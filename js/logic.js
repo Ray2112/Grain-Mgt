@@ -363,9 +363,38 @@
     return changed;
   }
 
+  // ---------- identificadores de registo (sincronização futura) ----------
+  // Cada registo tem um uid global (UUID v4) e o deviceId de origem. A chave local (IndexedDB) não é partilhada.
+  const UID_STORES = ['lots', 'events', 'monitor', 'sevents'];
+  const APP_VERSION = '0.2.0';
+  function newUid(rnd) {
+    rnd = rnd || Math.random;
+    let h = ''; for (let i = 0; i < 32; i++) h += Math.floor(rnd() * 16).toString(16);
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-4' + h.slice(13, 16) + '-8' + h.slice(17, 20) + '-' + h.slice(20, 32);
+  }
+  // Acrescenta uid/deviceId/appVersion a registos novos (não altera os existentes). Devolve cópia.
+  function stampRecord(store, obj, ctx) {
+    if (UID_STORES.indexOf(store) < 0) return obj;
+    const out = Object.assign({}, obj);
+    if (!out.uid) out.uid = (ctx && ctx.uid) || newUid();
+    if (!out.deviceId && ctx && ctx.deviceId) out.deviceId = ctx.deviceId;
+    if (!out.appVersion && !(ctx && ctx.noVersion)) out.appVersion = APP_VERSION;
+    return out;
+  }
+  // Migração por registo: renomeia silos e atribui uid/deviceId a registos antigos. Devolve { rec, changed }.
+  function upgradeRecord(store, rec, idMap, deviceId, rnd) {
+    const out = Object.assign({}, rec); let changed = false;
+    if (store !== 'lots') ['silo', 'toSilo'].forEach(function (f) { if (out[f] && idMap && idMap[out[f]]) { out[f] = idMap[out[f]]; changed = true; } });
+    if (UID_STORES.indexOf(store) >= 0) {
+      if (!out.uid) { out.uid = newUid(rnd); changed = true; }
+      if (!out.deviceId && deviceId) { out.deviceId = deviceId; changed = true; }
+    }
+    return { rec: out, changed: changed };
+  }
+
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs };
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;
 })(this);

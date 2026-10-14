@@ -71,13 +71,18 @@
       S.sev = r[3];
       S.settings = migrate(r[4]);
       I18n.set(S.settings.lang);
-      const rep = S.siloReport;
-      if (!rep || !Object.keys(rep.idMap).length) return null;
-      // Renomeação S1→S01: reescreve as referências nos registos existentes e grava tudo numa só transacção
-      const items = [];
-      [['events', S.events], ['monitor', S.mon], ['sevents', S.sev]].forEach(function (pair) {
-        L.remapSiloRefs(pair[1], rep.idMap).forEach(function (n) { items.push({ store: pair[0], obj: n, put: true }); });
+      let needSave = false;
+      if (!S.settings.deviceId) { S.settings.deviceId = L.newUid().replace(/-/g, '').slice(0, 12); needSave = true; }
+      DB.setDevice(S.settings.deviceId);
+      // Migração por registo: renomeia silos (S1→S01) e atribui uid/deviceId a registos antigos; tudo numa transacção
+      const rep = S.siloReport, idMap = rep ? rep.idMap : {}, items = [];
+      [['lots', S.lots], ['events', S.events], ['monitor', S.mon], ['sevents', S.sev]].forEach(function (pair) {
+        pair[1].forEach(function (rec) {
+          const u = L.upgradeRecord(pair[0], rec, pair[0] === 'lots' ? {} : idMap, S.settings.deviceId);
+          if (u.changed) items.push({ store: pair[0], obj: u.rec, put: true });
+        });
       });
+      if (!items.length && !needSave) return null;
       return (items.length ? DB.addMany(items) : Promise.resolve()).then(saveSettings).then(function () { return load(); });
     });
   }

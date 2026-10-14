@@ -169,4 +169,41 @@ ok('format 4 backups accepted', () => {
   assert.strictEqual(L.validBackup(d), true);
   assert.strictEqual(L.validBackup(Object.assign({}, d, { format: 5 })), false);
 });
+
+ok('newUid: UUID v4 format and distinct across 2000 draws', () => {
+  const seen = new Set();
+  for (let i = 0; i < 2000; i++) {
+    const u = L.newUid();
+    assert.ok(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(u), u);
+    seen.add(u);
+  }
+  assert.strictEqual(seen.size, 2000);
+});
+ok('stampRecord: new event gets uid, deviceId, appVersion; existing uid kept; config store untouched', () => {
+  const s = L.stampRecord('events', { type: 'IN' }, { uid: 'U-1', deviceId: 'D9' });
+  assert.strictEqual(s.uid, 'U-1'); assert.strictEqual(s.deviceId, 'D9'); assert.strictEqual(s.appVersion, L.APP_VERSION);
+  const k = L.stampRecord('events', { uid: 'KEEP', type: 'IN' }, { uid: 'NEW', deviceId: 'D9' });
+  assert.strictEqual(k.uid, 'KEEP');
+  const c = L.stampRecord('settings', { key: 'main' }, { uid: 'X', deviceId: 'D9' });
+  assert.strictEqual(c.uid, undefined);
+});
+ok('upgradeRecord: renames silo, backfills uid + deviceId, reports change', () => {
+  const r = L.upgradeRecord('events', { seq: 4, silo: 'S1', toSilo: 'S2', type: 'TRANSFER' }, { S1: 'S01', S2: 'S02' }, 'D9', () => 0.5);
+  assert.strictEqual(r.changed, true);
+  assert.strictEqual(r.rec.silo, 'S01'); assert.strictEqual(r.rec.toSilo, 'S02');
+  assert.ok(r.rec.uid && r.rec.uid.length === 36); assert.strictEqual(r.rec.deviceId, 'D9');
+  assert.strictEqual(r.rec.seq, 4);
+});
+ok('upgradeRecord: already migrated record is unchanged; lots are not silo-remapped', () => {
+  const done = { uid: 'U', deviceId: 'D', silo: 'S01' };
+  const r1 = L.upgradeRecord('monitor', done, { S1: 'S01' }, 'D');
+  assert.strictEqual(r1.changed, false);
+  const lot = L.upgradeRecord('lots', { id: 'REC-261014-01', silo: 'S1' }, { S1: 'S01' }, 'D');
+  assert.strictEqual(lot.rec.silo, 'S1');
+  assert.ok(lot.rec.uid);
+});
+ok('stampRecord: updates (noVersion) get uid/deviceId but no appVersion', () => {
+  const u = L.stampRecord('lots', { id: 'REC-1', status: 'HELD' }, { uid: 'U', deviceId: 'D', noVersion: true });
+  assert.strictEqual(u.uid, 'U'); assert.strictEqual(u.deviceId, 'D'); assert.strictEqual(u.appVersion, undefined);
+});
 console.log('OK — ' + n + ' tests');

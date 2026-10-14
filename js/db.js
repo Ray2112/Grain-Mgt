@@ -42,18 +42,24 @@
   }
   function reqP(r) { return new Promise(function (res, rej) { r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; }); }
 
+  let DEVICE = null;
+  function uidGen() { return (root.crypto && root.crypto.randomUUID) ? root.crypto.randomUUID() : root.Logic.newUid(); }
+  // noVersion: atualizações de registos existentes não recebem a versão da app (só os registos novos)
+  function stamp(store, obj, noVersion) { return root.Logic.stampRecord(store, obj, { uid: uidGen(), deviceId: DEVICE, noVersion: !!noVersion }); }
+
   const DB = {
+    setDevice: function (id) { DEVICE = id; },
     all: function (store) { return tx(store, 'readonly', function (s) { return reqP(s.getAll()); }); },
-    put: function (store, obj) { return tx(store, 'readwrite', function (s) { return reqP(s.put(obj)); }); },
+    put: function (store, obj) { const o = stamp(store, obj, true); return tx(store, 'readwrite', function (s) { return reqP(s.put(o)); }); },
     // add: falha se a chave já existir (nunca sobrescreve) / fails if the key exists (never overwrites)
-    add: function (store, obj) { return tx(store, 'readwrite', function (s) { return reqP(s.add(obj)); }); },
+    add: function (store, obj) { const o = stamp(store, obj); return tx(store, 'readwrite', function (s) { return reqP(s.add(o)); }); },
     // Vários registos novos numa só transacção (tudo ou nada) / several new records, all or nothing
     addMany: function (items) {
       const names = Array.from(new Set(items.map(function (i) { return i.store; })));
       return open().then(function (db) {
         return new Promise(function (resolve, reject) {
           const t = db.transaction(names, 'readwrite');
-          items.forEach(function (i) { const s = t.objectStore(i.store); if (i.put) s.put(i.obj); else s.add(i.obj); });
+          items.forEach(function (i) { const s = t.objectStore(i.store); const o = stamp(i.store, i.obj, !!i.put); if (i.put) s.put(o); else s.add(o); });
           t.oncomplete = function () { resolve(); };
           t.onerror = function (e) { e.preventDefault && e.preventDefault(); reject(t.error); };
           t.onabort = function () { reject(t.error); };
