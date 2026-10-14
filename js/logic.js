@@ -233,20 +233,19 @@
     return r;
   }
 
-  // Turnos / shifts: starts = ['07:00','19:00']
   function mins(s) { const p = String(s || '0:0').split(':'); return (+p[0] || 0) * 60 + (+p[1] || 0); }
   function addDays(d, n) { const x = new Date(Date.parse(d + 'T12:00:00Z') + n * 86400000); return x.toISOString().slice(0, 10); }
-  function shiftOf(date, time, starts) {
-    const st = (starts || ['00:00']).slice().sort(function (a, b) { return mins(a) - mins(b); });
+  // Turnos (iguais nas duas apps, fixos): D = 07:00–19:00, N = 19:00–07:00.
+  // O turno N das 00:00–07:00 pertence ao dia anterior (dia de produção). O parâmetro starts já não é usado.
+  const SHIFT_STARTS = ['07:00', '19:00'];
+  function shiftOf(date, time) {
     const t = mins(time || '00:00');
-    let idx = -1; st.forEach(function (s, i) { if (t >= mins(s)) idx = i; });
-    let d = date; if (idx < 0) { d = addDays(date, -1); idx = st.length - 1; }
-    return { id: d + '/' + (idx + 1), date: d, idx: idx, start: st[idx], end: st[(idx + 1) % st.length], n: st.length };
+    const win = (t >= mins('07:00') && t < mins('19:00')) ? 'D' : 'N';
+    const d = (win === 'N' && t < mins('07:00')) ? addDays(date, -1) : date;
+    return { id: d + '/' + win, date: d, window: win, idx: win === 'D' ? 0 : 1, start: win === 'D' ? '07:00' : '19:00', end: win === 'D' ? '19:00' : '07:00', n: 2 };
   }
-  function prevShift(sh, starts) {
-    const n = (starts || ['00:00']).length;
-    if (sh.idx > 0) return shiftOf(sh.date, (starts.slice().sort(function (a, b) { return mins(a) - mins(b); }))[sh.idx - 1], starts);
-    return shiftOf(addDays(sh.date, -1), (starts.slice().sort(function (a, b) { return mins(a) - mins(b); }))[n - 1], starts);
+  function prevShift(sh) {
+    return sh.window === 'N' ? shiftOf(sh.date, '08:00') : shiftOf(addDays(sh.date, -1), '20:00');
   }
 
   // Avaliação de uma ronda de turno / evaluate a shift round
@@ -325,7 +324,7 @@
     const shiftLevel = function (sh) { let m = -1; rounds.forEach(function (r, i) { if (shiftOf(r.date, r.time, starts).id === sh.id) m = Math.max(m, roundEval(r, rounds[i - 1], st).level); }); return m; };
     let elevated = level >= 2, sh = cur;
     const clearN = num(st.clearShifts) || 3;
-    for (let k = 0; k < clearN && !elevated; k++) { sh = prevShift(sh, starts); if (shiftLevel(sh) >= 2) elevated = true; }
+    for (let k = 0; k < clearN && !elevated; k++) { sh = prevShift(sh); if (shiftLevel(sh) >= 2) elevated = true; }
     const done = rounds.filter(function (r) { return shiftOf(r.date, r.time, starts).id === cur.id; }).length;
     const need = (o.kg > 0 || (o.lots || []).length) ? (elevated ? (num(st.amberRounds) || 2) : 1) : 0;
     const wDays = num(st.weeklyDays) || 7;
@@ -354,8 +353,8 @@
   // ---------- silos: IDs canónicos S01–S21 e capacidade (confirmado pelo cliente, Out-2026) ----------
   // Capacidade em toneladas no mestre; a app guarda kg. S01–S12 = 6 000 t; S13–S21 = 3 000 t.
   const SILO_IDS = Array.from({ length: 21 }, function (_, i) { return 'S' + pad(i + 1); });
-  function siloCapT(id) { const n = parseInt(String(id).slice(1), 10); return n >= 1 && n <= 12 ? 6000 : (n >= 13 && n <= 21 ? 3000 : null); }
-  function siloCapKg(id) { const t = siloCapT(id); return t === null ? null : t * 1000; }
+  // Capacidade do silo em kg (S01–S12: 6 000 t; S13–S21: 3 000 t). Todas as quantidades em kg.
+  function siloCapKg(id) { const n = parseInt(String(id).slice(1), 10); return n >= 1 && n <= 12 ? 6000000 : (n >= 13 && n <= 21 ? 3000000 : null); }
   // Normaliza S1 → S01 (também aceita s1, S 1). Devolve null se não for S1–S21.
   function normalizeSiloId(raw) {
     const m = /^\s*[Ss]\s*0*(\d{1,2})\s*$/.exec(String(raw == null ? '' : raw));
@@ -400,9 +399,9 @@
   // ---------- identificadores de registo (sincronização futura) ----------
   // Cada registo tem um uid global (UUID v4) e o deviceId de origem. A chave local (IndexedDB) não é partilhada.
   const UID_STORES = ['lots', 'events', 'monitor', 'sevents'];
-  const APP_VERSION = '0.3.0';
+  const APP_VERSION = '0.4.0';
   // Versão do mestre partilhado (silos e capacidades). Muda sempre que SILO_IDS ou as capacidades mudarem.
-  const MASTER_VERSION = '2026-10-14.1';
+  const MASTER_VERSION = '2026-10-14.1';   // não muda: silos e capacidades iguais (só unidades internas)
   // Compara a versão do mestre gravada num registo/cópia com a desta app: 'same' | 'older' | 'newer' | 'missing'.
   function masterStatus(v) {
     if (!v) return 'missing';
@@ -432,6 +431,7 @@
     if (out.operatorId === undefined) out.operatorId = (ctx && ctx.operatorId) || null;
     if (out.test === undefined) out.test = !!(ctx && ctx.test);
     if (out.uploadedAt === undefined) out.uploadedAt = null;
+    if (out.crew === undefined) out.crew = (ctx && ctx.crew) || null;
     if (out.shift === undefined) out.shift = (typeof out.date === 'string' && typeof out.time === 'string') ? shiftOf(out.date, out.time, ctx && ctx.starts).id : null;
     return out;
   }
@@ -478,7 +478,7 @@
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
     deviceTag: deviceTag, provisionalCode: provisionalCode, newLotCode: newLotCode, applyCentralCode: applyCentralCode, lotOrder: lotOrder,
     MASTER_VERSION: MASTER_VERSION, masterStatus: masterStatus, backupMasterSummary: backupMasterSummary, CONTRACT_VERSION: CONTRACT_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;

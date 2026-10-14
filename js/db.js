@@ -43,7 +43,7 @@
   function reqP(r) { return new Promise(function (res, rej) { r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; }); }
 
   // Contexto de registo: dispositivo, operador (ID), modo de teste e inícios de turno. Definido pela app a partir das Definições.
-  let CTX = { deviceId: null, operatorId: null, test: false, starts: null };
+  let CTX = { deviceId: null, operatorId: null, test: false, starts: null, crew: null };
   function uidGen() { return (root.crypto && root.crypto.randomUUID) ? root.crypto.randomUUID() : root.Logic.newUid(); }
   // noVersion: atualizações de registos existentes não recebem campos novos (só os registos novos)
   function stamp(store, obj, noVersion) { return root.Logic.stampRecord(store, obj, Object.assign({}, CTX, { uid: uidGen(), noVersion: !!noVersion })); }

@@ -1,10 +1,16 @@
-# Moagem — Registos (v0.3.0, Fase A)
+# Moagem — Registos (v0.4.0, Fase A)
 
 Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)** e **registo de silos e lotes (RG-13)** numa moagem. Funciona sem rede depois da primeira abertura. Os dados ficam **apenas no telemóvel**.
 
 *English version below.*
 
 ---
+
+## Novidades na v0.4.0
+- **Turnos iguais à app de CQ:** D = 07:00–19:00 e N = 19:00–07:00. O turno N das 00:00–07:00 pertence ao dia anterior. O campo de horas de início deixa de ser editável (secção protegida).
+- **Turma (A–D)** em Definições → Geral; cada registo novo guarda a turma e o turno (`2026-10-14/D` ou `/N`). Vazia = sem turma.
+- **Todas as quantidades em kg:** capacidades dos silos em kg (S01–S12: 6 000 000 kg; S13–S21: 3 000 000 kg). A função de toneladas foi retirada.
+- Cópia de segurança de produção: os silos passam de S1–S4 para S01–S04 (ficheiro `…_S01-kg.json`). Ao restaurar, a app acrescenta S05–S21 do mestre.
 
 ## Novidades na v0.3.0
 - **Códigos de lote provisórios:** um lote novo recebe `REC-AAMMDD-P<dispositivo>-NN` (ex.: `REC-261014-P3F9A1C-01`). O código é único entre telemóveis, sem servidor. Quando houver numeração central, o código passa a `REC-AAMMDD-NN` e o provisório fica guardado. As referências internas usam o identificador UUID, por isso não mudam.
@@ -64,6 +70,12 @@ Altere `const CACHE = 'moagem-v0.1.0'` em `sw.js` (por exemplo para `v0.1.1`) e 
 # Mill — Records (v0.3.0, Step A) — English
 
 A serverless phone app for **grain intake (RG-21)** and **silo and lot records (RG-13)**. It works offline after the first load. Data stays **on the phone only**.
+
+## New in v0.4.0
+- **Shifts same as the QC app:** D = 07:00–19:00 and N = 19:00–07:00. The N shift for 00:00–07:00 belongs to the previous day. The shift start field is no longer editable (protected section).
+- **Crew (A–D)** in Settings → General; every new record stores crew and shift (`2026-10-14/D` or `/N`). Empty = no crew.
+- **All quantities in kg:** silo capacities in kg (S01–S12: 6,000,000 kg; S13–S21: 3,000,000 kg). The tonnes function was removed.
+- Production backup: silos change from S1–S4 to S01–S04 (file `…_S01-kg.json`). On restore the app adds S05–S21 from the master.
 
 ## New in v0.3.0
 - **Provisional lot codes:** a new lot gets `REC-AAMMDD-P<device>-NN` (e.g. `REC-261014-P3F9A1C-01`), unique across phones without a server. When central numbering exists the code becomes `REC-AAMMDD-NN` and the provisional code is kept. Internal references use the UUID, so they do not change.

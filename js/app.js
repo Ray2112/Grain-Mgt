@@ -97,10 +97,10 @@
       return (items.length ? DB.addMany(items) : Promise.resolve()).then(saveSettings).then(function () { return load(); });
     });
   }
-  function saveSettings() { return DB.setSetting('main', S.settings); }
+  function saveSettings() { syncCtx(); return DB.setSetting('main', S.settings); }   // o contexto (operador, turma, teste) acompanha sempre as Definições
   // Contexto dos registos novos (dispositivo, ID do operador, modo de teste, inícios de turno)
   function syncCtx() {
-    DB.setContext({ deviceId: S.settings.deviceId, operatorId: S.settings.operatorId || null, test: !!S.settings.testMode,
+    DB.setContext({ deviceId: S.settings.deviceId, operatorId: S.settings.operatorId || null, test: !!S.settings.testMode, crew: S.settings.crew || null,
       starts: (S.settings.st && S.settings.st.shifts) || null });
   }
   function toast(msg) {
@@ -1016,6 +1016,7 @@
     const s = S.settings;
     let h = '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
       '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
+      '<label>' + esc(t('crew_label')) + '<select name="crew">' + ['', 'A', 'B', 'C', 'D'].map(function (c) { return '<option value="' + c + '"' + ((s.crew || '') === c ? ' selected' : '') + '>' + (c || esc(t('crew_none'))) + '</option>'; }).join('') + '</select></label>' +
       '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label>' +
       '<label>' + esc(t('language')) + '<select name="lang"><option value="pt" ' + (s.lang === 'pt' ? 'selected' : '') + '>Português</option><option value="en" ' + (s.lang === 'en' ? 'selected' : '') + '>English</option></select></label></div>';
     h += '<div class="card stack"><h2>' + esc(t('suppliers_cfg')) + '</h2>' + s.suppliers.map(function (x, i) {
@@ -1081,7 +1082,7 @@
       row('moist', [t('lv_0') + ' ≤', t('lv_1') + ' ≤', t('lv_2') + ' ≤', t('lv_3') + ' ≤']) + '<p class="small muted">' + esc(t('stc_moist_note')) + '</p>' +
       row('temp', [t('lv_0') + ' ≤', t('lv_1') + ' ≤', t('lv_2') + ' ≤', t('lv_4') + ' ≤']) + '<p class="small muted">' + esc(t('stc_temp_note')) + '</p>' +
       row('dt', [t('lv_2') + ' ≥', t('lv_4') + ' ≥']) +
-      '<div class="grid2"><label>' + esc(t('stc_shifts')) + '<input name="st_shifts" value="' + esc(st.shifts.join(', ')) + '"></label><label>' + esc(t('stc_weekly')) + '<input name="st_weeklyDays" inputmode="numeric" value="' + esc(st.weeklyDays) + '"></label></div>' +
+      '<div class="grid2"><label>' + esc(t('stc_shifts')) + '<input name="st_shifts" value="' + esc(st.shifts.join(', ')) + '" disabled></label><label>' + esc(t('stc_weekly')) + '<input name="st_weeklyDays" inputmode="numeric" value="' + esc(st.weeklyDays) + '"></label></div>' +
       '<div class="grid2"><label>' + esc(t('stc_amber')) + '<input name="st_amberRounds" inputmode="numeric" value="' + esc(st.amberRounds) + '"></label><label>' + esc(t('stc_clear')) + '<input name="st_clearShifts" inputmode="numeric" value="' + esc(st.clearShifts) + '"></label></div></div>';
     h += '<div class="grid2"><button type="button" class="btn" data-action="lock">' + esc(t('lock')) + '</button><button class="btn primary" type="submit">' + esc(t('save_protected')) + '</button></div>';
     return h;
@@ -1136,9 +1137,7 @@
       else if (n.some(function (x, j) { return j > 0 && x <= n[j - 1]; })) errors.push(t('stc_' + q[0]) + ': ' + t('err_ascending'));
       s.st[q[0]] = arr;
     });
-    const sh = (v.st_shifts || '').split(/[,;\s]+/).filter(Boolean);
-    if (!sh.length || sh.some(function (x) { return !/^([01]?\d|2[0-3]):[0-5]\d$/.test(x); })) errors.push(t('stc_shifts') + ': ' + t('err_shifts'));
-    s.st.shifts = sh.map(function (x) { return x.length === 4 ? '0' + x : x; });
+    s.st.shifts = ['07:00', '19:00'];   // turnos fixos (ver logic.js SHIFT_STARTS); o campo é só de leitura
     ['weeklyDays', 'amberRounds', 'clearShifts'].forEach(function (k) { s.st[k] = (v['st_' + k] || '').trim(); if (!/^\d{1,3}$/.test(s.st[k]) || +s.st[k] < 1) errors.push(t('stc_' + ({ weeklyDays: 'weekly', amberRounds: 'amber', clearShifts: 'clear' })[k]) + ': ' + t('err_number')); });
     return { s: s, errors: errors };
   }
@@ -1148,6 +1147,7 @@
     const s = S.settings;
     s.millName = v.millName || ''; s.site = v.site || ''; s.lang = v.lang || 'pt';
     s.operatorId = (v.operatorId || '').trim() || null; s.testMode = v.testMode === 'on';
+    s.crew = ['A', 'B', 'C', 'D'].indexOf(v.crew) >= 0 ? v.crew : null;
     s.suppliers = s.suppliers.map(function (x, i) { return (v['sup_' + i] || '').trim(); }).filter(Boolean);
   }
   function pinSubmit(form) {

@@ -77,10 +77,15 @@ ok('priority: moisture orange, rest G1/G2', () => {
   assert.strictEqual(L.intakeClass(Object.assign({}, base, { hum: '13.7' }), SOP, {}, ST).code, 'G2');
 });
 ok('shifts 07-19 / 19-07', () => {
-  assert.strictEqual(L.shiftOf('2026-10-05', '06:59', ST.shifts).id, '2026-10-04/2');
-  assert.strictEqual(L.shiftOf('2026-10-05', '07:00', ST.shifts).id, '2026-10-05/1');
-  assert.strictEqual(L.shiftOf('2026-10-05', '19:30', ST.shifts).id, '2026-10-05/2');
-  assert.strictEqual(L.prevShift(L.shiftOf('2026-10-05', '08:00', ST.shifts), ST.shifts).id, '2026-10-04/2');
+  // turnos fixos D 07:00–19:00 e N 19:00–07:00; o N das 00:00–07:00 pertence ao dia anterior
+  assert.strictEqual(L.shiftOf('2026-10-05', '06:59', ST.shifts).id, '2026-10-04/N');
+  assert.strictEqual(L.shiftOf('2026-10-05', '00:30', ST.shifts).id, '2026-10-04/N');
+  assert.strictEqual(L.shiftOf('2026-10-05', '07:00', ST.shifts).id, '2026-10-05/D');
+  assert.strictEqual(L.shiftOf('2026-10-05', '19:00', ST.shifts).id, '2026-10-05/N');
+  assert.strictEqual(L.shiftOf('2026-10-05', '18:59', ST.shifts).id, '2026-10-05/D');
+  assert.strictEqual(L.prevShift(L.shiftOf('2026-10-05', '08:00', ST.shifts)).id, '2026-10-04/N');
+  assert.strictEqual(L.prevShift(L.shiftOf('2026-10-05', '20:00', ST.shifts)).id, '2026-10-05/D');
+  assert.strictEqual(L.prevShift(L.shiftOf('2026-10-05', '02:00', ST.shifts)).id, '2026-10-04/D');
 });
 ok('round eval: dT red even at 30.0 (SOP warning example)', () => {
   const e = L.roundEval({ points: [{ t: '30.0' }, { t: '26' }], odour: 'N' }, { points: [{ t: '27.0' }, { t: '26' }] }, ST);
@@ -123,10 +128,10 @@ ok('silo normalisation S1 -> S01, S21 kept, invalid refused', () => {
 ok('silo master: 21 ids, S01-S12 6000 t, S13-S21 3000 t', () => {
   assert.strictEqual(L.SILO_IDS.length, 21);
   assert.strictEqual(L.SILO_IDS[0], 'S01'); assert.strictEqual(L.SILO_IDS[20], 'S21');
-  assert.strictEqual(L.siloCapT('S01'), 6000); assert.strictEqual(L.siloCapT('S12'), 6000);
-  assert.strictEqual(L.siloCapT('S13'), 3000); assert.strictEqual(L.siloCapT('S21'), 3000);
-  assert.strictEqual(L.siloCapKg('S12'), 6000000); assert.strictEqual(L.siloCapKg('S13'), 3000000);
-  assert.strictEqual(L.siloCapT('S22'), null);
+  assert.strictEqual(L.siloCapKg('S01'), 6000000); assert.strictEqual(L.siloCapKg('S12'), 6000000);
+  assert.strictEqual(L.siloCapKg('S13'), 3000000); assert.strictEqual(L.siloCapKg('S21'), 3000000);
+  assert.strictEqual(L.siloCapKg('S22'), null);
+  assert.strictEqual(L.siloCapT, undefined, 'capacidades só em kg');
 });
 
 ok('normalizeSilos: production backup (S1-S4) -> 21 silos, renames, master caps', () => {
@@ -335,10 +340,10 @@ ok('contrato v1: registo novo leva schemaVersion, createdAt, operatorId, test, u
   assert.strictEqual(r.operatorId, 'OP-042');
   assert.strictEqual(r.test, false);
   assert.strictEqual(r.uploadedAt, null);
-  assert.strictEqual(r.shift, '2026-10-14/1');
+  assert.strictEqual(r.shift, '2026-10-14/D');
   assert.strictEqual(r.deviceId, 'D1');
   const n = L.stampRecord('events', { date: '2026-10-14', time: '20:10' }, ctx);
-  assert.strictEqual(n.shift, '2026-10-14/2');
+  assert.strictEqual(n.shift, '2026-10-14/N');
 });
 ok('contrato v1: modo de teste marca os registos novos; hora do dispositivo pode ser dada', () => {
   const r = L.stampRecord('lots', { date: '2026-10-14', time: '09:00' }, { deviceId: 'D1', test: true, now: '2026-10-14T08:00:00.000Z' });
@@ -353,6 +358,14 @@ ok('contrato v1: actualização (noVersion) não acrescenta campos novos a regis
   assert.strictEqual(u.test, undefined);
   assert.strictEqual(u.operatorId, undefined);
   assert.strictEqual(u.uid, 'U-9');
+});
+
+ok('turma (A–D) no contrato: registo leva a turma das Definições; sem turma fica null', () => {
+  const a = L.stampRecord('events', { date: '2026-10-14', time: '09:00' }, { deviceId: 'D1', crew: 'B' });
+  assert.strictEqual(a.crew, 'B');
+  const b = L.stampRecord('events', { date: '2026-10-14', time: '09:00' }, { deviceId: 'D1' });
+  assert.strictEqual(b.crew, null);
+  assert.strictEqual(b.shift, '2026-10-14/D');
 });
 
 console.log('OK — ' + n + ' tests');

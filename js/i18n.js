@@ -55,6 +55,7 @@
       restore_confirm: 'Restaurar substitui TODOS os dados deste telemóvel pelos da cópia (incluindo o PIN e os limites). Será guardada primeiro uma cópia dos dados actuais. Continuar?',
       restore_master_warn: 'Atenção: versão do mestre de silos (capacidades) dos registos desta cópia — iguais / anteriores / posteriores / sem versão =',
       operator_id: 'ID do operador (número de colaborador)',
+      crew_label: 'Turma (A–D)', crew_none: '— sem turma —',
       test_mode: 'Modo de teste — marcar os registos novos como teste',
       test_banner: 'MODO DE TESTE — os registos novos ficam marcados (test: true). Desligar antes do uso real.',
       restored: 'Cópia restaurada.', bad_backup: 'Ficheiro de cópia inválido.', last_backup: 'Última cópia', never: 'nunca',
@@ -112,7 +113,7 @@
       x_annexA: 'Anexo A · Registo de Monitorização dos Silos (SOP-OPS-002)', x_annexB: 'Anexo B · Inspecção Semanal de Qualidade dos Silos (SOP-OPS-002)', x_treat: 'Tratamentos e disposições do CQ', x_events: 'Eventos Âmbar / Vermelho (passo 10)', x_review: 'Revisão de idade e estado dos silos em',
       silo_points: 'Pontos de temperatura', storage_cfg: 'Armazenagem (SOP-OPS-002)', storage_src: 'Valores pré-carregados do SOP-OPS-002 Rev 0.1, tabelas 5.1–5.3 e 5.5.',
       stc_moist: 'Humidade do grão (%)', stc_moist_note: 'Acima do limite Laranja = Vermelho.', stc_temp: 'Temperatura do grão (°C)', stc_temp_note: 'Acima do limite Vermelho = Emergência.', stc_dt: 'ΔT no mesmo ponto desde a leitura anterior (°C)',
-      stc_shifts: 'Início dos turnos (HH:MM)', stc_weekly: 'Inspecção do CQ a cada (dias)', stc_amber: 'Rondas por turno em Âmbar', stc_clear: 'Turnos Verdes seguidos para voltar a 1 ronda',
+      stc_shifts: 'Turnos fixos: D 07:00–19:00 e N 19:00–07:00 (iguais na app de CQ)', stc_weekly: 'Inspecção do CQ a cada (dias)', stc_amber: 'Rondas por turno em Âmbar', stc_clear: 'Turnos Verdes seguidos para voltar a 1 ronda',
       err_points: 'pontos de temperatura: 1 a 50', err_ascending: 'os valores têm de subir', err_shifts: 'use HH:MM separados por vírgula'
     },
     en: {
@@ -168,6 +169,7 @@
       restore_confirm: 'Restoring replaces ALL data on this phone with the backup (including the PIN and limits). A copy of the current data will be saved first. Continue?',
       restore_master_warn: 'Warning: silo master version (capacities) of this backup\'s records — same / older / newer / no version =',
       operator_id: 'Operator ID (staff number)',
+      crew_label: 'Crew (A–D)', crew_none: '— no crew —',
       test_mode: 'Test mode — mark new records as test',
       test_banner: 'TEST MODE — new records are marked (test: true). Turn off before live use.',
       restored: 'Backup restored.', bad_backup: 'Invalid backup file.', last_backup: 'Last backup', never: 'never',
@@ -225,7 +227,7 @@
       x_annexA: 'Annex A · Silo Monitoring Log (SOP-OPS-002)', x_annexB: 'Annex B · Weekly Silo Quality Inspection (SOP-OPS-002)', x_treat: 'Treatments and QC dispositions', x_events: 'Amber / Red events (step 10)', x_review: 'Silo age and status review on',
       silo_points: 'Temperature points', storage_cfg: 'Storage (SOP-OPS-002)', storage_src: 'Values preloaded from SOP-OPS-002 Rev 0.1, tables 5.1–5.3 and 5.5.',
       stc_moist: 'Grain moisture (%)', stc_moist_note: 'Above the Orange limit = Red.', stc_temp: 'Grain temperature (°C)', stc_temp_note: 'Above the Red limit = Emergency.', stc_dt: 'ΔT at the same point since previous reading (°C)',
-      stc_shifts: 'Shift start times (HH:MM)', stc_weekly: 'QC inspection every (days)', stc_amber: 'Rounds per shift when Amber', stc_clear: 'Consecutive Green shifts to return to 1 round',
+      stc_shifts: 'Fixed shifts: D 07:00–19:00 and N 19:00–07:00 (same as the QC app)', stc_weekly: 'QC inspection every (days)', stc_amber: 'Rounds per shift when Amber', stc_clear: 'Consecutive Green shifts to return to 1 round',
       err_points: 'temperature points: 1 to 50', err_ascending: 'values must rise', err_shifts: 'use HH:MM separated by commas'
     }
   };
