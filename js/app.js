@@ -83,7 +83,7 @@
       if (Object.keys(lotMap).length) lotItems.unshift({ store: 'settings', obj: { key: 'pre_lot_uuid_snapshot', value: { takenAt: new Date().toISOString(), lots: origLots, events: origEvents } }, put: true });
       let needSave = false;
       if (!S.settings.deviceId) { S.settings.deviceId = L.newUid().replace(/-/g, '').slice(0, 12); needSave = true; }
-      DB.setDevice(S.settings.deviceId);
+      DB.setDevice(S.settings.deviceId); syncCtx();
       // Migração por registo: renomeia silos (S1→S01) e atribui uid/deviceId a registos antigos; tudo numa transacção
       const rep = S.siloReport, idMap = rep ? rep.idMap : {}, items = [];
       lotItems.forEach(function (i) { items.push(i); });
@@ -98,6 +98,11 @@
     });
   }
   function saveSettings() { return DB.setSetting('main', S.settings); }
+  // Contexto dos registos novos (dispositivo, ID do operador, modo de teste, inícios de turno)
+  function syncCtx() {
+    DB.setContext({ deviceId: S.settings.deviceId, operatorId: S.settings.operatorId || null, test: !!S.settings.testMode,
+      starts: (S.settings.st && S.settings.st.shifts) || null });
+  }
   function toast(msg) {
     const el = $('#toast'); el.textContent = msg; el.classList.add('show');
     clearTimeout(toast._t); toast._t = setTimeout(function () { el.classList.remove('show'); }, 3200);
@@ -162,6 +167,8 @@
     if (S.tab === 'export') main.innerHTML = exportView();
     if (S.tab === 'settings') main.innerHTML = settingsView();
     if (S.tab === 'intake' && S.form) updateDyn();
+    // Aviso permanente enquanto o modo de teste estiver ligado (os registos novos ficam marcados test:true)
+    if (S.settings && S.settings.testMode) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status"><b>' + esc(t('test_banner')) + '</b></div>');
     renderSheet();
   }
 
@@ -1008,6 +1015,8 @@
   function settingsView() {
     const s = S.settings;
     let h = '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
+      '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
+      '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label>' +
       '<label>' + esc(t('language')) + '<select name="lang"><option value="pt" ' + (s.lang === 'pt' ? 'selected' : '') + '>Português</option><option value="en" ' + (s.lang === 'en' ? 'selected' : '') + '>English</option></select></label></div>';
     h += '<div class="card stack"><h2>' + esc(t('suppliers_cfg')) + '</h2>' + s.suppliers.map(function (x, i) {
       return '<div class="grid2b"><input name="sup_' + i + '" value="' + esc(x) + '" aria-label="' + esc(t('supplier')) + '"><button type="button" class="btn small" data-action="rm-sup" data-i="' + i + '">' + esc(t('remove')) + '</button></div>';
@@ -1138,6 +1147,7 @@
     const v = Object.fromEntries(new FormData(form).entries());
     const s = S.settings;
     s.millName = v.millName || ''; s.site = v.site || ''; s.lang = v.lang || 'pt';
+    s.operatorId = (v.operatorId || '').trim() || null; s.testMode = v.testMode === 'on';
     s.suppliers = s.suppliers.map(function (x, i) { return (v['sup_' + i] || '').trim(); }).filter(Boolean);
   }
   function pinSubmit(form) {

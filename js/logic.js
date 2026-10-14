@@ -415,13 +415,24 @@
     return h.slice(0, 8) + '-' + h.slice(8, 12) + '-4' + h.slice(13, 16) + '-8' + h.slice(17, 20) + '-' + h.slice(20, 32);
   }
   // Acrescenta uid/deviceId/appVersion a registos novos (não altera os existentes). Devolve cópia.
+  // Contrato de dados v1 (Stage 0): cada registo novo leva schemaVersion, appVersion, masterVersion, deviceId,
+  // operatorId, shift (derivado de date/time), createdAt (hora do dispositivo, ISO), uploadedAt (null até ao envio) e test.
+  // Actualizações (noVersion) não acrescentam campos novos: mantêm o que já tinham.
+  const CONTRACT_VERSION = 1;
   function stampRecord(store, obj, ctx) {
     if (UID_STORES.indexOf(store) < 0) return obj;
     const out = Object.assign({}, obj);
     if (!out.uid) out.uid = (ctx && ctx.uid) || newUid();
     if (!out.deviceId && ctx && ctx.deviceId) out.deviceId = ctx.deviceId;
-    if (!out.appVersion && !(ctx && ctx.noVersion)) out.appVersion = APP_VERSION;
-    if (!out.masterVersion && !(ctx && ctx.noVersion)) out.masterVersion = MASTER_VERSION;
+    if (ctx && ctx.noVersion) return out;
+    if (!out.schemaVersion) out.schemaVersion = CONTRACT_VERSION;
+    if (!out.appVersion) out.appVersion = APP_VERSION;
+    if (!out.masterVersion) out.masterVersion = MASTER_VERSION;
+    if (!out.createdAt) out.createdAt = (ctx && ctx.now) || new Date().toISOString();
+    if (out.operatorId === undefined) out.operatorId = (ctx && ctx.operatorId) || null;
+    if (out.test === undefined) out.test = !!(ctx && ctx.test);
+    if (out.uploadedAt === undefined) out.uploadedAt = null;
+    if (out.shift === undefined) out.shift = (typeof out.date === 'string' && typeof out.time === 'string') ? shiftOf(out.date, out.time, ctx && ctx.starts).id : null;
     return out;
   }
   // Resumo da versão do mestre nos registos de uma cópia: quantos são iguais, anteriores, posteriores ou sem versão.
@@ -469,6 +480,6 @@
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
     validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
     deviceTag: deviceTag, provisionalCode: provisionalCode, newLotCode: newLotCode, applyCentralCode: applyCentralCode, lotOrder: lotOrder,
-    MASTER_VERSION: MASTER_VERSION, masterStatus: masterStatus, backupMasterSummary: backupMasterSummary };
+    MASTER_VERSION: MASTER_VERSION, masterStatus: masterStatus, backupMasterSummary: backupMasterSummary, CONTRACT_VERSION: CONTRACT_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;
 })(this);

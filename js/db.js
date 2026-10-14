@@ -42,13 +42,15 @@
   }
   function reqP(r) { return new Promise(function (res, rej) { r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; }); }
 
-  let DEVICE = null;
+  // Contexto de registo: dispositivo, operador (ID), modo de teste e inícios de turno. Definido pela app a partir das Definições.
+  let CTX = { deviceId: null, operatorId: null, test: false, starts: null };
   function uidGen() { return (root.crypto && root.crypto.randomUUID) ? root.crypto.randomUUID() : root.Logic.newUid(); }
-  // noVersion: atualizações de registos existentes não recebem a versão da app (só os registos novos)
-  function stamp(store, obj, noVersion) { return root.Logic.stampRecord(store, obj, { uid: uidGen(), deviceId: DEVICE, noVersion: !!noVersion }); }
+  // noVersion: atualizações de registos existentes não recebem campos novos (só os registos novos)
+  function stamp(store, obj, noVersion) { return root.Logic.stampRecord(store, obj, Object.assign({}, CTX, { uid: uidGen(), noVersion: !!noVersion })); }
 
   const DB = {
-    setDevice: function (id) { DEVICE = id; },
+    setDevice: function (id) { CTX.deviceId = id; },
+    setContext: function (c) { CTX = Object.assign({}, CTX, c || {}); },
     all: function (store) { return tx(store, 'readonly', function (s) { return reqP(s.getAll()); }); },
     put: function (store, obj) { const o = stamp(store, obj, true); return tx(store, 'readwrite', function (s) { return reqP(s.put(o)); }); },
     // add: falha se a chave já existir (nunca sobrescreve) / fails if the key exists (never overwrites)

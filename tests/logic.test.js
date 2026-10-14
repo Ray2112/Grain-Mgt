@@ -326,4 +326,33 @@ ok('backupMasterSummary: conta versões do mestre nos registos da cópia', () =>
   assert.deepStrictEqual(L.backupMasterSummary({}), { same: 0, older: 0, newer: 0, missing: 0 });
 });
 
+ok('contrato v1: registo novo leva schemaVersion, createdAt, operatorId, test, uploadedAt e shift', () => {
+  const ctx = { deviceId: 'D1', operatorId: 'OP-042', test: false, starts: ['07:00', '19:00'] };
+  const r = L.stampRecord('events', { date: '2026-10-14', time: '08:30', kind: 'x' }, ctx);
+  assert.strictEqual(r.schemaVersion, L.CONTRACT_VERSION);
+  assert.strictEqual(L.CONTRACT_VERSION, 1);
+  assert.ok(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.createdAt), r.createdAt);
+  assert.strictEqual(r.operatorId, 'OP-042');
+  assert.strictEqual(r.test, false);
+  assert.strictEqual(r.uploadedAt, null);
+  assert.strictEqual(r.shift, '2026-10-14/1');
+  assert.strictEqual(r.deviceId, 'D1');
+  const n = L.stampRecord('events', { date: '2026-10-14', time: '20:10' }, ctx);
+  assert.strictEqual(n.shift, '2026-10-14/2');
+});
+ok('contrato v1: modo de teste marca os registos novos; hora do dispositivo pode ser dada', () => {
+  const r = L.stampRecord('lots', { date: '2026-10-14', time: '09:00' }, { deviceId: 'D1', test: true, now: '2026-10-14T08:00:00.000Z' });
+  assert.strictEqual(r.test, true);
+  assert.strictEqual(r.createdAt, '2026-10-14T08:00:00.000Z');
+});
+ok('contrato v1: actualização (noVersion) não acrescenta campos novos a registos antigos', () => {
+  const old = { uid: 'U-9', date: '2026-10-01', time: '10:00', kind: 'ROUND' };
+  const u = L.stampRecord('monitor', old, { deviceId: 'D1', noVersion: true, operatorId: 'OP-1', test: true });
+  assert.strictEqual(u.schemaVersion, undefined);
+  assert.strictEqual(u.createdAt, undefined);
+  assert.strictEqual(u.test, undefined);
+  assert.strictEqual(u.operatorId, undefined);
+  assert.strictEqual(u.uid, 'U-9');
+});
+
 console.log('OK — ' + n + ' tests');
