@@ -317,9 +317,22 @@
     return okLots && okEv && okSet;
   }
 
+  // ---------- silos: IDs canónicos S01–S21 e capacidade (confirmado pelo cliente, Out-2026) ----------
+  // Capacidade em toneladas no mestre; a app guarda kg. S01–S12 = 6 000 t; S13–S21 = 3 000 t.
+  const SILO_IDS = Array.from({ length: 21 }, function (_, i) { return 'S' + pad(i + 1); });
+  function siloCapT(id) { const n = parseInt(String(id).slice(1), 10); return n >= 1 && n <= 12 ? 6000 : (n >= 13 && n <= 21 ? 3000 : null); }
+  function siloCapKg(id) { const t = siloCapT(id); return t === null ? null : t * 1000; }
+  // Normaliza S1 → S01 (também aceita s1, S 1). Devolve null se não for S1–S21.
+  function normalizeSiloId(raw) {
+    const m = /^\s*[Ss]\s*0*(\d{1,2})\s*$/.exec(String(raw == null ? '' : raw));
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    return n >= 1 && n <= 21 ? 'S' + pad(n) : null;
+  }
+
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS };
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;
 })(this);

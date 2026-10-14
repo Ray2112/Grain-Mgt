@@ -109,4 +109,23 @@ ok('silo status, hold and disposition', () => {
   assert.ok(L.siloStatus({ siloId: 'S1', recs: [w2, tr], lots, st: ST, now, kg: 100 }).drivers.some(x => x.p === 'treat_pending'));
   assert.strictEqual(L.siloStatus({ siloId: 'S1', recs: [], lots: [{ date: '2026-10-01', hum: 14.3 }], st: ST, now, kg: 100 }).level, 3);
 });
+
+ok('silo normalisation S1 -> S01, S21 kept, invalid refused', () => {
+  assert.strictEqual(L.normalizeSiloId('S1'), 'S01');
+  assert.strictEqual(L.normalizeSiloId('s9'), 'S09');
+  assert.strictEqual(L.normalizeSiloId('S 12'), 'S12');
+  assert.strictEqual(L.normalizeSiloId('S21'), 'S21');
+  assert.strictEqual(L.normalizeSiloId('S22'), null);
+  assert.strictEqual(L.normalizeSiloId('S0'), null);
+  assert.strictEqual(L.normalizeSiloId('Silo 15'), null);
+  assert.strictEqual(L.normalizeSiloId(''), null);
+});
+ok('silo master: 21 ids, S01-S12 6000 t, S13-S21 3000 t', () => {
+  assert.strictEqual(L.SILO_IDS.length, 21);
+  assert.strictEqual(L.SILO_IDS[0], 'S01'); assert.strictEqual(L.SILO_IDS[20], 'S21');
+  assert.strictEqual(L.siloCapT('S01'), 6000); assert.strictEqual(L.siloCapT('S12'), 6000);
+  assert.strictEqual(L.siloCapT('S13'), 3000); assert.strictEqual(L.siloCapT('S21'), 3000);
+  assert.strictEqual(L.siloCapKg('S12'), 6000000); assert.strictEqual(L.siloCapKg('S13'), 3000000);
+  assert.strictEqual(L.siloCapT('S22'), null);
+});
 console.log('OK — ' + n + ' tests');
