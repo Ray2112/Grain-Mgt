@@ -128,4 +128,45 @@ ok('silo master: 21 ids, S01-S12 6000 t, S13-S21 3000 t', () => {
   assert.strictEqual(L.siloCapKg('S12'), 6000000); assert.strictEqual(L.siloCapKg('S13'), 3000000);
   assert.strictEqual(L.siloCapT('S22'), null);
 });
+
+ok('normalizeSilos: production backup (S1-S4) -> 21 silos, renames, master caps', () => {
+  const r = L.normalizeSilos([{ id: 'S1', cap: '' }, { id: 'S2', cap: '' }, { id: 'S3', cap: '' }, { id: 'S4', cap: '' }]);
+  assert.strictEqual(r.silos.length, 21);
+  assert.deepStrictEqual(r.silos.map(s => s.id), L.SILO_IDS);
+  assert.strictEqual(r.silos[0].cap, '6000000');
+  assert.strictEqual(r.silos[12].cap, '3000000');
+  assert.deepStrictEqual(r.idMap, { S1: 'S01', S2: 'S02', S3: 'S03', S4: 'S04' });
+  assert.ok(r.changes.indexOf('renamed:S1->S01') >= 0);
+  assert.deepStrictEqual(r.warnings, []);
+});
+ok('normalizeSilos: keeps an existing cap, warns when it differs from master', () => {
+  const r = L.normalizeSilos([{ id: 'S05', cap: '5000000' }]);
+  assert.strictEqual(r.silos.find(s => s.id === 'S05').cap, '5000000');
+  assert.ok(r.warnings.indexOf('cap-differs:S05') >= 0);
+});
+ok('normalizeSilos: invalid id kept and flagged; duplicate dropped and flagged', () => {
+  const r = L.normalizeSilos([{ id: 'Silo 15', cap: '' }, { id: 'S1' }, { id: 'S01' }]);
+  assert.ok(r.silos.some(s => s.id === 'Silo 15'));
+  assert.ok(r.warnings.indexOf('invalid:Silo 15') >= 0);
+  assert.ok(r.warnings.indexOf('duplicate:S01') >= 0);
+  assert.strictEqual(r.silos.filter(s => s.id === 'S01').length, 1);
+});
+ok('normalizeSilos: already canonical -> no renames', () => {
+  const r = L.normalizeSilos(L.SILO_IDS.map(id => ({ id: id, cap: String(L.siloCapKg(id)) })));
+  assert.deepStrictEqual(r.idMap, {});
+  assert.deepStrictEqual(r.changes, []);
+});
+ok('remapSiloRefs rewrites silo and toSilo, leaves others untouched', () => {
+  const recs = [{ seq: 1, silo: 'S1', type: 'IN' }, { seq: 2, silo: 'S5', toSilo: 'S1', type: 'TRANSFER' }, { seq: 3, silo: 'S9', type: 'OUT' }];
+  const out = L.remapSiloRefs(recs, { S1: 'S01' });
+  assert.strictEqual(out.length, 2);
+  assert.strictEqual(out[0].silo, 'S01');
+  assert.strictEqual(out[1].toSilo, 'S01');
+  assert.strictEqual(recs[0].silo, 'S1', 'input not mutated');
+});
+ok('format 4 backups accepted', () => {
+  const d = { app: 'moagem-app', format: 4, lots: [], events: [], settings: [] };
+  assert.strictEqual(L.validBackup(d), true);
+  assert.strictEqual(L.validBackup(Object.assign({}, d, { format: 5 })), false);
+});
 console.log('OK — ' + n + ' tests');

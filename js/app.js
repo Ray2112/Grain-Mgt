@@ -35,7 +35,7 @@
       grading: { Milho: clone(SOP_MAIZE), Trigo: blankG(), Arroz: blankG() },
       myco: { Milho: blankM(), Trigo: blankM(), Arroz: blankM() },
       st: clone(SOP_STORE),
-      pin: null, lastBackup: null, schema: 2
+      pin: null, lastBackup: null, schema: 4
     };
   }
   // Migração das definições v0.1 / migrate v0.1 settings
@@ -51,10 +51,12 @@
       Object.keys(old).forEach(function (c) { if (old[c]) L.MYCO.forEach(function (k) { s.myco[c][k] = old[c][k] || ''; s.myco[c][k + 'Required'] = !!old[c][k + 'Required']; }); });
       delete s.limits;
     }
-    s.silos = (s.silos || []).map(function (x) { return { id: x.id, cap: x.cap || '', cereal: x.cereal || '', colour: x.colour || '', grade: x.grade || '', points: x.points || '1' }; });
+    const sn = L.normalizeSilos((s.silos || []).map(function (x) { return { id: x.id, cap: x.cap || '', cereal: x.cereal || '', colour: x.colour || '', grade: x.grade || '', points: x.points || '1' }; }));
+    s.silos = sn.silos;
+    S.siloReport = sn;
     s.st = Object.assign(d.st, s.st || {});
     delete s.insp;
-    s.schema = 2;
+    s.schema = 4;
     return s;
   }
 
@@ -69,6 +71,14 @@
       S.sev = r[3];
       S.settings = migrate(r[4]);
       I18n.set(S.settings.lang);
+      const rep = S.siloReport;
+      if (!rep || !Object.keys(rep.idMap).length) return null;
+      // Renomeação S1→S01: reescreve as referências nos registos existentes e grava tudo numa só transacção
+      const items = [];
+      [['events', S.events], ['monitor', S.mon], ['sevents', S.sev]].forEach(function (pair) {
+        L.remapSiloRefs(pair[1], rep.idMap).forEach(function (n) { items.push({ store: pair[0], obj: n, put: true }); });
+      });
+      return (items.length ? DB.addMany(items) : Promise.resolve()).then(saveSettings).then(function () { return load(); });
     });
   }
   function saveSettings() { return DB.setSetting('main', S.settings); }

@@ -65,7 +65,7 @@
     setSetting: function (key, value) { return DB.put('settings', { key: key, value: value }); },
     exportAll: function () {
       return Promise.all(STORES.map(DB.all)).then(function (r) {
-        return { app: 'moagem-app', format: 3, exportedAt: new Date().toISOString(), lots: r[0], events: r[1], settings: r[2], monitor: r[3], sevents: r[4] };
+        return { app: 'moagem-app', format: 4, exportedAt: new Date().toISOString(), lots: r[0], events: r[1], settings: r[2], monitor: r[3], sevents: r[4] };
       });
     },
     // Restaurar cópia de segurança: substitui tudo / Restore backup: replaces everything

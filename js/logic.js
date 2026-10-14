@@ -304,7 +304,7 @@
   const STATUS = ['ACCEPTED', 'HELD', 'REJECTED'];
   const EVT = ['IN', 'OUT', 'TRANSFER', 'EMPTY'];
   function validBackup(d) {
-    if (!d || d.app !== 'moagem-app' || (d.format !== 1 && d.format !== 3)) return false;
+    if (!d || d.app !== 'moagem-app' || (d.format !== 1 && d.format !== 3 && d.format !== 4)) return false;
     if (!Array.isArray(d.lots) || !Array.isArray(d.events) || !Array.isArray(d.settings)) return false;
     if (d.monitor !== undefined && !Array.isArray(d.monitor)) return false;
     if (d.sevents !== undefined && !Array.isArray(d.sevents)) return false;
@@ -330,9 +330,42 @@
     return n >= 1 && n <= 21 ? 'S' + pad(n) : null;
   }
 
+  // Normaliza a lista de silos: renomeia (S1→S01), acrescenta os 21 silos do mestre, preenche capacidades vazias.
+  // Silos inválidos são mantidos e assinalados (podem ter grão). Devolve { silos, idMap, changes, warnings }.
+  function normalizeSilos(list) {
+    const out = [], idMap = {}, changes = [], warnings = [];
+    (list || []).forEach(function (x) {
+      const nid = normalizeSiloId(x.id);
+      if (nid === null) { warnings.push('invalid:' + x.id); out.push(Object.assign({}, x)); return; }
+      if (nid !== x.id) { idMap[x.id] = nid; changes.push('renamed:' + x.id + '->' + nid); }
+      if (out.some(function (o) { return o.id === nid; })) { warnings.push('duplicate:' + nid); return; }
+      out.push(Object.assign({}, x, { id: nid }));
+    });
+    SILO_IDS.forEach(function (id) {
+      const cur = out.find(function (o) { return o.id === id; });
+      const master = String(siloCapKg(id));
+      if (!cur) { out.push({ id: id, cap: master, cereal: '', colour: '', grade: '', points: '1' }); changes.push('added:' + id); return; }
+      if (!cur.cap) { cur.cap = master; changes.push('cap:' + id); }
+      else if (String(cur.cap).replace(/\D/g, '') !== master) warnings.push('cap-differs:' + id);
+    });
+    out.sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+    return { silos: out, idMap: idMap, changes: changes, warnings: warnings };
+  }
+  // Aplica o mapa de renomeação a registos que referenciam silos (eventos, rondas, eventos de armazenagem).
+  function remapSiloRefs(records, idMap) {
+    const changed = [];
+    (records || []).forEach(function (r) {
+      const n = Object.assign({}, r), fields = ['silo', 'toSilo'];
+      let dirty = false;
+      fields.forEach(function (f) { if (n[f] && idMap[n[f]]) { n[f] = idMap[n[f]]; dirty = true; } });
+      if (dirty) changed.push(n);
+    });
+    return changed;
+  }
+
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId };
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;
 })(this);
