@@ -1,4 +1,4 @@
-/* Moagem — Registos v0.2.0: interface. Sem frameworks, para manter simples de manter.
+/* Moagem — Registos v0.3.0: interface. Sem frameworks, para manter simples de manter.
    Recepção com classificação por graus (SOP-OPS-001), silos com capacidade, descarga em sequência,
    inspecções periódicas e autorização por PIN do supervisor. */
 (function () {
@@ -65,7 +65,7 @@
   // ---------------- carregar / load ----------------
   function load() {
     return Promise.all([DB.all('lots'), DB.all('events'), DB.all('monitor'), DB.all('sevents'), DB.getSetting('main', null)]).then(function (r) {
-      S.lots = r[0].sort(function (a, b) { return (b.date + b.time + b.id) < (a.date + a.time + a.id) ? -1 : 1; });
+      S.lots = r[0].sort(L.lotOrder);
       S.events = r[1];
       S.mon = r[2];
       S.sev = r[3];
@@ -250,7 +250,7 @@
       h += '<div class="grid2">' + field('qcName', t('qc_name')) + field('qcReason', t('qc_reason')) + '</div>';
       h += '<div id="dyn"></div>';
     } else {
-      h += '<h2>' + esc(t('new_lot')) + ' · <span class="mono">' + esc(L.lotCode(f.date || L.today(), S.lots)) + '</span></h2>';
+      h += '<h2>' + esc(t('new_lot')) + ' · <span class="mono">' + esc(L.newLotCode(f.date || L.today(), S.lots, S.settings.deviceId).code) + '</span></h2>';
       h += '<label>' + esc(t('cereal')) + '<select name="cereal">' + CEREALS.map(function (c) { return '<option value="' + c + '"' + (f.cereal === c ? ' selected' : '') + '>' + esc(cerName(c)) + '</option>'; }).join('') + '</select></label>';
       if (f.cereal === 'Milho') h += '<div class="lbl">' + esc(t('colour')) + '</div>' + seg('colour', COLOURS.map(function (c) { return [c, c]; }), f.colour);
       h += '<div class="grid2">' + field('date', t('date'), ' type="date"') + field('time', t('time'), ' type="time"') + '</div>';
@@ -393,7 +393,8 @@
     tries = tries || 0;
     return DB.all('lots').then(function (all) {
       if (!lot.id) { lot.id = newId(); lot.uid = lot.id; }
-      lot.code = L.lotCode(lot.date, all);
+      const nc = L.newLotCode(lot.date, all, S.settings && S.settings.deviceId);
+      lot.code = nc.code; lot.codeState = nc.codeState;
       return DB.addMany([{ store: 'lots', obj: lot }].concat(events.map(function (e) { e.lot = lot.id; e.lots = [lot.id]; return { store: 'events', obj: e }; })));
     }).catch(function (err) {
       if (tries < 3 && err && err.name === 'ConstraintError') { lot.id = ''; lot.uid = ''; return addLotUnique(lot, events, tries + 1); }
@@ -994,7 +995,9 @@
       return file.text().then(function (txt) {
         let data; try { data = JSON.parse(txt); } catch (e) { throw new Error('bad'); }
         if (!L.validBackup(data)) throw new Error('bad');
-        if (!confirm(t('restore_confirm'))) { reset(); return; }
+        const ms = L.backupMasterSummary(data);
+        const masterNote = (ms.older + ms.newer + ms.missing) ?'\n\n' + t('restore_master_warn') + ' ' + ms.same + ' / ' + ms.older + ' / ' + ms.newer + ' / ' + ms.missing : '';
+        if (!confirm(t('restore_confirm') + masterNote)) { reset(); return; }
         // Cópia automática dos dados actuais antes de restaurar / automatic safety copy first
         return backup(true).then(function () { return DB.importAll(data); }).then(load).then(function () { S.unlocked = false; render(); toast(t('restored')); });
       });

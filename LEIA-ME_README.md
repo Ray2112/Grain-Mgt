@@ -1,10 +1,16 @@
-# Moagem — Registos (v0.2.0, Fase A)
+# Moagem — Registos (v0.3.0, Fase A)
 
 Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)** e **registo de silos e lotes (RG-13)** numa moagem. Funciona sem rede depois da primeira abertura. Os dados ficam **apenas no telemóvel**.
 
 *English version below.*
 
 ---
+
+## Novidades na v0.3.0
+- **Códigos de lote provisórios:** um lote novo recebe `REC-AAMMDD-P<dispositivo>-NN` (ex.: `REC-261014-P3F9A1C-01`). O código é único entre telemóveis, sem servidor. Quando houver numeração central, o código passa a `REC-AAMMDD-NN` e o provisório fica guardado. As referências internas usam o identificador UUID, por isso não mudam.
+- **Versão do mestre de silos** (`2026-10-14.1`) gravada em cada registo novo. Ao restaurar uma cópia, a aplicação mostra quantos registos são de outra versão ou não têm versão.
+- **Ordem dos lotes** determinística: data, hora e depois código (antes, lotes com a mesma data e hora ficavam numa ordem indefinida).
+- Lotes antigos mantêm o código REC-AAMMDD-NN (estado "legacy").
 
 ## Novidades na v0.2.0
 - **Cereal:** milho, trigo ou arroz. O milho exige a cor (Amarelo / Branco).
@@ -55,9 +61,15 @@ Altere `const CACHE = 'moagem-v0.1.0'` em `sw.js` (por exemplo para `v0.1.1`) e 
 
 ---
 
-# Mill — Records (v0.2.0, Step A) — English
+# Mill — Records (v0.3.0, Step A) — English
 
 A serverless phone app for **grain intake (RG-21)** and **silo and lot records (RG-13)**. It works offline after the first load. Data stays **on the phone only**.
+
+## New in v0.3.0
+- **Provisional lot codes:** a new lot gets `REC-AAMMDD-P<device>-NN` (e.g. `REC-261014-P3F9A1C-01`), unique across phones without a server. When central numbering exists the code becomes `REC-AAMMDD-NN` and the provisional code is kept. Internal references use the UUID, so they do not change.
+- **Silo master version** (`2026-10-14.1`) stored on each new record. On restore the app shows how many records are from another master version or have none.
+- **Deterministic lot order:** date, time, then code (lots with the same date and time previously had an undefined order).
+- Existing lots keep their REC-AAMMDD-NN code (state "legacy").
 
 ## New in v0.2.0
 - Grain dropdown (maize, wheat, rice); maize colour (Amarelo/Branco) required.

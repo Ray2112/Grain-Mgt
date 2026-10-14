@@ -259,4 +259,71 @@ ok('retrieval: silo contents built from uid references report the same lots and 
   assert.deepStrictEqual(c.lots.slice().sort(), ['U-7', 'U-8']);
   assert.deepStrictEqual(L.lotsCarried('S01', events).slice().sort(), ['U-7', 'U-8']);
 });
+// ----- códigos provisórios, sincronização, ordem e versão do mestre -----
+ok('provisionalCode: formato REC-AAMMDD-P<dispositivo>-NN, sequência por dispositivo e dia', () => {
+  assert.strictEqual(L.deviceTag('3f9a1c2e0b7d'), '3F9A1C');
+  assert.strictEqual(L.deviceTag(''), 'NODEV');
+  assert.strictEqual(L.provisionalCode('2026-10-14', '3f9a1c2e0b7d', []), 'REC-261014-P3F9A1C-01');
+  const mine = [{ id: 'a', code: 'REC-261014-P3F9A1C-01' }, { id: 'b', code: 'REC-261014-P3F9A1C-02' }];
+  assert.strictEqual(L.provisionalCode('2026-10-14', '3f9a1c2e0b7d', mine), 'REC-261014-P3F9A1C-03');
+  // outro telemóvel, mesmo dia: não colide
+  assert.strictEqual(L.provisionalCode('2026-10-14', 'aa11bb22cc33', mine), 'REC-261014-PAA11BB-01');
+  // código central do mesmo dia não conta para a sequência provisória
+  assert.strictEqual(L.provisionalCode('2026-10-14', '3f9a1c2e0b7d', [{ id: 'c', code: 'REC-261014-07' }]), 'REC-261014-P3F9A1C-01');
+});
+ok('newLotCode: lote novo fica provisório', () => {
+  const r = L.newLotCode('2026-10-14', [], '3f9a1c2e0b7d');
+  assert.deepStrictEqual(r, { code: 'REC-261014-P3F9A1C-01', codeState: 'provisional' });
+});
+ok('applyCentralCode: troca o código provisório pelo central, guarda o antigo, mantém a chave', () => {
+  const lot = { id: 'U-1', uid: 'U-1', code: 'REC-261014-P3F9A1C-01', codeState: 'provisional', date: '2026-10-14' };
+  const other = { id: 'U-2', code: 'REC-261014-01', codeState: 'central' };
+  const c = L.applyCentralCode(lot, 'REC-261014-02', [lot, other]);
+  assert.strictEqual(c.code, 'REC-261014-02');
+  assert.strictEqual(c.provisionalCode, 'REC-261014-P3F9A1C-01');
+  assert.strictEqual(c.codeState, 'central');
+  assert.strictEqual(c.id, 'U-1');
+  assert.strictEqual(lot.code, 'REC-261014-P3F9A1C-01');        // entrada não alterada
+});
+ok('applyCentralCode: recusa código já usado, formato inválido ou lote não provisório', () => {
+  const lot = { id: 'U-1', code: 'REC-261014-P3F9A1C-01', codeState: 'provisional' };
+  assert.throws(() => L.applyCentralCode(lot, 'REC-261014-01', [lot, { id: 'U-2', code: 'REC-261014-01' }]), /central-code-taken/);
+  assert.throws(() => L.applyCentralCode(lot, 'REC-26-1', [lot]), /bad-central-code/);
+  assert.throws(() => L.applyCentralCode(lot, 'REC-261014-P3F9A1C-02', [lot]), /bad-central-code/);
+  assert.throws(() => L.applyCentralCode({ id: 'U-3', code: 'REC-261014-01', codeState: 'central' }, 'REC-261014-09', []), /not-provisional/);
+  assert.throws(() => L.applyCentralCode({ id: 'U-4', code: 'REC-261014-01', codeState: 'legacy' }, 'REC-261014-09', []), /not-provisional/);
+});
+ok('lotUpgrade: lote antigo fica com codeState legacy; lote novo mantém o seu', () => {
+  assert.strictEqual(L.lotUpgrade({ id: 'REC-261014-01' }, 'F').lot.codeState, 'legacy');
+  assert.strictEqual(L.lotUpgrade({ id: 'U-1', code: 'REC-261014-01', codeState: 'central' }, 'F').lot.codeState, 'central');
+});
+ok('lotOrder: data e hora descendentes; empates ordenados pelo código (comparador válido)', () => {
+  const a = { id: 'U-1', date: '2026-10-14', time: '08:00', code: 'REC-261014-P3F9A1C-02' };
+  const b = { id: 'U-2', date: '2026-10-14', time: '08:00', code: 'REC-261014-P3F9A1C-01' };
+  const c = { id: 'U-3', date: '2026-10-14', time: '09:00', code: 'REC-261014-P3F9A1C-03' };
+  const sorted = [a, b, c].sort(L.lotOrder).map(x => x.id);
+  assert.deepStrictEqual(sorted, ['U-3', 'U-1', 'U-2']);
+  assert.strictEqual(L.lotOrder(a, a), 0);
+  // ordem independente da ordem de entrada
+  assert.deepStrictEqual([b, c, a].sort(L.lotOrder).map(x => x.id), sorted);
+});
+ok('masterStatus: same / older / newer / missing; registos recebem masterVersion', () => {
+  assert.strictEqual(L.masterStatus(L.MASTER_VERSION), 'same');
+  assert.strictEqual(L.masterStatus('2026-01-01.1'), 'older');
+  assert.strictEqual(L.masterStatus('2099-01-01.1'), 'newer');
+  assert.strictEqual(L.masterStatus(undefined), 'missing');
+  const s = L.stampRecord('events', { kind: 'x' }, { deviceId: 'D1' });
+  assert.strictEqual(s.masterVersion, L.MASTER_VERSION);
+  const u = L.stampRecord('events', { kind: 'x', masterVersion: '2026-01-01.1' }, { deviceId: 'D1' });
+  assert.strictEqual(u.masterVersion, '2026-01-01.1');   // não altera o existente
+  const n = L.stampRecord('events', { kind: 'x' }, { deviceId: 'D1', noVersion: true });
+  assert.strictEqual(n.masterVersion, undefined);         // atualizações não ganham versão nova
+});
+
+ok('backupMasterSummary: conta versões do mestre nos registos da cópia', () => {
+  const sum = L.backupMasterSummary({ events: [{ masterVersion: L.MASTER_VERSION }, { masterVersion: '2026-01-01.1' }], lots: [{}], monitor: [{ masterVersion: '2099-01-01.1' }] });
+  assert.deepStrictEqual(sum, { same: 1, older: 1, newer: 1, missing: 1 });
+  assert.deepStrictEqual(L.backupMasterSummary({}), { same: 0, older: 0, newer: 0, missing: 0 });
+});
+
 console.log('OK — ' + n + ' tests');

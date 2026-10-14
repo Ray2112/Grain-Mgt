@@ -1,6 +1,6 @@
 /* Regras de negócio puras (sem interface) — testáveis em Node.
    Business rules with no UI — testable in Node.
-   v0.2.0: classificação por graus (SOP-OPS-001 §7), capacidade dos silos, descarga em sequência, inspecções. */
+   v0.3.0: códigos provisórios e versão do mestre; v0.2.0: classificação por graus (SOP-OPS-001 §7), capacidade dos silos, descarga em sequência, inspecções. */
 (function (root) {
   'use strict';
 
@@ -51,6 +51,40 @@
       if (id && id.indexOf(prefix) === 0) { const n = parseInt(id.slice(prefix.length), 10); if (n > max) max = n; }
     });
     return prefix + pad(max + 1);
+  }
+  // Código provisório (lote criado sem numeração central): REC-AAMMDD-P<6 hex do dispositivo>-NN.
+  // A sequência NN é por dispositivo e por dia, por isso dois telemóveis nunca geram o mesmo código.
+  function deviceTag(deviceId) {
+    const hex = String(deviceId || '').replace(/[^0-9a-fA-F]/g, '').slice(0, 6).toUpperCase();
+    return hex || 'NODEV';
+  }
+  function provisionalCode(dateStr, deviceId, existingLots) {
+    const prefix = 'REC-' + dateStr.replace(/-/g, '').slice(2) + '-P' + deviceTag(deviceId) + '-';
+    let max = 0;
+    (existingLots || []).forEach(function (l) {
+      const id = typeof l === 'string' ? l : (l && (l.code || l.id));
+      if (id && id.indexOf(prefix) === 0) { const n = parseInt(id.slice(prefix.length), 10); if (n > max) max = n; }
+    });
+    return prefix + pad(max + 1);
+  }
+  // Lote novo. Sem serviço central, todo o lote novo fica provisório.
+  function newLotCode(dateStr, existingLots, deviceId) {
+    return { code: provisionalCode(dateStr, deviceId, existingLots), codeState: 'provisional' };
+  }
+  // Sincronização: troca o código provisório pelo central (REC-AAMMDD-NN). As referências usam o UUID, por isso não mudam.
+  // O código provisório fica em provisionalCode. Recusa códigos centrais inválidos, já usados ou em lotes já centrais.
+  const CENTRAL_CODE_RE = /^REC-\d{6}-\d{2,}$/;
+  function applyCentralCode(lot, centralCode, lots) {
+    if (lot.codeState !== 'provisional') throw new Error('not-provisional');
+    if (!CENTRAL_CODE_RE.test(String(centralCode || ''))) throw new Error('bad-central-code');
+    if ((lots || []).some(function (l) { return l.id !== lot.id && (l.code || l.id) === centralCode; })) throw new Error('central-code-taken');
+    return Object.assign({}, lot, { provisionalCode: lot.code, code: centralCode, codeState: 'central' });
+  }
+  // Ordem dos lotes (mais recente primeiro): data, hora, depois código. Comparador válido (0 quando empatam).
+  function lotOrder(a, b) {
+    const ka = [a.date || '', a.time || '', a.code || a.id || ''], kb = [b.date || '', b.time || '', b.code || b.id || ''];
+    for (let i = 0; i < 3; i++) { if (ka[i] !== kb[i]) return ka[i] < kb[i] ? 1 : -1; }
+    return 0;
   }
 
   // ---------- classificação / grading (SOP-OPS-001 §7) ----------
@@ -366,7 +400,15 @@
   // ---------- identificadores de registo (sincronização futura) ----------
   // Cada registo tem um uid global (UUID v4) e o deviceId de origem. A chave local (IndexedDB) não é partilhada.
   const UID_STORES = ['lots', 'events', 'monitor', 'sevents'];
-  const APP_VERSION = '0.2.0';
+  const APP_VERSION = '0.3.0';
+  // Versão do mestre partilhado (silos e capacidades). Muda sempre que SILO_IDS ou as capacidades mudarem.
+  const MASTER_VERSION = '2026-10-14.1';
+  // Compara a versão do mestre gravada num registo/cópia com a desta app: 'same' | 'older' | 'newer' | 'missing'.
+  function masterStatus(v) {
+    if (!v) return 'missing';
+    if (v === MASTER_VERSION) return 'same';
+    return v < MASTER_VERSION ? 'older' : 'newer';
+  }
   function newUid(rnd) {
     rnd = rnd || Math.random;
     let h = ''; for (let i = 0; i < 32; i++) h += Math.floor(rnd() * 16).toString(16);
@@ -379,6 +421,13 @@
     if (!out.uid) out.uid = (ctx && ctx.uid) || newUid();
     if (!out.deviceId && ctx && ctx.deviceId) out.deviceId = ctx.deviceId;
     if (!out.appVersion && !(ctx && ctx.noVersion)) out.appVersion = APP_VERSION;
+    if (!out.masterVersion && !(ctx && ctx.noVersion)) out.masterVersion = MASTER_VERSION;
+    return out;
+  }
+  // Resumo da versão do mestre nos registos de uma cópia: quantos são iguais, anteriores, posteriores ou sem versão.
+  function backupMasterSummary(data) {
+    const out = { same: 0, older: 0, newer: 0, missing: 0 };
+    UID_STORES.forEach(function (s) { (data && data[s] || []).forEach(function (r) { out[masterStatus(r.masterVersion)]++; }); });
     return out;
   }
   // Migração por registo: renomeia silos e atribui uid/deviceId a registos antigos. Devolve { rec, changed }.
@@ -412,12 +461,14 @@
   // Lote antigo (chave = código REC): passa a chave = uid e guarda o código antigo.
   function lotUpgrade(lot, fallbackUid) {
     const nid = lot.uid || fallbackUid;
-    return { oldId: lot.id, newId: nid, lot: Object.assign({}, lot, { id: nid, uid: nid, code: lot.code || lot.id }) };
+    return { oldId: lot.id, newId: nid, lot: Object.assign({}, lot, { id: nid, uid: nid, code: lot.code || lot.id, codeState: lot.codeState || 'legacy' }) };
   }
 
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade };
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
+    deviceTag: deviceTag, provisionalCode: provisionalCode, newLotCode: newLotCode, applyCentralCode: applyCentralCode, lotOrder: lotOrder,
+    MASTER_VERSION: MASTER_VERSION, masterStatus: masterStatus, backupMasterSummary: backupMasterSummary };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;
 })(this);
