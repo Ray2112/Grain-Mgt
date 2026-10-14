@@ -47,7 +47,7 @@
     const prefix = 'REC-' + dateStr.replace(/-/g, '').slice(2) + '-';
     let max = 0;
     (existingLots || []).forEach(function (l) {
-      const id = typeof l === 'string' ? l : l && l.id;
+      const id = typeof l === 'string' ? l : (l && (l.code || l.id));
       if (id && id.indexOf(prefix) === 0) { const n = parseInt(id.slice(prefix.length), 10); if (n > max) max = n; }
     });
     return prefix + pad(max + 1);
@@ -382,8 +382,12 @@
     return out;
   }
   // Migração por registo: renomeia silos e atribui uid/deviceId a registos antigos. Devolve { rec, changed }.
-  function upgradeRecord(store, rec, idMap, deviceId, rnd) {
+  function upgradeRecord(store, rec, idMap, deviceId, rnd, lotMap) {
     const out = Object.assign({}, rec); let changed = false;
+    if (store === 'events' && lotMap) {
+      if (out.lot && lotMap[out.lot]) { out.lot = lotMap[out.lot]; changed = true; }
+      if (Array.isArray(out.lots)) { const nl = out.lots.map(function (x) { return lotMap[x] || x; }); if (nl.some(function (x, i) { return x !== out.lots[i]; })) { out.lots = nl; changed = true; } }
+    }
     if (store !== 'lots') ['silo', 'toSilo'].forEach(function (f) { if (out[f] && idMap && idMap[out[f]]) { out[f] = idMap[out[f]]; changed = true; } });
     if (UID_STORES.indexOf(store) >= 0) {
       if (!out.uid) { out.uid = newUid(rnd); changed = true; }
@@ -392,9 +396,28 @@
     return { rec: out, changed: changed };
   }
 
+  // ---------- lotes: chave = uid (UUID); código = REC-AAMMDD-NN (apresentação) ----------
+  // Rótulo para ecrãs e exportações: código do lote; se não existir, devolve o identificador tal como está.
+  function lotLabel(lots, id) {
+    const l = (lots || []).find(function (x) { return x.id === id; });
+    return (l && (l.code || l.id)) || String(id);
+  }
+  function codeExists(lots, code) { return (lots || []).some(function (l) { return (l.code || l.id) === code; }); }
+  // Novo lote: chave e uid iguais; código calculado a partir dos lotes existentes.
+  function newLotRecord(lot, existingLots, uid) {
+    const out = Object.assign({}, lot, { id: uid, uid: uid });
+    out.code = lotCode(lot.date, existingLots);
+    return out;
+  }
+  // Lote antigo (chave = código REC): passa a chave = uid e guarda o código antigo.
+  function lotUpgrade(lot, fallbackUid) {
+    const nid = lot.uid || fallbackUid;
+    return { oldId: lot.id, newId: nid, lot: Object.assign({}, lot, { id: nid, uid: nid, code: lot.code || lot.id }) };
+  }
+
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION };
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapT: siloCapT, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;
 })(this);

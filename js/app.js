@@ -71,14 +71,25 @@
       S.sev = r[3];
       S.settings = migrate(r[4]);
       I18n.set(S.settings.lang);
+      // Lotes antigos (chave = código REC): chave passa a UUID; código guardado. Snapshot antes de qualquer alteração
+      const origLots = S.lots, origEvents = S.events, lotMap = {}, lotItems = [];
+      S.lots = origLots.map(function (l) {
+        if (l.code) return l;
+        const u = L.lotUpgrade(l, L.newUid());
+        lotMap[u.oldId] = u.newId;
+        lotItems.push({ store: 'lots', obj: u.lot, put: true }, { store: 'lots', del: u.oldId });
+        return u.lot;
+      });
+      if (Object.keys(lotMap).length) lotItems.unshift({ store: 'settings', obj: { key: 'pre_lot_uuid_snapshot', value: { takenAt: new Date().toISOString(), lots: origLots, events: origEvents } }, put: true });
       let needSave = false;
       if (!S.settings.deviceId) { S.settings.deviceId = L.newUid().replace(/-/g, '').slice(0, 12); needSave = true; }
       DB.setDevice(S.settings.deviceId);
       // Migração por registo: renomeia silos (S1→S01) e atribui uid/deviceId a registos antigos; tudo numa transacção
       const rep = S.siloReport, idMap = rep ? rep.idMap : {}, items = [];
+      lotItems.forEach(function (i) { items.push(i); });
       [['lots', S.lots], ['events', S.events], ['monitor', S.mon], ['sevents', S.sev]].forEach(function (pair) {
         pair[1].forEach(function (rec) {
-          const u = L.upgradeRecord(pair[0], rec, pair[0] === 'lots' ? {} : idMap, S.settings.deviceId);
+          const u = L.upgradeRecord(pair[0], rec, pair[0] === 'lots' ? {} : idMap, S.settings.deviceId, undefined, lotMap);
           if (u.changed) items.push({ store: pair[0], obj: u.rec, put: true });
         });
       });
@@ -176,7 +187,7 @@
   function lotRow(l) {
     const dest = (l.dest && l.dest.length) ? ' · ' + l.dest.map(function (d) { return esc(d.silo); }).join('+') : (l.silo ? ' · ' + esc(l.silo) : '');
     const act = l.status === 'HELD' ? '<button class="btn small" data-action="release" data-id="' + esc(l.id) + '">' + esc(t('decide_held')) + '</button>' : '';
-    return '<div class="card row"><div class="grow"><div class="mono">' + esc(l.id) + '</div><div class="muted small">' +
+    return '<div class="card row"><div class="grow"><div class="mono">' + esc(l.code || l.id) + '</div><div class="muted small">' +
       esc(cerName(l.cereal)) + (l.colour ? ' ' + esc(l.colour) : '') + ' · ' + esc(l.supplier) + ' · ' + fmtKg(L.num(l.kg, 'kg')) + dest + '</div>' + act + '</div>' +
       '<div class="stack right">' + statusBadge(l.status) + gradeBadge(l.grade) + '</div></div>';
   }
@@ -194,7 +205,7 @@
   function lotListHtml(d) {
     const q = S.q.trim().toLowerCase();
     if (q) {
-      const m = S.lots.filter(function (l) { return (l.id + ' ' + l.supplier + ' ' + (l.plate || '') + ' ' + (l.guia || '')).toLowerCase().indexOf(q) >= 0; });
+      const m = S.lots.filter(function (l) { return ((l.code || l.id) + ' ' + l.supplier + ' ' + (l.plate || '') + ' ' + (l.guia || '')).toLowerCase().indexOf(q) >= 0; });
       return m.length ? m.slice(0, 100).map(lotRow).join('') + (m.length > 100 ? '<p class="muted small">' + esc(t('more_results')) + '</p>' : '') : '<p class="muted">' + esc(t('no_results')) + '</p>';
     }
     const todays = S.lots.filter(function (l) { return l.date === d; });
@@ -229,7 +240,7 @@
     const f = S.form;
     let h = '<form id="lotform" class="card stack" autocomplete="off" novalidate>';
     if (f.mode === 'release') {
-      h += '<h2>' + esc(t('decide_held')) + ' · <span class="mono">' + esc(f.id) + '</span></h2>' + lotSummary(f);
+      h += '<h2>' + esc(t('decide_held')) + ' · <span class="mono">' + esc(f.code || f.id) + '</span></h2>' + lotSummary(f);
       const r = L.intakeClass(f, gcfg(f.cereal), mcfg(f.cereal), f.cereal === 'Milho' ? S.settings.st : null);
       const opts = L.releaseOptions(r.matrix, r.priority);
       h += '<label>' + esc(t('qc_decision')) + '<select name="qcGrade"><option value="">—</option>' + opts.map(function (g) {
@@ -375,14 +386,17 @@
     } else if (f.mode === 'release' && d.status === 'REJECTED') h += '<p class="warn small">' + esc(t('reject_note')) + '</p>';
     box.innerHTML = h;
   }
-  // Grava novo lote com código único (nunca sobrescreve) / save with unique code
+  // Identificador único do lote (UUID). Código REC-AAMMDD-NN é só apresentação / lot key = UUID, code = display only
+  function newId() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : L.newUid(); }
+  // Grava novo lote: chave UUID, código calculado a partir dos lotes existentes / save: UUID key + display code
   function addLotUnique(lot, events, tries) {
     tries = tries || 0;
     return DB.all('lots').then(function (all) {
-      lot.id = L.lotCode(lot.date, all);
+      if (!lot.id) { lot.id = newId(); lot.uid = lot.id; }
+      lot.code = L.lotCode(lot.date, all);
       return DB.addMany([{ store: 'lots', obj: lot }].concat(events.map(function (e) { e.lot = lot.id; e.lots = [lot.id]; return { store: 'events', obj: e }; })));
     }).catch(function (err) {
-      if (tries < 3 && err && err.name === 'ConstraintError') return addLotUnique(lot, events, tries + 1);
+      if (tries < 3 && err && err.name === 'ConstraintError') { lot.id = ''; lot.uid = ''; return addLotUnique(lot, events, tries + 1); }
       throw err;
     });
   }
@@ -397,16 +411,17 @@
     if (r.code === 'INCOMPLETE') { toast(t('enter_values') + ': ' + r.missing.map(function (k) { return t(PLABEL[k]); }).join(', ')); return; }
     const now = new Date().toISOString();
     const lot = {
-      id: '', date: f.date, time: f.time, guia: f.guia, supplier: f.supplier.trim(), origin: f.origin, cereal: f.cereal, colour: f.cereal === 'Milho' ? f.colour : '',
+      id: newId(), uid: '', date: f.date, time: f.time, guia: f.guia, supplier: f.supplier.trim(), origin: f.origin, cereal: f.cereal, colour: f.cereal === 'Milho' ? f.colour : '',
       plate: f.plate, kg: kg, hum: L.num(f.hum), fat: L.num(f.fat), fm: L.num(f.fm), brk: L.num(f.brk), dis: L.num(f.dis), sw: L.num(f.sw),
       ins: f.ins, odor: f.odor, afla: L.num(f.afla), don: L.num(f.don), fum: L.num(f.fum),
       matrix: r.matrix, auto: r.code, reasons: r.reasons, holdReasons: r.hold, gradeNotes: r.notes, grade: d.grade, status: d.status,
       dest: [], auth: [], responsible: f.responsible.trim(), notes: f.notes, createdAt: now,
       history: [{ at: now, status: d.status, grade: d.grade, by: f.responsible.trim() }]
     };
+    lot.uid = lot.id;
     finishAccept(lot, d, f, function (lot2, evs) {
       addLotUnique(lot2, evs).then(function () { return after(f.responsible, lot2.supplier); }).then(function () {
-        S.form = null; render(); toast(t('saved') + ': ' + lot2.id + ' · ' + t('st_' + lot2.status) + (lot2.grade ? ' · ' + gradeName(lot2.grade) : ''));
+        S.form = null; render(); toast(t('saved') + ': ' + (lot2.code || lot2.id) + ' · ' + t('st_' + lot2.status) + (lot2.grade ? ' · ' + gradeName(lot2.grade) : ''));
       }).catch(function () { toast(t('save_failed')); });
     });
   }
@@ -450,7 +465,7 @@
     finishAccept(upd, d, f, function (lot2, evs) {
       DB.addMany([{ store: 'lots', obj: lot2, put: true }].concat(evs.map(function (e) { return { store: 'events', obj: e }; })))
         .then(function () { return after(f.qcName, null); })
-        .then(function () { S.form = null; render(); toast(t('saved') + ': ' + lot2.id + ' · ' + t('st_' + lot2.status)); })
+        .then(function () { S.form = null; render(); toast(t('saved') + ': ' + (lot2.code || lot2.id) + ' · ' + t('st_' + lot2.status)); })
         .catch(function () { toast(t('save_failed')); });
     });
   }
@@ -526,7 +541,7 @@
       if (ss.rejected) h += '<p class="holdbar">⛔ ' + esc(t('rejected_banner')) + '</p>';
       h += drvList(ss, 1);
       h += '<details><summary class="small muted">' + esc(t('lots_in_silo')) + ' (' + c.lots.length + ')</summary>' +
-        (c.lots.length ? c.lots.map(function (id) { const l = lotsById[id]; return '<div class="row small"><span class="mono grow">' + esc(id) + '</span><span class="muted">' + (l ? esc(l.date) + ' · ' + esc(l.supplier) + ' · ' + esc(gradeName(l.grade)) : '') + '</span></div>'; }).join('') : '<div class="muted small">' + esc(t('empty_silo')) + '</div>') + '</details>';
+        (c.lots.length ? c.lots.map(function (id) { const l = lotsById[id]; return '<div class="row small"><span class="mono grow">' + esc(l ? (l.code || l.id) : id) + '</span><span class="muted">' + (l ? esc(l.date) + ' · ' + esc(l.supplier) + ' · ' + esc(gradeName(l.grade)) : '') + '</span></div>'; }).join('') : '<div class="muted small">' + esc(t('empty_silo')) + '</div>') + '</details>';
       const dis = c.kg > 0 && !blockOut ? '' : ' disabled';
       h += '<div class="grid2"><button class="btn small" data-action="discharge" data-silo="' + esc(s.id) + '"' + dis + '>' + esc(t('act_out_short')) + '</button>' +
         '<button class="btn small" data-action="silo-transfer" data-silo="' + esc(s.id) + '"' + dis + '>' + esc(t('act_transfer')) + '</button>' +
@@ -538,7 +553,7 @@
     h += evs.length ? evs.map(function (e) {
       const what = e.type === 'TRANSFER' ? esc(e.silo) + ' → ' + esc(e.toSilo) : esc(e.silo);
       return '<div class="card row small"><div class="grow"><strong>' + esc(t('ev_' + e.type)) + '</strong> · ' + what + (e.place && e.type === 'OUT' ? ' → ' + esc(placeName(e.place)) : '') + (e.auth ? ' · <span class="flag">⚠ ' + esc(t('authorized')) + '</span>' : '') +
-        '<div class="muted">' + esc(e.date) + ' ' + esc(e.time) + (e.lots && e.lots.length ? ' · ' + e.lots.map(esc).join(', ') : '') + (e.prodLot ? ' · ' + esc(e.prodLot) : '') + (e.operator ? ' · ' + esc(e.operator) : '') + '</div></div><div>' + (e.kg ? fmtKg(e.kg) : (e.type === 'EMPTY' && e.writeOff ? '−' + fmtKg(e.writeOff) : '')) + '</div></div>';
+        '<div class="muted">' + esc(e.date) + ' ' + esc(e.time) + (e.lots && e.lots.length ? ' · ' + e.lots.map(function (x) { return esc(L.lotLabel(S.lots, x)); }).join(', ') : '') + (e.prodLot ? ' · ' + esc(e.prodLot) : '') + (e.operator ? ' · ' + esc(e.operator) : '') + '</div></div><div>' + (e.kg ? fmtKg(e.kg) : (e.type === 'EMPTY' && e.writeOff ? '−' + fmtKg(e.writeOff) : '')) + '</div></div>';
     }).join('') : '<p class="muted">' + esc(t('no_events')) + '</p>';
     return h;
   }
@@ -906,8 +921,8 @@
     const H21 = [t('date'), t('time'), t('lot_code'), t('guia'), t('supplier'), t('origin'), t('cereal'), t('colour'), t('plate'), t('net_kg'),
       t('moisture'), t('fat'), t('foreign'), t('broken'), t('diseased'), t('sw'), t('odour'), t('infestation'), t('afla'), t('don'), t('fum'),
       t('x_matrix'), t('x_reasons'), t('x_status'), t('x_grade'), t('x_dest'), t('x_auth'), t('x_qc'), t('responsible'), t('notes')];
-    const rows21 = S.lots.filter(function (l) { return inRange(l.date); }).sort(function (a, b) { return a.id < b.id ? -1 : 1; }).map(function (l) {
-      return [l.date, l.time, l.id, l.guia, l.supplier, l.origin, cerName(l.cereal), l.colour || '', l.plate, l.kg, l.hum, l.fat, l.fm, l.brk, l.dis, l.sw,
+    const rows21 = S.lots.filter(function (l) { return inRange(l.date); }).sort(function (a, b) { return (a.code || a.id) < (b.code || b.id) ? -1 : 1; }).map(function (l) {
+      return [l.date, l.time, l.code || l.id, l.guia, l.supplier, l.origin, cerName(l.cereal), l.colour || '', l.plate, l.kg, l.hum, l.fat, l.fm, l.brk, l.dis, l.sw,
         l.odor === 'Anormal' ? t('abnormal') : t('normal'), yn(l.ins), l.afla, l.don, l.fum,
         l.matrix ? gradeName(l.matrix) : '', (l.reasons || []).map(function (x) { return x.k ? t(PLABEL[x.k]) + ' ' + x.v + ' → ' + gradeName(L.GRADES[x.level]) : t(x); }).concat((l.holdReasons || []).map(function (x) { return t('hold_' + x); })).join('; '),
         t('st_' + l.status), l.grade ? gradeName(l.grade) : '', (l.dest || []).map(function (d) { return d.silo + ': ' + d.kg; }).join('; ') || l.silo || '',
@@ -919,7 +934,7 @@
     const rows13 = L.sortEvents(S.events.filter(function (e) { return inRange(e.date); })).map(function (e) {
       const where = e.type === 'TRANSFER' ? e.silo + ' → ' + e.toSilo : e.type === 'OUT' ? placeName(e.place) : e.type === 'IN' ? t('tab_intake') : '';
       const kg = e.type === 'EMPTY' ? (e.writeOff ? -e.writeOff : null) : e.kg;
-      return [e.date, e.time, e.silo, t('ev_' + e.type), (e.lots || []).join(', '), kg, where, e.prodLot || '', e.operator, e.auth ? e.auth.by + ' — ' + e.auth.reason : '', e.notes];
+      return [e.date, e.time, e.silo, t('ev_' + e.type), (e.lots || []).map(function (x) { return L.lotLabel(S.lots, x); }).join(', '), kg, where, e.prodLot || '', e.operator, e.auth ? e.auth.by + ' — ' + e.auth.reason : '', e.notes];
     });
     const desig = function (id) { const x = siloById(id); return x ? siloDesig(x) : ''; };
     const HA = [t('date'), t('shift'), t('time'), t('silo'), t('x_product'), t('x_maxtemp'), t('x_point'), t('x_maxdt'), t('odour_visual'), t('status'), t('operator'), t('x_points'), t('notes')];

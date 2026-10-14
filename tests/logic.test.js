@@ -206,4 +206,57 @@ ok('stampRecord: updates (noVersion) get uid/deviceId but no appVersion', () => 
   const u = L.stampRecord('lots', { id: 'REC-1', status: 'HELD' }, { uid: 'U', deviceId: 'D', noVersion: true });
   assert.strictEqual(u.uid, 'U'); assert.strictEqual(u.deviceId, 'D'); assert.strictEqual(u.appVersion, undefined);
 });
+
+ok('lotCode: uses display code, so a UUID-keyed lot does not break numbering', () => {
+  const lots = [{ id: '6f1c0a2e-0000-4000-8000-000000000001', code: 'REC-261014-01' }, { id: 'REC-261013-07' }];
+  assert.strictEqual(L.lotCode('2026-10-14', lots), 'REC-261014-02');
+  assert.strictEqual(L.lotCode('2026-10-13', lots), 'REC-261013-08');
+  assert.strictEqual(L.lotCode('2026-10-15', lots), 'REC-261015-01');
+});
+ok('lotLabel: shows the code for a uuid; falls back to the id when unknown', () => {
+  const lots = [{ id: 'U-1', code: 'REC-261014-01' }];
+  assert.strictEqual(L.lotLabel(lots, 'U-1'), 'REC-261014-01');
+  assert.strictEqual(L.lotLabel(lots, 'MISSING'), 'MISSING');
+  assert.strictEqual(L.codeExists(lots, 'REC-261014-01'), true);
+  assert.strictEqual(L.codeExists(lots, 'REC-261014-02'), false);
+});
+ok('newLotRecord: creation sets key = uid, a fresh code, and keeps the fields', () => {
+  const existing = [{ id: 'U-OLD', code: 'REC-261014-01' }];
+  const lot = L.newLotRecord({ date: '2026-10-14', supplier: 'X', kg: 1000 }, existing, 'U-NEW');
+  assert.strictEqual(lot.id, 'U-NEW'); assert.strictEqual(lot.uid, 'U-NEW');
+  assert.strictEqual(lot.code, 'REC-261014-02'); assert.strictEqual(lot.supplier, 'X');
+});
+ok('creation in sequence: 50 lots get 50 distinct codes and distinct keys', () => {
+  let all = []; const codes = new Set(), keys = new Set();
+  for (let i = 0; i < 50; i++) {
+    const lot = L.newLotRecord({ date: '2026-10-14' }, all, 'K' + i);
+    codes.add(lot.code); keys.add(lot.id); all = all.concat([lot]);
+  }
+  assert.strictEqual(codes.size, 50); assert.strictEqual(keys.size, 50);
+  assert.strictEqual(all[49].code, 'REC-261014-50');
+});
+ok('lotUpgrade: legacy REC key becomes uid key; old code kept; uid reused when present', () => {
+  const u = L.lotUpgrade({ id: 'REC-261014-01', uid: 'U-7', supplier: 'X' }, 'FALLBACK');
+  assert.strictEqual(u.oldId, 'REC-261014-01'); assert.strictEqual(u.newId, 'U-7');
+  assert.strictEqual(u.lot.id, 'U-7'); assert.strictEqual(u.lot.code, 'REC-261014-01'); assert.strictEqual(u.lot.supplier, 'X');
+  const v = L.lotUpgrade({ id: 'REC-261014-02' }, 'FALLBACK');
+  assert.strictEqual(v.newId, 'FALLBACK'); assert.strictEqual(v.lot.uid, 'FALLBACK');
+});
+ok('upgradeRecord: event lot and lots[] references move to the new key', () => {
+  const map = { 'REC-261014-01': 'U-7' };
+  const r = L.upgradeRecord('events', { seq: 3, type: 'IN', lot: 'REC-261014-01', lots: ['REC-261014-01'], silo: 'S01' }, {}, 'D', () => 0.5, map);
+  assert.strictEqual(r.changed, true); assert.strictEqual(r.rec.lot, 'U-7'); assert.deepStrictEqual(r.rec.lots, ['U-7']);
+  const other = L.upgradeRecord('events', { lot: 'REC-261014-09', lots: ['REC-261014-09'], silo: 'S01', uid: 'x', deviceId: 'd' }, {}, 'D', () => 0.5, map);
+  assert.deepStrictEqual(other.rec.lots, ['REC-261014-09']);
+});
+ok('retrieval: silo contents built from uid references report the same lots and kg', () => {
+  const events = [
+    { seq: 1, type: 'IN', silo: 'S01', lot: 'U-7', lots: ['U-7'], kg: 1000 },
+    { seq: 2, type: 'IN', silo: 'S01', lot: 'U-8', lots: ['U-8'], kg: 500 },
+  ];
+  const c = L.siloContents('S01', events);
+  assert.strictEqual(c.kg, 1500);
+  assert.deepStrictEqual(c.lots.slice().sort(), ['U-7', 'U-8']);
+  assert.deepStrictEqual(L.lotsCarried('S01', events).slice().sort(), ['U-7', 'U-8']);
+});
 console.log('OK — ' + n + ' tests');

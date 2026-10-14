@@ -59,7 +59,7 @@
       return open().then(function (db) {
         return new Promise(function (resolve, reject) {
           const t = db.transaction(names, 'readwrite');
-          items.forEach(function (i) { const s = t.objectStore(i.store); const o = stamp(i.store, i.obj, !!i.put); if (i.put) s.put(o); else s.add(o); });
+          items.forEach(function (i) { const s = t.objectStore(i.store); if (i.del !== undefined) { s.delete(i.del); return; } const o = stamp(i.store, i.obj, !!i.put); if (i.put) s.put(o); else s.add(o); });
           t.oncomplete = function () { resolve(); };
           t.onerror = function (e) { e.preventDefault && e.preventDefault(); reject(t.error); };
           t.onabort = function () { reject(t.error); };
