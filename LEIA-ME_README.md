@@ -8,7 +8,7 @@ Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)**
 
 ## Novidades na v0.4.0
 - **Turnos iguais à app de CQ:** D = 07:00–19:00 e N = 19:00–07:00. O turno N das 00:00–07:00 pertence ao dia anterior. O campo de horas de início deixa de ser editável (secção protegida).
-- **Turma (A–D)** em Definições → Geral; cada registo novo guarda a turma e o turno (`2026-10-14/D` ou `/N`). Vazia = sem turma.
+- **Turma (A–D)** deduzida da data e hora pela rotação de 8 turnos (ancora 14-10-2026 07:00 = C); não se escolhe. Cada registo novo guarda a turma e o turno (`2026-10-14/D` ou `/N`). Turnos fixos D 07:00–19:00 e N 19:00–07:00.
 - **Todas as quantidades em kg:** capacidades dos silos em kg (S01–S12: 6 000 000 kg; S13–S21: 3 000 000 kg). A função de toneladas foi retirada.
 - Cópia de segurança de produção: os silos passam de S1–S4 para S01–S04 (ficheiro `…_S01-kg.json`). Ao restaurar, a app acrescenta S05–S21 do mestre.
 
@@ -73,7 +73,7 @@ A serverless phone app for **grain intake (RG-21)** and **silo and lot records (
 
 ## New in v0.4.0
 - **Shifts same as the QC app:** D = 07:00–19:00 and N = 19:00–07:00. The N shift for 00:00–07:00 belongs to the previous day. The shift start field is no longer editable (protected section).
-- **Crew (A–D)** in Settings → General; every new record stores crew and shift (`2026-10-14/D` or `/N`). Empty = no crew.
+- **Crew (A–D)** derived from date and time by the 8-slot rotation (anchor 2026-10-14 07:00 = C); not chosen. Every new record stores crew and shift (`2026-10-14/D` or `/N`). Fixed shifts D 07:00–19:00 and N 19:00–07:00.
 - **All quantities in kg:** silo capacities in kg (S01–S12: 6,000,000 kg; S13–S21: 3,000,000 kg). The tonnes function was removed.
 - Production backup: silos change from S1–S4 to S01–S04 (file `…_S01-kg.json`). On restore the app adds S05–S21 from the master.
 

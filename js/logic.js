@@ -244,6 +244,17 @@
     const d = (win === 'N' && t < mins('07:00')) ? addDays(date, -1) : date;
     return { id: d + '/' + win, date: d, window: win, idx: win === 'D' ? 0 : 1, start: win === 'D' ? '07:00' : '19:00', end: win === 'D' ? '19:00' : '07:00', n: 2 };
   }
+  // Turma pela rotação de 12 h (indicada por Zhax, 14-10-2026): 14-10 07:00–19:00 = C; 14-10 19:00 = B; 15-10 D = A;
+  // 15-10 N = C; 16-10 D = D; 16-10 N = A; 17-10 D = B. Ciclo de 8 turnos (4 dias), que se repete.
+  // O 8.º turno (17-10 N = D) é INFERIDO (cada turma faz 2 turnos por ciclo). Confirmar com Zhax.
+  const CREW_ANCHOR = '2026-10-14';
+  const CREW_CYCLE = ['C', 'B', 'A', 'C', 'D', 'A', 'B', 'D'];
+  function crewOf(date, time) {
+    const sh = shiftOf(date, time);
+    const startMin = sh.window === 'D' ? mins('07:00') : mins('19:00');
+    const slot = Math.floor((daysBetween(CREW_ANCHOR, sh.date) * 1440 + startMin - mins('07:00')) / 720);
+    return CREW_CYCLE[((slot % 8) + 8) % 8];
+  }
   function prevShift(sh) {
     return sh.window === 'N' ? shiftOf(sh.date, '08:00') : shiftOf(addDays(sh.date, -1), '20:00');
   }
@@ -431,7 +442,7 @@
     if (out.operatorId === undefined) out.operatorId = (ctx && ctx.operatorId) || null;
     if (out.test === undefined) out.test = !!(ctx && ctx.test);
     if (out.uploadedAt === undefined) out.uploadedAt = null;
-    if (out.crew === undefined) out.crew = (ctx && ctx.crew) || null;
+    if (out.crew === undefined) out.crew = (typeof out.date === 'string' && typeof out.time === 'string') ? crewOf(out.date, out.time) : null;
     if (out.shift === undefined) out.shift = (typeof out.date === 'string' && typeof out.time === 'string') ? shiftOf(out.date, out.time, ctx && ctx.starts).id : null;
     return out;
   }
@@ -478,7 +489,7 @@
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapKg: siloCapKg, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapKg: siloCapKg, crewOf: crewOf, CREW_CYCLE: CREW_CYCLE, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
     deviceTag: deviceTag, provisionalCode: provisionalCode, newLotCode: newLotCode, applyCentralCode: applyCentralCode, lotOrder: lotOrder,
     MASTER_VERSION: MASTER_VERSION, masterStatus: masterStatus, backupMasterSummary: backupMasterSummary, CONTRACT_VERSION: CONTRACT_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;

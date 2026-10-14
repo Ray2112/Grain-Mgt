@@ -360,12 +360,15 @@ ok('contrato v1: actualização (noVersion) não acrescenta campos novos a regis
   assert.strictEqual(u.uid, 'U-9');
 });
 
-ok('turma (A–D) no contrato: registo leva a turma das Definições; sem turma fica null', () => {
-  const a = L.stampRecord('events', { date: '2026-10-14', time: '09:00' }, { deviceId: 'D1', crew: 'B' });
-  assert.strictEqual(a.crew, 'B');
-  const b = L.stampRecord('events', { date: '2026-10-14', time: '09:00' }, { deviceId: 'D1' });
-  assert.strictEqual(b.crew, null);
-  assert.strictEqual(b.shift, '2026-10-14/D');
+ok('turma pela rotação de 12 h: os turnos indicados por Zhax + o ciclo que se repete', () => {
+  const seq = [['2026-10-14', '08:00', 'C'], ['2026-10-14', '20:00', 'B'], ['2026-10-15', '08:00', 'A'], ['2026-10-15', '20:00', 'C'],
+    ['2026-10-16', '08:00', 'D'], ['2026-10-16', '20:00', 'A'], ['2026-10-17', '08:00', 'B'],
+    ['2026-10-15', '02:00', 'B'], ['2026-10-14', '05:00', 'D'], ['2026-10-18', '08:00', 'C']];
+  seq.forEach(([d, t, c]) => assert.strictEqual(L.crewOf(d, t), c, d + ' ' + t));
+  const r = L.stampRecord('events', { date: '2026-10-15', time: '02:00' }, { deviceId: 'D1' });
+  assert.strictEqual(r.crew, 'B');
+  assert.strictEqual(L.stampRecord('events', { kind: 'x' }, {}).crew, null, 'sem data/hora: sem turma');
+  assert.strictEqual(L.stampRecord('events', { date: '2026-10-14', time: '09:00' }, {}).shift, '2026-10-14/D');
 });
 
 console.log('OK — ' + n + ' tests');

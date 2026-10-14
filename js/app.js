@@ -100,7 +100,7 @@
   function saveSettings() { syncCtx(); return DB.setSetting('main', S.settings); }   // o contexto (operador, turma, teste) acompanha sempre as Definições
   // Contexto dos registos novos (dispositivo, ID do operador, modo de teste, inícios de turno)
   function syncCtx() {
-    DB.setContext({ deviceId: S.settings.deviceId, operatorId: S.settings.operatorId || null, test: !!S.settings.testMode, crew: S.settings.crew || null,
+    DB.setContext({ deviceId: S.settings.deviceId, operatorId: S.settings.operatorId || null, test: !!S.settings.testMode,
       starts: (S.settings.st && S.settings.st.shifts) || null });
   }
   function toast(msg) {
@@ -1016,7 +1016,6 @@
     const s = S.settings;
     let h = '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
       '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
-      '<label>' + esc(t('crew_label')) + '<select name="crew">' + ['', 'A', 'B', 'C', 'D'].map(function (c) { return '<option value="' + c + '"' + ((s.crew || '') === c ? ' selected' : '') + '>' + (c || esc(t('crew_none'))) + '</option>'; }).join('') + '</select></label>' +
       '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label>' +
       '<label>' + esc(t('language')) + '<select name="lang"><option value="pt" ' + (s.lang === 'pt' ? 'selected' : '') + '>Português</option><option value="en" ' + (s.lang === 'en' ? 'selected' : '') + '>English</option></select></label></div>';
     h += '<div class="card stack"><h2>' + esc(t('suppliers_cfg')) + '</h2>' + s.suppliers.map(function (x, i) {
@@ -1147,7 +1146,6 @@
     const s = S.settings;
     s.millName = v.millName || ''; s.site = v.site || ''; s.lang = v.lang || 'pt';
     s.operatorId = (v.operatorId || '').trim() || null; s.testMode = v.testMode === 'on';
-    s.crew = ['A', 'B', 'C', 'D'].indexOf(v.crew) >= 0 ? v.crew : null;
     s.suppliers = s.suppliers.map(function (x, i) { return (v['sup_' + i] || '').trim(); }).filter(Boolean);
   }
   function pinSubmit(form) {
