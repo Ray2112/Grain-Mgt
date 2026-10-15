@@ -1018,6 +1018,7 @@
       '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
       '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label>' +
       '<label>' + esc(t('language')) + '<select name="lang"><option value="pt" ' + (s.lang === 'pt' ? 'selected' : '') + '>Português</option><option value="en" ' + (s.lang === 'en' ? 'selected' : '') + '>English</option></select></label></div>';
+    h += '<p class="small muted">' + esc(t('version_line')) + ' ' + esc(L.APP_VERSION) + ' · ' + esc(t('master_line')) + ' ' + esc(L.MASTER_VERSION) + '</p>';
     h += '<div class="card stack"><h2>' + esc(t('suppliers_cfg')) + '</h2>' + s.suppliers.map(function (x, i) {
       return '<div class="grid2b"><input name="sup_' + i + '" value="' + esc(x) + '" aria-label="' + esc(t('supplier')) + '"><button type="button" class="btn small" data-action="rm-sup" data-i="' + i + '">' + esc(t('remove')) + '</button></div>';
     }).join('') + '<button type="button" class="btn small" data-action="add-sup">+ ' + esc(t('add_supplier')) + '</button><button class="btn primary" type="submit">' + esc(t('save')) + '</button></div></form>';
