@@ -11,6 +11,8 @@
   const fmtNum = function (n, d) { return (n === null || n === undefined || isNaN(n)) ? '—' : Number(n).toLocaleString(loc(), { maximumFractionDigits: d === undefined ? 2 : d }); };
   const fmt1 = function (n) { return (n === null || n === undefined || isNaN(n)) ? '—' : Number(n).toLocaleString(loc(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
   const fmtKg = function (n) { return fmtNum(n, 0) + ' kg'; };
+  // Quantidades em kg sem casas decimais (arredondadas) / whole kg only
+  const roundKg = function (v) { return v === null || v === undefined || isNaN(v) ? v : Math.round(v); };
   const lt = function (iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : L.today(d) + ' ' + L.nowTime(d); }; // hora local / local time
   const clone = function (o) { return JSON.parse(JSON.stringify(o)); };
 
@@ -146,6 +148,8 @@
   }
 
   // ---------------- casca / shell ----------------
+  // Linhas de moagem e bins de milho sujo (B01–B04, mestre na app de Registos de QC) / mill lines and dirty-maize bins
+  const LINES = ['C', 'D'], DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'];
   const TITLES = { intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', export: 'export_title', settings: 'settings_title' };
   function renderShell() {
     document.title = t('app_name');
@@ -265,6 +269,7 @@
       h += '<datalist id="suppliers">' + S.settings.suppliers.map(function (s) { return '<option value="' + esc(s) + '">'; }).join('') + '</datalist>';
       h += '<div class="grid2">' + field('guia', t('guia')) + field('plate', t('plate')) + '</div>';
       h += '<div class="grid2">' + field('origin', t('origin')) + field('kg', t('net_kg'), DEC, 'kg') + '</div>';
+      h += siloPickHtml(f);
       h += '<h3>' + esc(t('quality')) + '</h3>';
       h += '<div class="grid2">' + field('hum', t('moisture'), DEC) + field('fat', t('fat'), DEC) + '</div>';
       h += '<div class="grid2">' + field('fm', t('foreign'), DEC) + field('brk', t('broken'), DEC) + '</div>';
@@ -285,6 +290,18 @@
     return '<div class="small muted">' + esc(cerName(l.cereal)) + (l.colour ? ' ' + esc(l.colour) : '') + ' · ' + esc(l.supplier) + ' · ' + esc(l.date) + ' ' + esc(l.time) + '</div>' +
       '<div class="kv small">' + rows.filter(function (r) { return r[1] !== null && r[1] !== undefined && r[1] !== ''; }).map(function (r) { return '<span>' + esc(t(r[0])) + '</span><b>' + esc(r[1]) + '</b>'; }).join('') + '</div>' +
       ((l.holdReasons || []).length ? '<p class="warn small">' + esc(t('held_because')) + ' ' + l.holdReasons.map(function (x) { return esc(t('hold_' + x)); }).join(' · ') + '</p>' : '');
+  }
+  // Silo de carga (escolha explícita). Silos incompatíveis com cereal/cor ficam desativados; o grau é verificado ao decidir.
+  function siloPickHtml(f) {
+    const item = { cereal: f.cereal, colour: f.colour || '', grade: '' };
+    const cur = (f.dest || [])[0] || '';
+    const opts = S.settings.silos.map(function (s) {
+      const fit = L.siloFit(item, s), ss = siloSt(s), free = L.freeSpace(s, S.events);
+      const off = !fit.ok || ss.held || ss.rejected || free === null || free <= 0;
+      const info = fit.ok ? (s.grade ? gradeName(s.grade) : '') + ' · ' + (free === null ? t('cap_not_set') : t('free') + ' ' + fmtKg(free)) : t('silo_not_allowed');
+      return '<option value="' + esc(s.id) + '"' + (cur === s.id ? ' selected' : '') + (off ? ' disabled' : '') + '>' + esc(s.id + ' · ' + siloDesig(s) + ' · ' + info) + '</option>';
+    }).join('');
+    return '<label>' + esc(t('load_silo')) + ' *<select name="siloPick"><option value="">—</option>' + opts + '</select></label>';
   }
   function gcfg(c) { return S.settings.grading[c] || {}; }
   function mcfg(c) { return S.settings.myco[c] || {}; }
@@ -411,7 +428,7 @@
   function saveLot() {
     const f = S.form;
     if (f.mode === 'release') return saveRelease();
-    const kg = L.num(f.kg, 'kg');
+    const kg = roundKg(L.num(f.kg, 'kg'));
     if (!f.date || !f.supplier.trim() || !f.cereal || kg === null || isNaN(kg) || kg <= 0 || !f.responsible.trim()) { toast(t('need_fields')); return; }
     if (f.cereal === 'Milho' && !f.colour) { toast(t('need_colour')); return; }
     const d = formDecision(), r = d.r;
@@ -443,6 +460,8 @@
     const bad = f.dest.filter(function (id) { const s = siloById(id); if (!s || !L.siloFit(item, s).ok) return true; const ss = siloSt(s); return ss.held || ss.rejected || ss.level >= 4; });
     if (bad.length) { toast(t('silo_not_allowed') + ' ' + bad.join(', ')); return; }
     const needs = authNeeds(d.grade, plan);
+    const badIn = L.binCheck(plan.parts.map(function (p) { return { silo: p.silo, type: 'IN', kg: p.kg }; }), S.events);
+    if (badIn.length) { toast(binMsg(badIn[0])); return; }
     const go = function () {
       const by = (f.mode === 'release' ? f.qcName : f.responsible) || '';
       const auth = needs.length ? { at: new Date().toISOString(), by: f.auth_by.trim(), reason: f.auth_reason.trim(), items: needs } : null;
@@ -535,16 +554,18 @@
     let h = '<button class="btn primary block" data-action="discharge">' + esc(t('act_out')) + '</button>';
     S.settings.silos.forEach(function (s) {
       const ss = siloSt(s), c = { kg: ss.kg, lots: ss.lots };
-      const cap = L.num(s.cap, 'kg');
-      const hasCap = cap !== null && !isNaN(cap) && cap > 0;
+      const bs = L.binState(s, S.events), cap = bs.cap;
+      const hasCap = cap !== null && cap > 0;
       const pct = hasCap ? Math.min(100, Math.round(c.kg / cap * 100)) : null;
-      const full = hasCap && c.kg >= cap;
+      const full = bs.state === 'FULL';
       const blockOut = ss.held || ss.rejected;
       h += '<div class="card stack"><div class="row"><div class="grow"><div class="big2">' + esc(s.id) + ' ' + lvChip(ss) + '</div><div class="small muted">' + esc(siloDesig(s)) + (ageText(ss) ? ' · ' + esc(ageText(ss)) : '') + '</div></div>' +
         '<div class="right"><div class="strong">' + fmtKg(c.kg) + '</div><div class="small muted">' + (hasCap ? esc(t('of')) + ' ' + fmtKg(cap) + ' · ' + pct + '%' : esc(t('cap_not_set'))) + '</div></div></div>';
       if (hasCap) h += '<div class="bar' + (full ? ' full' : '') + '"><div style="width:' + pct + '%"></div></div>';
       if (full) h += '<div class="badge b-REJECTED fit">' + esc(t('silo_full')) + '</div>';
-      if (c.kg < 0) h += '<p class="warn small">' + esc(t('negative_stock')) + '</p>';
+      if (bs.state === 'EMPTY') h += '<div class="badge b-HELD fit">' + esc(t('silo_empty')) + '</div>';
+      if (bs.state === 'NEG') h += '<p class="warn small">' + esc(t('negative_stock')) + '</p>';
+      if (!S.events.some(function (e) { return e.type === 'OPENING' && e.silo === s.id; })) h += '<button type="button" class="btn small" data-action="silo-opening" data-silo="' + esc(s.id) + '">' + esc(t('act_opening')) + '</button>';
       if (ss.held) h += '<p class="holdbar">⛔ ' + esc(t('held_banner')) + '</p>';
       if (ss.rejected) h += '<p class="holdbar">⛔ ' + esc(t('rejected_banner')) + '</p>';
       h += drvList(ss, 1);
@@ -560,7 +581,7 @@
     h += '<h2>' + esc(t('events')) + '</h2>';
     h += evs.length ? evs.map(function (e) {
       const what = e.type === 'TRANSFER' ? esc(e.silo) + ' → ' + esc(e.toSilo) : esc(e.silo);
-      return '<div class="card row small"><div class="grow"><strong>' + esc(t('ev_' + e.type)) + '</strong> · ' + what + (e.place && e.type === 'OUT' ? ' → ' + esc(placeName(e.place)) : '') + (e.auth ? ' · <span class="flag">⚠ ' + esc(t('authorized')) + '</span>' : '') +
+      return '<div class="card row small"><div class="grow"><strong>' + esc(t('ev_' + e.type)) + '</strong> · ' + what + (e.place && e.type === 'OUT' ? ' → ' + esc(placeName(e.place)) + (e.bin ? ' · ' + esc(e.bin) : '') : '') + (e.auth ? ' · <span class="flag">⚠ ' + esc(t('authorized')) + '</span>' : '') +
         '<div class="muted">' + esc(e.date) + ' ' + esc(e.time) + (e.lots && e.lots.length ? ' · ' + e.lots.map(function (x) { return esc(L.lotLabel(S.lots, x)); }).join(', ') : '') + (e.prodLot ? ' · ' + esc(e.prodLot) : '') + (e.operator ? ' · ' + esc(e.operator) : '') + '</div></div><div>' + (e.kg ? fmtKg(e.kg) : (e.type === 'EMPTY' && e.writeOff ? '−' + fmtKg(e.writeOff) : '')) + '</div></div>';
     }).join('') : '<p class="muted">' + esc(t('no_events')) + '</p>';
     return h;
@@ -576,7 +597,7 @@
     const done = needed.filter(function (x) { return x.ss.roundsDone >= x.ss.roundsNeed; }).length;
     let h = '<div class="card stack"><div class="row"><div class="grow"><div class="small muted caps">' + esc(t('current_shift')) + '</div><div class="strong">' + esc(shiftLabel(cur)) + '</div></div>' +
       '<div class="right"><div class="big2">' + done + '/' + needed.length + '</div><div class="small muted">' + esc(t('rounds_done')) + '</div></div></div>' +
-      '<p class="small muted">' + esc(t('mon_source')) + '</p></div>';
+      (needed.length ? '' : '<p class="small muted">' + esc(t('no_grain_silos')) + '</p>') + '<p class="small muted">' + esc(t('mon_source')) + '</p></div>';
     all.forEach(function (x) {
       const s = x.s, ss = x.ss;
       const openEv = S.sev.find(function (e) { return e.silo === s.id && e.status === 'OPEN'; });
@@ -659,6 +680,9 @@
 
   // ---------------- folhas (modais) / sheets ----------------
   function sv(name, dflt) { const v = S.sheet.v[name]; return v === undefined ? (dflt === undefined ? '' : dflt) : v; }
+  function selInput(name, label, opts) {
+    return '<label>' + esc(label) + '<select name="' + name + '"><option value="">—</option>' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (sv(name) === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>';
+  }
   function sInput(name, label, extra, dflt) { return '<label>' + esc(label) + '<input name="' + name + '" value="' + esc(sv(name, dflt)) + '"' + (extra || '') + '></label>'; }
   function openSheet(kind, data) { S.sheet = Object.assign({ kind: kind, v: { date: L.today(), time: L.nowTime(), operator: S.settings.operator || '' } }, data || {}); renderSheet(); }
   const PERSON = { round: ['operator', 'operator'], weekly: ['operator', 'qc_name'], treat: ['operator', 'recorded_by'], disp: ['operator', 'qc_name'], event: ['operator', 'decided_by'] };
@@ -667,11 +691,12 @@
     if (!S.sheet) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
     const sh = S.sheet;
-    const titles = { out: t('act_out'), transfer: t('act_transfer'), empty: t('act_empty'), round: t('act_round'), weekly: t('act_weekly'), treat: t('act_treat'), disp: t('act_disp'), event: t('event_btn') };
+    const titles = { opening: t('act_opening'), out: t('act_out'), transfer: t('act_transfer'), empty: t('act_empty'), round: t('act_round'), weekly: t('act_weekly'), treat: t('act_treat'), disp: t('act_disp'), event: t('event_btn') };
     let h = '<form class="sheet-card stack" id="sheetform" novalidate><h2>' + esc(titles[sh.kind]) + (sh.silo ? ' · ' + esc(sh.silo) : '') + '</h2>';
     if (sh.kind !== 'event') h += '<div class="grid2">' + sInput('date', t('date'), ' type="date"') + sInput('time', t('time'), ' type="time"') + '</div>';
     if (sh.kind === 'out') {
-      h += sInput('place', t('to_line') + ' *') + '<div class="grid2">' + sInput('kg', t('kg') + ' *', DEC) + sInput('prodLot', t('prod_lot')) + '</div>';
+      h += '<div class="grid2">' + selInput('line', t('line') + ' *', LINES.map(function (l) { return [l, l]; })) + selInput('bin', t('dirty_bin') + ' *', DIRTY_BINS.map(function (b) { return [b, b]; })) + '</div>';
+      h += '<div class="grid2">' + sInput('kg', t('kg') + ' *', DEC) + sInput('prodLot', t('prod_lot')) + '</div>';
     }
     if (sh.kind === 'transfer') {
       const src = siloById(sh.silo);
@@ -687,6 +712,9 @@
       const bal = L.siloContents(sh.silo, S.events).kg;
       h += '<p class="warn">' + esc(t('confirm_empty')) + '</p>';
       if (bal > 0) h += '<p class="warn"><b>' + esc(t('writeoff_warn')) + ' ' + fmtKg(bal) + '.</b> ' + esc(t('writeoff_reason_needed')) + '</p>' + sInput('reason', t('writeoff_reason') + ' *');
+    }
+    if (sh.kind === 'opening') {
+      h += '<p class="small muted">' + esc(t('opening_note')) + '</p>' + sInput('kg', t('opening_kg') + ' *', DEC);
     }
     if (sh.kind === 'round') {
       const s = siloById(sh.silo), n = Math.max(1, Math.min(50, parseInt(s.points, 10) || 1));
@@ -743,12 +771,16 @@
     return S.settings.silos.map(function (s) { const ss = siloSt(s); return { s: s, kg: ss.kg, ss: ss }; }).filter(function (x) { return x.kg > 0; });
   }
   function outPlan() {
-    const kg = L.num(sv('kg'), 'kg');
+    const kg = roundKg(L.num(sv('kg'), 'kg'));
     const slots = S.sheet.order.map(function (id) { return { id: id, avail: Math.max(0, L.siloContents(id, S.events).kg) }; });
     return { kg: kg, a: L.allocate(kg > 0 ? kg : 0, slots) };
   }
+  // Mensagem de bin fora de limites / bin out-of-limit message
+  function binMsg(b) {
+    return b.silo + ': ' + (b.state === 'NEG' ? t('negative_stock') : t('bin_over_cap') + ' ' + fmtKg(b.cap));
+  }
   function transferCheck() {
-    const sh = S.sheet, kg = L.num(sv('kg'), 'kg'), to = siloById(sv('toSilo')), src = siloById(sh.silo);
+    const sh = S.sheet, kg = roundKg(L.num(sv('kg'), 'kg')), to = siloById(sv('toSilo')), src = siloById(sh.silo);
     const bal = L.siloContents(sh.silo, S.events).kg;
     const res = { kg: kg, errors: [], needs: [] };
     const sss = siloSt(src);
@@ -756,6 +788,7 @@
     if (kg === null) res.errors.push(t('need_kg'));
     else if (isNaN(kg) || kg <= 0) res.errors.push(t('check_values') + ': ' + t('kg'));
     else if (kg > bal) res.errors.push(t('more_than_stock') + ' ' + fmtKg(bal));
+    if (kg > 0 && to && !res.errors.length) L.binCheck([{ silo: sh.silo, type: 'TRANSFER', toSilo: to.id, kg: kg }], S.events).forEach(function (b) { res.errors.push(binMsg(b)); });
     if (!to) res.errors.push(t('need_to_silo'));
     else {
       const free = L.freeSpace(to, S.events);
@@ -782,11 +815,12 @@
         return '<div class="row destrow"><span class="mono">' + (i + 1) + '. ' + esc(id) + '</span><span class="grow small muted">' + esc(s ? siloDesig(s) : '') + ' · ' + fmtKg(L.siloContents(id, S.events).kg) + '</span><span class="strong">' + (part ? '−' + fmtKg(part.kg) : '0 kg') + '</span>' +
           '<button type="button" class="btn small" data-action="out-rm" data-silo="' + esc(id) + '" aria-label="' + esc(t('remove')) + '">✕</button></div>';
       }).join('');
-      const more = st.filter(function (x) { return sh.order.indexOf(x.s.id) < 0; });
-      if (more.length) h += '<div class="chips">' + more.map(function (x) {
-        const blocked = x.ss.held || x.ss.rejected;
-        return '<button type="button" class="chip' + (blocked ? ' warnchip' : '') + '" data-action="out-add" data-silo="' + esc(x.s.id) + '"' + (blocked ? ' disabled' : '') + '>' + (blocked ? '⛔ ' : '+ ') + esc(x.s.id) + ' <span class="muted">' + esc(blocked ? t('silo_held_short') : gradeName(x.s.grade) + ' · ' + fmtKg(x.kg)) + '</span></button>';
+      h += '<div class="lbl">' + esc(t('silos_with_grain')) + '</div>';
+      if (st.length) h += '<div class="chips">' + st.map(function (x) {
+        const blocked = x.ss.held || x.ss.rejected, on = sh.order.indexOf(x.s.id) >= 0;
+        return '<button type="button" class="chip' + (on ? ' on' : '') + (blocked ? ' warnchip' : '') + '" data-action="out-add" data-silo="' + esc(x.s.id) + '"' + (blocked ? ' disabled' : '') + '>' + (on ? '✓ ' : (blocked ? '⛔ ' : '+ ')) + esc(x.s.id) + ' <span class="muted">' + esc(blocked ? t('silo_held_short') : gradeName(x.s.grade) + ' · ' + fmtKg(x.kg)) + '</span></button>';
       }).join('') + '</div>';
+      else h += '<p class="small muted">' + esc(t('no_grain_silos')) + '</p>';
       if (p.kg !== null && !isNaN(p.kg) && p.kg > 0) {
         h += '<p class="small">' + esc(t('kg_read_as')) + ' ' + fmtKg(p.kg) + '</p>';
         if (p.a.short > 0) h += '<p class="warn small">' + esc(t('short_stock')) + ' ' + fmtKg(p.a.short) + '</p>';
@@ -833,15 +867,17 @@
     const monBase = { date: sv('date'), time: sv('time'), silo: sh.silo, by: who, notes: sv('notes').trim(), createdAt: new Date().toISOString() };
     let p;
     if (sh.kind === 'out') {
-      if (!sv('place').trim()) { toast(t('need_line')); return; }
+      if (!sv('line') || !sv('bin')) { toast(t('need_line')); return; }
       const pl = outPlan();
       if (pl.kg === null || isNaN(pl.kg) || pl.kg <= 0) { toast(t('need_kg')); return; }
       if (!sh.order.length) { toast(t('need_silo')); return; }
       const heldIn = sh.order.filter(function (id) { const ss = siloSt(siloById(id)); return ss.held || ss.rejected; });
       if (heldIn.length) { toast(heldIn.join(', ') + ': ' + t('silo_held_short')); return; }
       if (pl.a.short > 0) { toast(t('short_stock') + ' ' + fmtKg(pl.a.short)); return; }
+      const badOut = L.binCheck(pl.a.parts.map(function (part) { return { silo: part.silo, type: 'OUT', kg: part.kg }; }), S.events);
+      if (badOut.length) { toast(binMsg(badOut[0])); return; }
       p = DB.addMany(pl.a.parts.map(function (part) {
-        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('place').trim(), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots }) };
+        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('line'), bin: sv('bin'), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots }) };
       }));
     }
     if (sh.kind === 'transfer') {
@@ -862,6 +898,12 @@
       const bal = L.siloContents(sh.silo, S.events).kg;
       if (bal > 0 && !sv('reason').trim()) { toast(t('writeoff_reason_needed')); return; }
       p = DB.add('events', Object.assign({}, base, { type: 'EMPTY', kg: null, writeOff: bal > 0 ? bal : 0, notes: sv('reason').trim(), lots: [] }));
+    }
+    if (sh.kind === 'opening') {
+      const kg0 = roundKg(L.num(sv('kg'), 'kg'));
+      if (kg0 === null || isNaN(kg0) || kg0 <= 0) { toast(t('need_kg')); return; }
+      if (S.events.some(function (e) { return e.type === 'OPENING' && e.silo === sh.silo; })) { toast(t('opening_exists')); return; }
+      p = DB.add('events', Object.assign({}, base, { type: 'OPENING', kg: kg0, lots: [], notes: '' }));
     }
     if (sh.kind === 'round') {
       const r = sheetRound();
@@ -1057,7 +1099,7 @@
       const stock = L.siloContents(x.id, S.events);
       const locked = stock.kg > 0 || stock.lots.length > 0;
       const sel = function (name, opts, val, dis) { return '<select name="' + name + '_' + i + '"' + (dis ? ' disabled' : '') + '><option value="">—</option>' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (val === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>'; };
-      return '<div class="silocfg stack"><div class="grid2"><label>' + esc(t('silo_id')) + '<input name="silo_id_' + i + '" value="' + esc(x.id) + '"' + (hist ? ' readonly' : '') + '></label><label>' + esc(t('silo_cap')) + '<input name="silo_cap_' + i + '" type="text" inputmode="decimal" value="' + esc(x.cap) + '"></label></div>' +
+      return '<div class="silocfg stack"><div class="grid2"><label>' + esc(t('silo_id')) + '<input name="silo_id_' + i + '" value="' + esc(x.id) + '"' + (hist ? ' readonly' : '') + '></label><label>' + esc(t('silo_cap')) + '<input name="silo_cap_' + i + '" type="text" readonly value="' + esc(L.binCapKg(x) === null ? '' : String(L.binCapKg(x))) + '"></label></div>' +
         '<label>' + esc(t('silo_points')) + '<input name="silo_pts_' + i + '" type="text" inputmode="numeric" value="' + esc(x.points || '1') + '"></label>' +
         '<div class="grid3"><label>' + esc(t('cereal')) + sel('silo_cer', CEREALS.map(function (c) { return [c, cerName(c)]; }), x.cereal, locked) + '</label><label>' + esc(t('colour')) + sel('silo_col', COLOURS.map(function (c) { return [c, c]; }), x.colour, locked) + '</label><label>' + esc(t('grade')) + sel('silo_grade', SILO_GRADES.map(function (g) { return [g, gradeName(g)]; }), x.grade) + '</label></div>' +
         (locked ? '<p class="small muted">' + esc(t('silo_locked_note')) + '</p>' : '') +
@@ -1096,7 +1138,9 @@
       const hist = siloHasHistory(x.id) && !x._new;
       const st = L.siloContents(x.id, S.events);
       const locked = st.kg > 0 || st.lots.length > 0;
-      return { id: hist ? x.id : (v['silo_id_' + i] || '').trim(), cap: (v['silo_cap_' + i] || '').trim(),
+      const idv = hist ? x.id : (v['silo_id_' + i] || '').trim();
+      const capCode = L.binCapKg({ id: idv });
+      return { id: idv, cap: capCode === null ? '' : String(capCode),
         cereal: locked ? x.cereal : (v['silo_cer_' + i] || ''), colour: locked ? x.colour : (v['silo_col_' + i] || ''), grade: v['silo_grade_' + i] || '', points: (v['silo_pts_' + i] || '1').trim(), _new: x._new };
     });
     const ids = {};
@@ -1188,7 +1232,12 @@
     if (a === 'dest-add') { if (S.form.dest.indexOf(b.dataset.silo) < 0) S.form.dest.push(b.dataset.silo); updateDyn(); }
     if (a === 'dest-rm') { S.form.dest = S.form.dest.filter(function (x) { return x !== b.dataset.silo; }); updateDyn(); }
     if (a === 'discharge') { openSheet('out', { order: b.dataset.silo ? [b.dataset.silo] : [] }); }
-    if (a === 'out-add') { S.sheet.order.push(b.dataset.silo); updateSheetDyn(); }
+    if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
+      const id = b.dataset.silo;
+      S.sheet.order = S.sheet.order.indexOf(id) >= 0 ? S.sheet.order.filter(function (x) { return x !== id; }) : S.sheet.order.concat([id]);
+      updateSheetDyn();
+    }
+    if (a === 'silo-opening') openSheet('opening', { silo: b.dataset.silo });
     if (a === 'out-rm') { S.sheet.order = S.sheet.order.filter(function (x) { return x !== b.dataset.silo; }); updateSheetDyn(); }
     if (a === 'silo-transfer') openSheet('transfer', { silo: b.dataset.silo });
     if (a === 'silo-empty') openSheet('empty', { silo: b.dataset.silo });
@@ -1223,7 +1272,8 @@
     const el = e.target;
     if (S.form && el.form && el.form.id === 'lotform' && el.name) {
       S.form[el.name] = el.value;
-      if (el.name === 'cereal') { S.form.dest = []; S.form.colour = ''; render(); }
+      if (el.name === 'siloPick') { S.form.dest = el.value ? [el.value] : []; updateDyn(); }
+      else if (el.name === 'cereal') { S.form.dest = []; S.form.colour = ''; render(); }
       else if (el.name === 'date') render();
       else if (el.name === 'qcGrade') { S.form.dest = []; updateDyn(); }
     }

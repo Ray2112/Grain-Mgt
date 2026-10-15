@@ -161,7 +161,8 @@
     let lots = {}, kg = 0, lastEmpty = null;
     evs.forEach(function (e) {
       if (e.type === 'EMPTY' && e.silo === siloId) { lots = {}; kg = 0; lastEmpty = e; return; }
-      const inbound = e.type === 'IN' || (e.type === 'TRANSFER' && e.toSilo === siloId && e.silo !== siloId);
+      // OPENING = quantidade inicial (stock existente antes de começar a registar)
+      const inbound = e.type === 'IN' || e.type === 'OPENING' || (e.type === 'TRANSFER' && e.toSilo === siloId && e.silo !== siloId);
       const outbound = e.type === 'OUT' || (e.type === 'TRANSFER' && e.silo === siloId && e.toSilo !== siloId);
       if (inbound) { (e.lots || (e.lot ? [e.lot] : [])).forEach(function (l) { lots[l] = true; }); kg += num(e.kg) || 0; }
       else if (outbound) kg -= num(e.kg) || 0;
@@ -169,11 +170,52 @@
     return { lots: Object.keys(lots), kg: r3(kg), lastEmpty: lastEmpty };
   }
   function lotsCarried(fromSilo, events) { return siloContents(fromSilo, events).lots; }
+  // Capacidade da bin (kg): vem do código (siloCapKg) para S01–S21; null se o código não a define.
+  function binCapKg(silo) {
+    const nid = normalizeSiloId(silo && silo.id);
+    if (nid !== null) return siloCapKg(nid);
+    const c = num(silo && silo.cap, 'kg');
+    return c === null || isNaN(c) || c <= 0 ? null : c;
+  }
   // Espaço livre; null se a capacidade não estiver definida.
   function freeSpace(silo, events) {
-    const cap = num(silo.cap, 'kg');
-    if (cap === null || isNaN(cap) || cap <= 0) return null;
+    const cap = binCapKg(silo);
+    if (cap === null) return null;
     return r3(Math.max(0, cap - siloContents(silo.id, events).kg));
+  }
+  // Estado da bin / bin state: EMPTY (kg = 0), FULL (kg ≥ capacidade), NEG (kg < 0), OK, NOCAP.
+  // Já teve grão? (entrada, abertura ou transferência para o silo, em algum momento)
+  function siloHadGrain(siloId, events) {
+    return (events || []).some(function (e) {
+      return (e.silo === siloId && (e.type === 'IN' || e.type === 'OPENING')) || (e.type === 'TRANSFER' && e.toSilo === siloId);
+    });
+  }
+  function binState(silo, events) {
+    const cap = binCapKg(silo), kg = siloContents(silo.id, events).kg;
+    let state = 'OK';
+    if (kg < 0) state = 'NEG';
+    else if (kg === 0) state = siloHadGrain(silo.id, events) ? 'EMPTY' : 'NEW';   // alarme só depois de ter tido grão
+    else if (cap !== null && kg >= cap) state = 'FULL';
+    if (cap === null && kg >= 0) state = 'NOCAP';
+    return { cap: cap, kg: kg, free: cap === null ? null : r3(Math.max(0, cap - kg)), state: state };
+  }
+  // Verifica se novos eventos deixam alguma bin negativa ou acima da capacidade.
+  // Devolve [{silo, state:'NEG'|'OVER', kg, cap}]; vazio se tudo OK.
+  function binCheck(newEvs, events) {
+    const touched = {};
+    (newEvs || []).forEach(function (e) {
+      if (e.silo) touched[e.silo] = true;
+      if (e.type === 'TRANSFER' && e.toSilo) touched[e.toSilo] = true;
+    });
+    const all = (events || []).concat(newEvs || []);
+    const out = [];
+    Object.keys(touched).forEach(function (sid) {
+      const cap = binCapKg({ id: sid });
+      const kg = siloContents(sid, all).kg;
+      if (kg < 0) out.push({ silo: sid, state: 'NEG', kg: kg, cap: cap });
+      else if (cap !== null && kg > cap) out.push({ silo: sid, state: 'OVER', kg: kg, cap: cap });
+    });
+    return out;
   }
   // Repartir kg pelos silos, pela ordem dada: enche/esvazia o primeiro, depois o seguinte.
   // slots: [{id, avail}] → { parts:[{silo, kg}], short }
@@ -390,7 +432,8 @@
       const master = String(siloCapKg(id));
       if (!cur) { out.push({ id: id, cap: master, cereal: '', colour: '', grade: '', points: '1' }); changes.push('added:' + id); return; }
       if (!cur.cap) { cur.cap = master; changes.push('cap:' + id); }
-      else if (String(cur.cap).replace(/\D/g, '') !== master) warnings.push('cap-differs:' + id);
+      else if (String(cur.cap).replace(/\D/g, '') !== master) { cur.cap = master; warnings.push('cap-differs:' + id); }
+      else cur.cap = master;
     });
     out.sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
     return { silos: out, idMap: idMap, changes: changes, warnings: warnings };
@@ -410,7 +453,7 @@
   // ---------- identificadores de registo (sincronização futura) ----------
   // Cada registo tem um uid global (UUID v4) e o deviceId de origem. A chave local (IndexedDB) não é partilhada.
   const UID_STORES = ['lots', 'events', 'monitor', 'sevents'];
-  const APP_VERSION = '0.4.1';
+  const APP_VERSION = '0.4.2';
   // Versão do mestre partilhado (silos e capacidades). Muda sempre que SILO_IDS ou as capacidades mudarem.
   const MASTER_VERSION = '2026-10-14.1';   // não muda: silos e capacidades iguais (só unidades internas)
   // Compara a versão do mestre gravada num registo/cópia com a desta app: 'same' | 'older' | 'newer' | 'missing'.
@@ -489,7 +532,7 @@
   const api = { today: today, nowTime: nowTime, daysBetween: daysBetween, num: num, bad: bad, lotCode: lotCode,
     GRADES: GRADES, LOT_GRADES: LOT_GRADES, LEVELS: LEVELS, bandMoist: bandMoist, bandTemp: bandTemp, bandDT: bandDT, moistBand: moistBand, storeTh: storeTh, intakeClass: intakeClass, shiftOf: shiftOf, prevShift: prevShift, roundEval: roundEval, siloStatus: siloStatus, recStamp: recStamp, addDays: addDays, ODOUR_LV: ODOUR_LV, PARAMS: PARAMS, MYCO: MYCO, thresholds: thresholds, gradeLot: gradeLot, releaseOptions: releaseOptions,
     siloContents: siloContents, lotsCarried: lotsCarried, freeSpace: freeSpace, allocate: allocate, siloFit: siloFit, sortEvents: sortEvents,
-    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapKg: siloCapKg, crewOf: crewOf, CREW_CYCLE: CREW_CYCLE, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
+    validBackup: validBackup, STATUS: STATUS, SILO_IDS: SILO_IDS, siloCapKg: siloCapKg, binCapKg: binCapKg, binState: binState, binCheck: binCheck, crewOf: crewOf, CREW_CYCLE: CREW_CYCLE, normalizeSiloId: normalizeSiloId, normalizeSilos: normalizeSilos, remapSiloRefs: remapSiloRefs, newUid: newUid, stampRecord: stampRecord, upgradeRecord: upgradeRecord, UID_STORES: UID_STORES, APP_VERSION: APP_VERSION, lotLabel: lotLabel, codeExists: codeExists, newLotRecord: newLotRecord, lotUpgrade: lotUpgrade,
     deviceTag: deviceTag, provisionalCode: provisionalCode, newLotCode: newLotCode, applyCentralCode: applyCentralCode, lotOrder: lotOrder,
     MASTER_VERSION: MASTER_VERSION, masterStatus: masterStatus, backupMasterSummary: backupMasterSummary, CONTRACT_VERSION: CONTRACT_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Logic = api;

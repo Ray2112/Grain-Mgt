@@ -43,8 +43,34 @@ ok('silo contents and free space', () => {
     { seq: 3, date: '2026-10-05', time: '10:00', silo: 'S1', type: 'TRANSFER', toSilo: 'S2', lots: ['A'], kg: 1000 }];
   assert.strictEqual(L.siloContents('S1', ev).kg, 14000);
   assert.strictEqual(L.siloContents('S2', ev).kg, 1000);
-  assert.strictEqual(L.freeSpace({ id: 'S1', cap: '50.000' }, ev), 36000);
-  assert.strictEqual(L.freeSpace({ id: 'S1', cap: '' }, ev), null);
+  assert.strictEqual(L.freeSpace({ id: 'S1', cap: '50.000' }, ev), 5986000);   // capacidade vem do código (S01)
+  assert.strictEqual(L.freeSpace({ id: 'S22', cap: '' }, ev), null);
+});
+ok('bin capacity from code, state and guards', () => {
+  const ev = [{ seq: 1, date: '2026-10-05', time: '08:00', silo: 'S13', type: 'IN', lots: ['A'], kg: 3000000 }];
+  assert.strictEqual(L.binCapKg({ id: 'S13', cap: '1' }), 3000000);
+  assert.strictEqual(L.binState({ id: 'S13' }, ev).state, 'FULL');
+  assert.strictEqual(L.binState({ id: 'S14' }, ev).state, 'NEW');          // nunca teve grão: sem alarme
+  assert.strictEqual(L.binState({ id: 'S13' }, []).state, 'NEW');
+  const had = ev.concat([{ seq: 9, date: '2026-10-06', time: '08:00', silo: 'S13', type: 'OUT', kg: 3000000 }]);
+  assert.strictEqual(L.binState({ id: 'S13' }, had).state, 'EMPTY');      // teve grão e ficou vazio: alarme
+  assert.strictEqual(L.binState({ id: 'S13' }, ev).free, 0);
+  assert.strictEqual(L.binState({ id: 'S22' }, []).state, 'NOCAP');
+  assert.strictEqual(L.binState({ id: 'S13' }, [{ seq: 1, date: '2026-10-05', time: '08:00', silo: 'S13', type: 'OUT', kg: 5 }]).state, 'NEG');
+  assert.strictEqual(L.binCheck([{ silo: 'S13', type: 'IN', kg: 1 }], ev)[0].state, 'OVER');
+  assert.strictEqual(L.binCheck([{ silo: 'S13', type: 'OUT', kg: 5 }], [])[0].state, 'NEG');
+  assert.strictEqual(L.binCheck([{ silo: 'S13', type: 'OUT', kg: 5 }], ev).length, 0);
+  assert.strictEqual(L.binCheck([{ silo: 'S13', type: 'TRANSFER', toSilo: 'S14', kg: 1000 }], ev).length, 0);
+  assert.strictEqual(L.binCheck([{ silo: 'S14', type: 'TRANSFER', toSilo: 'S13', kg: 1000 }], [{ seq: 1, date: '2026-10-05', time: '08:00', silo: 'S13', type: 'IN', kg: 2999999 }]).find(b => b.silo === 'S13').state, 'OVER');
+  assert.strictEqual(L.binCheck([{ silo: 'S14', type: 'TRANSFER', toSilo: 'S13', kg: 1000 }], [{ seq: 1, date: '2026-10-05', time: '08:00', silo: 'S14', type: 'IN', kg: 5000 }]).length, 0);
+});
+ok('quantity = initial (OPENING) + intakes + transfers in - discharges - transfers out', () => {
+  const ev = [{ seq: 1, date: '2026-10-01', time: '07:00', silo: 'S05', type: 'OPENING', kg: 100000, lots: [] },
+    { seq: 2, date: '2026-10-02', time: '08:00', silo: 'S05', type: 'IN', lots: ['A'], kg: 20000 },
+    { seq: 3, date: '2026-10-03', time: '08:00', silo: 'S06', type: 'TRANSFER', toSilo: 'S05', lots: ['A'], kg: 5000 },
+    { seq: 4, date: '2026-10-04', time: '08:00', silo: 'S05', type: 'OUT', lots: ['A'], kg: 30000 }];
+  assert.strictEqual(L.siloContents('S05', ev).kg, 95000);
+  assert.strictEqual(L.binState({ id: 'S05' }, ev).state, 'OK');
 });
 ok('silo fit', () => {
   const lot = { cereal: 'Milho', colour: 'Amarelo', grade: 'G1' };
@@ -144,9 +170,9 @@ ok('normalizeSilos: production backup (S1-S4) -> 21 silos, renames, master caps'
   assert.ok(r.changes.indexOf('renamed:S1->S01') >= 0);
   assert.deepStrictEqual(r.warnings, []);
 });
-ok('normalizeSilos: keeps an existing cap, warns when it differs from master', () => {
+ok('normalizeSilos: code cap overrides a stored cap that differs, warns', () => {
   const r = L.normalizeSilos([{ id: 'S05', cap: '5000000' }]);
-  assert.strictEqual(r.silos.find(s => s.id === 'S05').cap, '5000000');
+  assert.strictEqual(r.silos.find(s => s.id === 'S05').cap, '6000000');
   assert.ok(r.warnings.indexOf('cap-differs:S05') >= 0);
 });
 ok('normalizeSilos: invalid id kept and flagged; duplicate dropped and flagged', () => {
