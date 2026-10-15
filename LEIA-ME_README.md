@@ -1,10 +1,20 @@
-# Moagem — Registos (v0.4.0, Fase A)
+# Moagem — Registos (v0.4.2, Fase A)
 
 Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)** e **registo de silos e lotes (RG-13)** numa moagem. Funciona sem rede depois da primeira abertura. Os dados ficam **apenas no telemóvel**.
 
 *English version below.*
 
 ---
+
+## Novidades na v0.4.2
+- **Capacidade da bin (kg) fixa no código** (S01–S12: 6 000 000 kg; S13–S21: 3 000 000 kg). O campo nas Definições é só de leitura. Não se pode gravar quantidade negativa nem acima da capacidade (entrada, descarga, transferência).
+- **Alarmes nos silos:** CHEIO quando atinge a capacidade; VAZIO quando fica a zero depois de ter tido grão. Um silo que nunca recebeu grão não mostra alarme.
+- **Quantidade inicial por silo:** botão "Quantidade inicial" no cartão do silo, uma vez por silo, com o grão existente antes de começar a registar.
+- **Quantidade do silo** = inicial + entradas (recepção) + transferências recebidas − descargas − transferências enviadas. Entradas de recepção contam como entradas; confirmar se a regra deve ser só esta.
+- **Entrada:** seletor "Silo de carga" logo abaixo da quantidade líquida. Silos de outro cereal, cor, cheios ou retidos ficam desativados; o grau é verificado ao decidir.
+- **Descarga para a linha:** obrigatório escolher a **Linha (C ou D)** e a **Bin de milho sujo (B01, B02, B03 ou B04)**. Os silos com grão aparecem como botões a tocar para selecionar; a quantidade reparte-se pela ordem de seleção e avisa se não chegar.
+- **Monitorização:** o contador "silos com ronda feita" mostra 0/0 quando não há silos com grão; a app diz isso explicitamente.
+- **Quantidades em kg inteiros** (arredondadas à entrada).
 
 ## Novidades na v0.4.0
 - **Turnos iguais à app de CQ:** D = 07:00–19:00 e N = 19:00–07:00. O turno N das 00:00–07:00 pertence ao dia anterior. O campo de horas de início deixa de ser editável (secção protegida).
@@ -33,7 +43,7 @@ Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)**
 - **Recepção:** novo lote com código automático `REC-AAMMDD-NN`, análises (humidade, impurezas, insectos, odor, aflatoxinas, DON, fumonisinas) e decisão automática ACEITAR / RETER / REJEITAR com o motivo.
   - A decisão final pode ser diferente da automática, mas exige motivo.
   - Os lotes retidos podem ser decididos mais tarde, também com motivo.
-- **Silos:** entrada automática quando um lote é aceite; descarga para a linha; transferência entre silos/células; marcação de silo vazio. Mostra os lotes presentes desde o último esvaziamento (regra conservadora do PR-12) e a quantidade estimada.
+- **Silos:** entrada automática quando um lote é aceite; quantidade inicial (uma vez por silo); descarga para a linha C ou D com bin de milho sujo B01–B04; transferência entre silos/células; marcação de silo vazio. Mostra os lotes presentes desde o último esvaziamento (regra conservadora do PR-12) e a quantidade estimada.
 - **Exportar:** Excel com as folhas RG-21 e RG-13, nas mesmas colunas do kit.
 - **Cópia de segurança:** guardar e restaurar em ficheiro `.json`.
 - **Definições:** nome da moagem, silos e capacidades, fornecedores e limites de aceitação por cereal. A aplicação **não traz limites pré-definidos**: a empresa define-os (PR-24).
@@ -53,7 +63,7 @@ Alternativas: Cloudflare Pages ou Netlify (arrastar a pasta). Qualquer alojament
 Abra o endereço no Chrome (Android) → menu ⋮ → **Adicionar ao ecrã principal** (ou **Instalar aplicação**). Abra-a uma vez com rede; depois funciona sem rede.
 
 ## Publicar uma nova versão
-Altere `const CACHE = 'moagem-v0.1.0'` em `sw.js` (por exemplo para `v0.1.1`) e carregue os ficheiros alterados. Os telemóveis actualizam na próxima abertura com rede.
+Altere `const CACHE = 'moagem-v0.4.2-a'` em `sw.js` (por exemplo para `v0.4.3-a`) e carregue os ficheiros alterados. Os telemóveis actualizam na próxima abertura com rede.
 
 ## Limitações conhecidas (Fase A)
 - **Um telemóvel = uma base de dados.** Não há sincronização entre telemóveis nem cópia automática. Se o telemóvel se perder, perdem-se os dados posteriores à última cópia de segurança.
@@ -67,9 +77,19 @@ Altere `const CACHE = 'moagem-v0.1.0'` em `sw.js` (por exemplo para `v0.1.1`) e 
 
 ---
 
-# Mill — Records (v0.3.0, Step A) — English
+# Mill — Records (v0.4.2, Step A) — English
 
 A serverless phone app for **grain intake (RG-21)** and **silo and lot records (RG-13)**. It works offline after the first load. Data stays **on the phone only**.
+
+## New in v0.4.2
+- **Bin capacity (kg) fixed in the code** (S01–S12: 6,000,000 kg; S13–S21: 3,000,000 kg). The field in Settings is read-only. Negative quantities and quantities above capacity cannot be saved (intake, discharge, transfer).
+- **Silo alarms:** FULL when the capacity is reached; EMPTY when it drops to zero after the silo has held grain. A silo that has never held grain shows no alarm.
+- **Initial quantity per silo:** an "Initial quantity" button on the silo card, once per silo, for the grain already in it before recording starts.
+- **Silo quantity** = initial + intakes + transfers in − discharges − transfers out. Intake lots count as inflows; confirm whether this rule should be the only one.
+- **Intake:** a "Loading silo" selector right under the net quantity. Silos with another cereal or colour, full or held silos are disabled; the grade is checked when the decision is made.
+- **Discharge to line:** the **Line (C or D)** and the **Dirty maize bin (B01, B02, B03 or B04)** are required. Silos with grain appear as tap buttons; the quantity is split in selection order and a warning shows if there is not enough.
+- **Monitoring:** the "silos with round done" counter shows 0/0 when no silo has grain; the app says so explicitly.
+- **Whole kg quantities** (rounded on entry).
 
 ## New in v0.4.0
 - **Shifts same as the QC app:** D = 07:00–19:00 and N = 19:00–07:00. The N shift for 00:00–07:00 belongs to the previous day. The shift start field is no longer editable (protected section).
@@ -100,7 +120,7 @@ A serverless phone app for **grain intake (RG-21)** and **silo and lot records (
   - Held lots can be decided later.
 - **Silos:**
   - Each accepted lot is entered into its silo automatically.
-  - Draw-off to the line, transfers between silos/bins, and marking a silo as emptied.
+  - Initial quantity (once per silo), discharge to line C or D with dirty-maize bin B01–B04, transfers between silos, and marking a silo as emptied.
   - Shows the lots present since the silo was last emptied, plus an estimated quantity.
 - **Export:** Excel with the RG-21 and RG-13 sheets, using the kit's columns.
 - **Backup:** save and restore a `.json` file.
@@ -121,7 +141,7 @@ Any static host with **HTTPS** also works (Cloudflare Pages, Netlify). Offline m
 Open the URL in Chrome → ⋮ menu → **Add to Home screen**. Open it once with signal; after that it works offline.
 
 ## Releasing an update
-Change the version in `const CACHE` in `sw.js`, then upload the changed files.
+Change the version in `const CACHE` in `sw.js` (for example `moagem-v0.4.3-a`), then upload the changed files.
 
 ## Known limitations
 - **One phone = one database:** no sync and no automatic backup.
