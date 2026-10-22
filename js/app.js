@@ -570,11 +570,10 @@
       if (ss.rejected) h += '<p class="holdbar">⛔ ' + esc(t('rejected_banner')) + '</p>';
       h += drvList(ss, 1);
       h += '<details><summary class="small muted">' + esc(t('lots_in_silo')) + ' (' + c.lots.length + ')</summary>' +
-        (c.lots.length ? c.lots.map(function (id) { const l = lotsById[id]; return '<div class="row small"><span class="mono grow">' + esc(l ? (l.code || l.id) : id) + '</span><span class="muted">' + (l ? esc(l.date) + ' · ' + esc(l.supplier) + ' · ' + esc(gradeName(l.grade)) : '') + '</span></div>'; }).join('') : '<div class="muted small">' + esc(t('empty_silo')) + '</div>') + '</details>';
+        (c.lots.length ? c.lots.map(function (id) { const l = lotsById[id]; return '<div class="row small"><span class="mono grow">' + esc(l ? (l.code || l.id) : id) + '</span><span class="muted">' + (l ? esc(l.date) + ' · ' + esc(cerName(l.cereal)) + (l.colour ? ' ' + esc(l.colour) : '') + ' · ' + esc(gradeName(l.grade)) + ' · ' + esc(l.supplier) : '') + '</span></div>'; }).join('') : '<div class="muted small">' + esc(t('empty_silo')) + '</div>') + '</details>';
       const dis = c.kg > 0 && !blockOut ? '' : ' disabled';
       h += '<div class="grid2"><button class="btn small" data-action="discharge" data-silo="' + esc(s.id) + '"' + dis + '>' + esc(t('act_out_short')) + '</button>' +
         '<button class="btn small" data-action="silo-transfer" data-silo="' + esc(s.id) + '"' + dis + '>' + esc(t('act_transfer')) + '</button>' +
-        '<button class="btn small" data-action="mon-round" data-silo="' + esc(s.id) + '">' + esc(t('act_round')) + '</button>' +
         '<button class="btn small" data-action="silo-empty" data-silo="' + esc(s.id) + '">' + esc(t('act_empty')) + '</button></div></div>';
     });
     const evs = L.sortEvents(S.events).reverse().slice(0, 50);
@@ -592,12 +591,7 @@
   function inspView() {
     if (!S.settings.silos.length) return '<p class="warn">' + esc(t('no_silos')) + '</p>';
     const all = S.settings.silos.map(function (s) { return { s: s, ss: siloSt(s) }; });
-    const cur = L.shiftOf(L.today(), L.nowTime(), S.settings.st.shifts);
-    const needed = all.filter(function (x) { return x.ss.roundsNeed > 0; });
-    const done = needed.filter(function (x) { return x.ss.roundsDone >= x.ss.roundsNeed; }).length;
-    let h = '<div class="card stack"><div class="row"><div class="grow"><div class="small muted caps">' + esc(t('current_shift')) + '</div><div class="strong">' + esc(shiftLabel(cur)) + '</div></div>' +
-      '<div class="right"><div class="big2">' + done + '/' + needed.length + '</div><div class="small muted">' + esc(t('rounds_done')) + '</div></div></div>' +
-      (needed.length ? '' : '<p class="small muted">' + esc(t('no_grain_silos')) + '</p>') + '<p class="small muted">' + esc(t('mon_source')) + '</p></div>';
+    let h = '';
     all.forEach(function (x) {
       const s = x.s, ss = x.ss;
       const openEv = S.sev.find(function (e) { return e.silo === s.id && e.status === 'OPEN'; });
@@ -608,14 +602,10 @@
       if (ss.level === 3) h += '<p class="warn small">' + esc(t('orange_banner')) + '</p>';
       if (ss.lastDisp && !ss.held) h += '<p class="small">' + esc(t('disp_last')) + ': <b>' + esc(t('disp_' + ss.lastDisp.decision)) + '</b> — ' + esc(ss.lastDisp.by) + ', ' + esc(ss.lastDisp.date) + '</p>';
       h += drvList(ss, 0);
-      if (ss.roundsNeed > 0) {
-        const late = ss.roundsDone < ss.roundsNeed;
-        h += '<div class="small' + (late ? ' flag' : '') + '">' + (late ? '⏰ ' : '✓ ') + esc(t('round_shift')) + ': ' + ss.roundsDone + '/' + ss.roundsNeed + (ss.roundsNeed > 1 ? ' (' + esc(t('round_twice')) + ')' : '') + '</div>';
-      }
       if (ss.weeklyDue) h += '<div class="small flag">⏰ ' + esc(t('weekly_due')) + (ss.lastWeekly ? ' (' + esc(t('last')) + ': ' + esc(ss.lastWeekly.date) + ')' : '') + '</div>';
       else if (ss.lastWeekly) h += '<div class="small muted">' + esc(t('weekly_last')) + ': ' + esc(ss.lastWeekly.date) + '</div>';
       if (openEv) h += '<div class="row small"><span class="grow flag">⚠ ' + esc(t('event_open')) + ' ' + esc(openEv.date) + '</span><button class="btn small" data-action="mon-event" data-id="' + esc(openEv.id) + '">' + esc(t('event_btn')) + '</button></div>';
-      h += '<div class="grid3"><button class="btn small" data-action="mon-round" data-silo="' + esc(s.id) + '">' + esc(t('act_round')) + '</button>' +
+      h += '<div class="grid2">' +
         '<button class="btn small" data-action="mon-weekly" data-silo="' + esc(s.id) + '">' + esc(t('act_weekly')) + '</button>' +
         '<button class="btn small" data-action="mon-treat" data-silo="' + esc(s.id) + '">' + esc(t('act_treat')) + '</button></div>';
       if (ss.held) h += '<button class="btn small primary" data-action="mon-disp" data-silo="' + esc(s.id) + '">' + esc(t('act_disp')) + '</button>';
@@ -685,13 +675,13 @@
   }
   function sInput(name, label, extra, dflt) { return '<label>' + esc(label) + '<input name="' + name + '" value="' + esc(sv(name, dflt)) + '"' + (extra || '') + '></label>'; }
   function openSheet(kind, data) { S.sheet = Object.assign({ kind: kind, v: { date: L.today(), time: L.nowTime(), operator: S.settings.operator || '' } }, data || {}); renderSheet(); }
-  const PERSON = { round: ['operator', 'operator'], weekly: ['operator', 'qc_name'], treat: ['operator', 'recorded_by'], disp: ['operator', 'qc_name'], event: ['operator', 'decided_by'] };
+  const PERSON = { round: ['operator', 'operator'], weekly: ['operator', 'qc_name'], treat: ['operator', 'recorded_by'], disp: ['operator', 'qc_name'], event: ['operator', 'decided_by'], adjust: ['operator', 'corr_by'], override: ['operator', 'corr_by'] };
   function renderSheet() {
     const el = $('#sheet');
     if (!S.sheet) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
     const sh = S.sheet;
-    const titles = { opening: t('act_opening'), out: t('act_out'), transfer: t('act_transfer'), empty: t('act_empty'), round: t('act_round'), weekly: t('act_weekly'), treat: t('act_treat'), disp: t('act_disp'), event: t('event_btn') };
+    const titles = { opening: t('act_opening'), out: t('act_out'), transfer: t('act_transfer'), empty: t('act_empty'), weekly: t('act_weekly'), treat: t('act_treat'), disp: t('act_disp'), event: t('event_btn'), adjust: t('corr_stock'), override: t('corr_status') };
     let h = '<form class="sheet-card stack" id="sheetform" novalidate><h2>' + esc(titles[sh.kind]) + (sh.silo ? ' · ' + esc(sh.silo) : '') + '</h2>';
     if (sh.kind !== 'event') h += '<div class="grid2">' + sInput('date', t('date'), ' type="date"') + sInput('time', t('time'), ' type="time"') + '</div>';
     if (sh.kind === 'out') {
@@ -716,17 +706,16 @@
     if (sh.kind === 'opening') {
       h += '<p class="small muted">' + esc(t('opening_note')) + '</p>' + sInput('kg', t('opening_kg') + ' *', DEC);
     }
-    if (sh.kind === 'round') {
-      const s = siloById(sh.silo), n = Math.max(1, Math.min(50, parseInt(s.points, 10) || 1));
-      const prev = lastRoundOf(sh.silo);
-      h += '<p class="small muted">' + esc(t('round_note')) + '</p><div class="points">';
-      for (let i = 0; i < n; i++) {
-        const pp = prev && prev.points[i];
-        h += '<div class="pt"><label>P' + (i + 1) + ' (°C)' + '<input name="p_' + i + '" type="text" inputmode="decimal" value="' + esc(sv('p_' + i)) + '"></label>' +
+    if (sh.kind === 'weekly') {
+      const tp = lastTempOf(sh.silo), pts = tp ? tp.points : [];
+      h += '<p class="small muted">' + esc(t('temp_note')) + '</p><div class="points">';
+      for (let i = 0; i < 3; i++) {
+        const pp = pts[i];
+        h += '<div class="pt"><label>' + esc(t(['pt_base', 'pt_mid', 'pt_top'][i])) + ' (°C)<input name="p_' + i + '" type="text" inputmode="decimal" value="' + esc(sv('p_' + i)) + '"></label>' +
           '<span class="small muted">' + esc(t('prev')) + ': ' + (pp ? (pp.fault ? t('fault_short') : esc(fmt1(L.num(pp.t)))) : '—') + '</span>' +
           '<span class="check"><input type="checkbox" name="f_' + i + '"' + (sv('f_' + i) ? ' checked' : '') + '> ' + esc(t('fault')) + '</span></div>';
       }
-      h += '</div><label>' + esc(t('odour_visual')) + '<select name="odour">' + ODOURS.map(function (o) { return '<option value="' + o + '"' + (sv('odour', 'N') === o ? ' selected' : '') + '>' + esc(t('od_' + o)) + '</option>'; }).join('') + '</select></label>' + sInput('notes', t('notes'));
+      h += '</div><label>' + esc(t('odour_visual')) + '<select name="odour">' + ODOURS.map(function (o) { return '<option value="' + o + '"' + (sv('odour', 'N') === o ? ' selected' : '') + '>' + esc(t('od_' + o)) + '</option>'; }).join('') + '</select></label>';
     }
     if (sh.kind === 'weekly') {
       const pw = lastWeeklyOf(sh.silo);
@@ -742,6 +731,15 @@
     if (sh.kind === 'disp') {
       h += '<p class="small muted">' + esc(t('disp_note')) + '</p><label>' + esc(t('disp_decision')) + ' *<select name="decision"><option value="">—</option>' + DISPS.map(function (d) { return '<option value="' + d + '"' + (sv('decision') === d ? ' selected' : '') + '>' + esc(t('disp_' + d)) + '</option>'; }).join('') + '</select></label>' +
         sInput('basis', t('disp_basis') + ' *') + '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
+    }
+    if (sh.kind === 'adjust') {
+      const book = L.siloContents(sh.silo, S.events).kg;
+      h += '<p class="small">' + esc(t('corr_book')) + ': <b>' + fmtKg(book) + '</b></p>' + sInput('kg', t('corr_new_kg') + ' *', DEC) + sInput('reason', t('corr_reason') + ' *') +
+        '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
+    }
+    if (sh.kind === 'override') {
+      h += '<label>' + esc(t('corr_status')) + ' *<select name="status"><option value="">—</option><option value="HELD"' + (sv('status') === 'HELD' ? ' selected' : '') + '>' + esc(t('corr_hold')) + '</option><option value="CLEAR"' + (sv('status') === 'CLEAR' ? ' selected' : '') + '>' + esc(t('corr_clear')) + '</option></select></label>' +
+        sInput('reason', t('corr_reason') + ' *') + '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
     }
     if (sh.kind === 'event') {
       const ev = S.sev.find(function (e) { return e.id === sh.id; });
@@ -759,11 +757,11 @@
     el.innerHTML = h;
     updateSheetDyn();
   }
-  function lastRoundOf(id) { let p = null; S.mon.forEach(function (x) { if (x.kind === 'ROUND' && x.silo === id && (!p || L.recStamp(x) > L.recStamp(p))) p = x; }); return p; }
+  function lastTempOf(id) { let p = null; S.mon.forEach(function (x) { if (x.kind === 'WEEKLY' && x.silo === id && Array.isArray(x.points) && x.points.length && (!p || L.recStamp(x) > L.recStamp(p))) p = x; }); return p; }
   function lastWeeklyOf(id) { let p = null; S.mon.forEach(function (x) { if (x.kind === 'WEEKLY' && x.silo === id && (!p || L.recStamp(x) > L.recStamp(p))) p = x; }); return p; }
-  function sheetRound() {
-    const s = siloById(S.sheet.silo), n = Math.max(1, Math.min(50, parseInt(s.points, 10) || 1));
-    const pts = []; for (let i = 0; i < n; i++) pts.push({ t: sv('p_' + i), fault: !!sv('f_' + i) });
+  // Temperatura: 3 pontos fixos (base, meio, topo) / temperature: 3 fixed points (base, middle, top)
+  function sheetTemps() {
+    const pts = []; for (let i = 0; i < 3; i++) pts.push({ t: sv('p_' + i), fault: !!sv('f_' + i) });
     return { points: pts, odour: sv('odour', 'N') };
   }
   // Silos com grão e não retidos (para descarga) / stocked and not held
@@ -834,11 +832,11 @@
       if (sv('kg') !== '' || sv('toSilo') !== '') h += c.errors.map(function (e) { return '<p class="warn small">' + esc(e) + '</p>'; }).join('');
       if (c.needs.length) h += authBlock(c.needs, sh.v);
     }
-    if (sh.kind === 'round') {
-      const r = sheetRound();
+    if (sh.kind === 'weekly') {
+      const r = sheetTemps();
       if (r.points.some(function (p) { return !p.fault && L.bad(p.t); })) h += '<p class="warn small">' + esc(t('check_values')) + '</p>';
       else {
-        const e = L.roundEval(r, lastRoundOf(sh.silo), S.settings.st);
+        const e = L.roundEval(r, lastTempOf(sh.silo), S.settings.st);
         const parts = [];
         if (e.maxT !== null) parts.push('<span class="drv"><span class="dot lv' + (e.lv.temp || 0) + '"></span>' + esc(t('drv_temp')) + ' ' + esc(fmt1(e.maxT)) + ' °C (P' + e.maxPoint + ')</span>');
         if (e.maxDT !== null) parts.push('<span class="drv"><span class="dot lv' + (e.lv.dt || 0) + '"></span>ΔT ' + (e.maxDT > 0 ? '+' : '') + esc(fmt1(e.maxDT)) + ' °C (P' + e.dtPoint + ')</span>');
@@ -905,17 +903,12 @@
       if (S.events.some(function (e) { return e.type === 'OPENING' && e.silo === sh.silo; })) { toast(t('opening_exists')); return; }
       p = DB.add('events', Object.assign({}, base, { type: 'OPENING', kg: kg0, lots: [], notes: '' }));
     }
-    if (sh.kind === 'round') {
-      const r = sheetRound();
-      if (r.points.some(function (x) { return !x.fault && (L.num(x.t) === null || isNaN(L.num(x.t))); })) { toast(t('need_all_points')); return; }
-      const rec = Object.assign({}, monBase, { kind: 'ROUND', shift: L.shiftOf(sv('date'), sv('time'), S.settings.st.shifts).id, odour: r.odour,
-        points: r.points.map(function (x) { return { t: x.fault ? null : L.num(x.t), fault: x.fault }; }) });
-      p = DB.add('monitor', rec).then(load).then(function () { return syncEvent(sh.silo); });
-    }
     if (sh.kind === 'weekly') {
-      const m = L.num(sv('moist')), ins = L.num(sv('insects'));
+      const m = L.num(sv('moist')), ins = L.num(sv('insects')), tp = sheetTemps();
       if (m === null || isNaN(m) || ins === null || isNaN(ins) || ins < 0 || Math.round(ins) !== ins) { toast(t('need_weekly')); return; }
-      p = DB.add('monitor', Object.assign({}, monBase, { kind: 'WEEKLY', moist: m, insects: ins, insectType: sv('insectType').trim(), damaged: sv('damaged', 'N') }))
+      if (tp.points.some(function (x) { return !x.fault && (L.num(x.t) === null || isNaN(L.num(x.t))); })) { toast(t('need_all_points')); return; }
+      p = DB.add('monitor', Object.assign({}, monBase, { kind: 'WEEKLY', moist: m, insects: ins, insectType: sv('insectType').trim(), damaged: sv('damaged', 'N'),
+        points: tp.points.map(function (x) { return { t: x.fault ? null : L.num(x.t), fault: x.fault }; }), odour: tp.odour }))
         .then(load).then(function () { return syncEvent(sh.silo); });
     }
     if (sh.kind === 'treat') {
@@ -928,6 +921,27 @@
       checkPin(sv('auth_pin')).then(function (r) {
         if (r !== 'ok') { toast(pinMsg(r)); return; }
         finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'DISP', decision: sv('decision'), basis: sv('basis').trim() })), who);
+      });
+      return;
+    }
+    if (sh.kind === 'adjust') {
+      const nv = L.num(sv('kg'), 'kg'), reason = sv('reason').trim(), book = L.siloContents(sh.silo, S.events).kg;
+      if (nv === null || isNaN(nv) || nv < 0) { toast(t('need_kg')); return; }
+      if (!reason) { toast(t('need_reason')); return; }
+      if (nv === book) { toast(t('corr_no_change')); return; }
+      checkPin(sv('auth_pin')).then(function (r) {
+        if (r !== 'ok') { toast(pinMsg(r)); return; }
+        finishSheet(DB.add('events', Object.assign({}, base, { type: 'ADJUST', kg: Math.round((nv - book) * 1000) / 1000, from: book, to: nv, reason: reason, notes: reason })), who);
+      });
+      return;
+    }
+    if (sh.kind === 'override') {
+      const st = sv('status'), reason = sv('reason').trim();
+      if (!st) { toast(t('need_fields')); return; }
+      if (!reason) { toast(t('need_reason')); return; }
+      checkPin(sv('auth_pin')).then(function (r) {
+        if (r !== 'ok') { toast(pinMsg(r)); return; }
+        finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'OVERRIDE', status: st, reason: reason })), who);
       });
       return;
     }
@@ -1100,11 +1114,13 @@
       const locked = stock.kg > 0 || stock.lots.length > 0;
       const sel = function (name, opts, val, dis) { return '<select name="' + name + '_' + i + '"' + (dis ? ' disabled' : '') + '><option value="">—</option>' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (val === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>'; };
       return '<div class="silocfg stack"><div class="grid2"><label>' + esc(t('silo_id')) + '<input name="silo_id_' + i + '" value="' + esc(x.id) + '"' + (hist ? ' readonly' : '') + '></label><label>' + esc(t('silo_cap')) + '<input name="silo_cap_' + i + '" type="text" readonly value="' + esc(L.binCapKg(x) === null ? '' : String(L.binCapKg(x))) + '"></label></div>' +
-        '<label>' + esc(t('silo_points')) + '<input name="silo_pts_' + i + '" type="text" inputmode="numeric" value="' + esc(x.points || '1') + '"></label>' +
         '<div class="grid3"><label>' + esc(t('cereal')) + sel('silo_cer', CEREALS.map(function (c) { return [c, cerName(c)]; }), x.cereal, locked) + '</label><label>' + esc(t('colour')) + sel('silo_col', COLOURS.map(function (c) { return [c, c]; }), x.colour, locked) + '</label><label>' + esc(t('grade')) + sel('silo_grade', SILO_GRADES.map(function (g) { return [g, gradeName(g)]; }), x.grade) + '</label></div>' +
         (locked ? '<p class="small muted">' + esc(t('silo_locked_note')) + '</p>' : '') +
         (hist ? '<p class="small muted">' + esc(t('silo_hist_note')) + '</p>' : '<button type="button" class="btn small" data-action="rm-silo" data-i="' + i + '">' + esc(t('remove')) + '</button>') + '</div>';
     }).join('') + '<button type="button" class="btn small" data-action="add-silo">+ ' + esc(t('add_silo')) + '</button></div>';
+    h += '<div class="card stack"><h2>' + esc(t('corr_title')) + '</h2><p class="small muted">' + esc(t('corr_note')) + '</p>' + s.silos.map(function (x) {
+      return '<div class="row small"><span class="grow mono">' + esc(x.id) + '</span><button type="button" class="btn small" data-action="corr-stock" data-silo="' + esc(x.id) + '">' + esc(t('corr_stock')) + '</button><button type="button" class="btn small" data-action="corr-status" data-silo="' + esc(x.id) + '">' + esc(t('corr_status')) + '</button></div>';
+    }).join('') + '</div>';
     CEREALS.forEach(function (c) {
       const g = s.grading[c], m = s.myco[c];
       h += '<div class="card stack"><h2>' + esc(t('grading_cfg')) + ' · ' + esc(cerName(c)) + '</h2>' + (c === 'Milho' ? '<p class="small muted">' + esc(t('sop_source')) + '</p>' : '<p class="small muted">' + esc(t('no_preset')) + '</p>');
@@ -1141,7 +1157,7 @@
       const idv = hist ? x.id : (v['silo_id_' + i] || '').trim();
       const capCode = L.binCapKg({ id: idv });
       return { id: idv, cap: capCode === null ? '' : String(capCode),
-        cereal: locked ? x.cereal : (v['silo_cer_' + i] || ''), colour: locked ? x.colour : (v['silo_col_' + i] || ''), grade: v['silo_grade_' + i] || '', points: (v['silo_pts_' + i] || '1').trim(), _new: x._new };
+        cereal: locked ? x.cereal : (v['silo_cer_' + i] || ''), colour: locked ? x.colour : (v['silo_col_' + i] || ''), grade: v['silo_grade_' + i] || '', points: '3', _new: x._new };
     });
     const ids = {};
     s.silos.forEach(function (x) {
@@ -1241,7 +1257,8 @@
     if (a === 'out-rm') { S.sheet.order = S.sheet.order.filter(function (x) { return x !== b.dataset.silo; }); updateSheetDyn(); }
     if (a === 'silo-transfer') openSheet('transfer', { silo: b.dataset.silo });
     if (a === 'silo-empty') openSheet('empty', { silo: b.dataset.silo });
-    if (a === 'mon-round') openSheet('round', { silo: b.dataset.silo });
+    if (a === 'corr-stock') openSheet('adjust', { silo: b.dataset.silo });
+    if (a === 'corr-status') openSheet('override', { silo: b.dataset.silo });
     if (a === 'mon-weekly') openSheet('weekly', { silo: b.dataset.silo });
     if (a === 'mon-treat') openSheet('treat', { silo: b.dataset.silo });
     if (a === 'mon-disp') openSheet('disp', { silo: b.dataset.silo });
