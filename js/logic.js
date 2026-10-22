@@ -161,6 +161,8 @@
     let lots = {}, kg = 0, lastEmpty = null;
     evs.forEach(function (e) {
       if (e.type === 'EMPTY' && e.silo === siloId) { lots = {}; kg = 0; lastEmpty = e; return; }
+      // ADJUST = correção de stock aprovada com PIN e motivo (kg com sinal; não altera lotes)
+      if (e.type === 'ADJUST') { if (e.silo === siloId) kg += num(e.kg) || 0; return; }
       // OPENING = quantidade inicial (stock existente antes de começar a registar)
       const inbound = e.type === 'IN' || e.type === 'OPENING' || (e.type === 'TRANSFER' && e.toSilo === siloId && e.silo !== siloId);
       const outbound = e.type === 'OUT' || (e.type === 'TRANSFER' && e.silo === siloId && e.toSilo !== siloId);
@@ -333,17 +335,18 @@
     const st = o.st || {}, th = storeTh(st);
     const recs = (o.recs || []).filter(function (r) { return r.silo === o.siloId && (!o.emptyStamp || recStamp(r) > o.emptyStamp); })
       .sort(function (a, b) { return recStamp(a) < recStamp(b) ? -1 : 1; });
-    const rounds = recs.filter(function (r) { return r.kind === 'ROUND'; });
+    // Temperatura: inspecção semanal com 3 pontos (base, meio, topo) — sem rondas de turno (v1.x)
     const weeks = recs.filter(function (r) { return r.kind === 'WEEKLY'; });
+    const temps = weeks.filter(function (w) { return Array.isArray(w.points) && w.points.length > 0; });
     const treats = recs.filter(function (r) { return r.kind === 'TREAT'; });
     const disps = recs.filter(function (r) { return r.kind === 'DISP'; });
     const drivers = [];
     const add = function (p, level, v) { if (level !== null && level !== undefined) drivers.push({ p: p, level: level, v: v }); };
-    const lastRound = rounds[rounds.length - 1] || null;
+    const lastTmp = temps[temps.length - 1] || null;
     let ev = null;
-    if (lastRound) {
-      ev = roundEval(lastRound, rounds[rounds.length - 2], st);
-      add('temp', ev.lv.temp, ev.maxT); add('dt', ev.lv.dt, ev.maxDT); add('odour', ev.lv.odour, lastRound.odour); add('fault', ev.lv.fault, null);
+    if (lastTmp) {
+      ev = roundEval(lastTmp, temps[temps.length - 2], st);
+      add('temp', ev.lv.temp, ev.maxT); add('dt', ev.lv.dt, ev.maxDT); add('odour', ev.lv.odour, lastTmp.odour); add('fault', ev.lv.fault, null);
     }
     const lastW = weeks[weeks.length - 1] || null, prevW = weeks[weeks.length - 2] || null;
     const closed = (o.sevents || []).filter(function (e) { return e.status === 'CLOSED'; });
@@ -359,36 +362,30 @@
     const lastT = treats[treats.length - 1];
     if (lastT && (!lastW || recStamp(lastW) < recStamp(lastT))) add('treat_pending', 2, lastT.date);
     const level = drivers.reduce(function (m, d) { return Math.max(m, d.level); }, 0);
-    const noData = !lastRound && !lastW && !drivers.length;
+    const noData = !lastTmp && !lastW && !drivers.length;
     // Retenção: leitura Vermelha/Emergência depois da última disposição do CQ
     let lastRed = null;
-    rounds.forEach(function (r, i) { if (roundEval(r, rounds[i - 1], st).level >= 4) lastRed = recStamp(r); });
+    temps.forEach(function (r, i) { if (roundEval(r, temps[i - 1], st).level >= 4) lastRed = recStamp(r); });
     weeks.forEach(function (w) { if (th.m && num(w.moist) !== null && bandMoist(num(w.moist), th.m) >= 4) lastRed = recStamp(w); });
     const lastD = disps[disps.length - 1] || null;
     const dispValid = lastD && lastRed && recStamp(lastD) > lastRed;
-    const held = !!lastRed && !dispValid;
-    const rejected = !!(dispValid && lastD.decision === 'REJECT');
+    let held = !!lastRed && !dispValid;
+    let rejected = !!(dispValid && lastD.decision === 'REJECT');
+    // Correção de estado (OVERRIDE, com PIN e motivo): vence se for mais recente que a última leitura Vermelha e a última disposição
+    const lastOv = recs.filter(function (r) { return r.kind === 'OVERRIDE'; }).pop() || null;
+    if (lastOv && (!lastRed || recStamp(lastOv) > lastRed) && (!lastD || recStamp(lastOv) > recStamp(lastD))) { held = lastOv.status === 'HELD'; rejected = false; }
     // Idade de armazenagem: lote mais antigo presente
     const dates = (o.lots || []).map(function (l) { return l.date; }).filter(Boolean).sort();
     const ageDays = dates.length ? daysBetween(dates[0], o.now.date) : null;
-    // Rondas: 1 por turno; 2 se Âmbar ou pior agora ou num dos últimos N turnos
-    const starts = st.shifts && st.shifts.length ? st.shifts : ['07:00', '19:00'];
-    const cur = shiftOf(o.now.date, o.now.time, starts);
-    const shiftLevel = function (sh) { let m = -1; rounds.forEach(function (r, i) { if (shiftOf(r.date, r.time, starts).id === sh.id) m = Math.max(m, roundEval(r, rounds[i - 1], st).level); }); return m; };
-    let elevated = level >= 2, sh = cur;
-    const clearN = num(st.clearShifts) || 3;
-    for (let k = 0; k < clearN && !elevated; k++) { sh = prevShift(sh); if (shiftLevel(sh) >= 2) elevated = true; }
-    const done = rounds.filter(function (r) { return shiftOf(r.date, r.time, starts).id === cur.id; }).length;
-    const need = (o.kg > 0 || (o.lots || []).length) ? (elevated ? (num(st.amberRounds) || 2) : 1) : 0;
     const wDays = num(st.weeklyDays) || 7;
     const weeklyDue = (o.kg > 0) && (lastW ? daysBetween(lastW.date, o.now.date) >= wDays : (ageDays === null || ageDays >= wDays));
-    return { level: level, drivers: drivers, noData: noData, held: held, rejected: rejected, lastDisp: lastD, lastRound: lastRound, lastEval: ev, lastWeekly: lastW, prevWeekly: prevW,
-      ageDays: ageDays, unknownAge: (o.kg > 0 && !dates.length), shift: cur, roundsDone: done, roundsNeed: need, weeklyDue: weeklyDue };
+    return { level: level, drivers: drivers, noData: noData, held: held, rejected: rejected, lastDisp: lastD, lastTemp: lastTmp, lastEval: ev, lastWeekly: lastW, prevWeekly: prevW,
+      ageDays: ageDays, unknownAge: (o.kg > 0 && !dates.length), weeklyDue: weeklyDue };
   }
 
   // ---------- cópia de segurança / backup validation ----------
   const STATUS = ['ACCEPTED', 'HELD', 'REJECTED'];
-  const EVT = ['IN', 'OUT', 'TRANSFER', 'EMPTY'];
+  const EVT = ['IN', 'OUT', 'TRANSFER', 'EMPTY', 'OPENING', 'ADJUST'];
   function validBackup(d) {
     if (!d || d.app !== 'moagem-app' || (d.format !== 1 && d.format !== 3 && d.format !== 4)) return false;
     if (!Array.isArray(d.lots) || !Array.isArray(d.events) || !Array.isArray(d.settings)) return false;

@@ -121,12 +121,19 @@ ok('round eval: dT red even at 30.0 (SOP warning example)', () => {
 ok('silo status, hold and disposition', () => {
   const now = { date: '2026-10-05', time: '10:00' };
   const lots = [{ date: '2026-09-20', hum: 13.2 }];
-  const r1 = { kind: 'ROUND', silo: 'S1', seq: 1, date: '2026-10-05', time: '08:00', points: [{ t: '24' }], odour: 'N' };
+  const r1 = { kind: 'WEEKLY', silo: 'S1', seq: 1, date: '2026-10-05', time: '08:00', points: [{ t: '24' }, { t: '24' }, { t: '24' }], odour: 'N' };
   let s1 = L.siloStatus({ siloId: 'S1', recs: [r1], lots, st: ST, now, kg: 100 });
-  assert.strictEqual(s1.level, 1); assert.strictEqual(s1.ageDays, 15); assert.strictEqual(s1.roundsDone, 1); assert.strictEqual(s1.roundsNeed, 1); assert.ok(s1.weeklyDue); assert.ok(!L.siloStatus({ siloId: 'S1', recs: [r1], lots: [{ date: '2026-10-04', hum: 13 }], st: ST, now, kg: 100 }).weeklyDue);
-  const r2 = { kind: 'ROUND', silo: 'S1', seq: 2, date: '2026-10-05', time: '09:00', points: [{ t: '27.5' }], odour: 'N' };
+  assert.strictEqual(s1.level, 1); assert.strictEqual(s1.ageDays, 15); assert.ok(!s1.weeklyDue);   // inspecção semanal feita hoje
+  assert.ok(L.siloStatus({ siloId: 'S1', recs: [], lots, st: ST, now, kg: 100 }).weeklyDue);       // sem inspecção: vencida
+  const r2 = { kind: 'WEEKLY', silo: 'S1', seq: 2, date: '2026-10-05', time: '09:00', points: [{ t: '27.5' }, { t: '24' }, { t: '24' }], odour: 'N' };
   s1 = L.siloStatus({ siloId: 'S1', recs: [r1, r2], lots, st: ST, now, kg: 100 });
-  assert.strictEqual(s1.level, 4); assert.ok(s1.held); assert.strictEqual(s1.roundsNeed, 2);
+  assert.strictEqual(s1.level, 4); assert.ok(s1.held);
+  assert.strictEqual(L.siloStatus({ siloId: 'S1', recs: [r1, r2], lots, st: ST, now, kg: 0 }).held, true);   // held independent of kg
+  const ov = { kind: 'OVERRIDE', silo: 'S1', seq: 7, date: '2026-10-05', time: '09:40', status: 'CLEAR', reason: 'Recolha confirmada pelo CQ' };
+  s1 = L.siloStatus({ siloId: 'S1', recs: [r1, r2, ov], lots, st: ST, now, kg: 100 });
+  assert.ok(!s1.held);   // correção com motivo, mais recente que a leitura vermelha
+  const ov2 = { kind: 'OVERRIDE', silo: 'S1', seq: 8, date: '2026-10-05', time: '09:45', status: 'HELD', reason: 'Cheiro suspeito' };
+  assert.ok(L.siloStatus({ siloId: 'S1', recs: [ov2], lots, st: ST, now, kg: 100 }).held);
   const d = { kind: 'DISP', silo: 'S1', seq: 3, date: '2026-10-05', time: '09:30', decision: 'RELEASE_PRIORITY' };
   s1 = L.siloStatus({ siloId: 'S1', recs: [r1, r2, d], lots, st: ST, now, kg: 100 });
   assert.ok(!s1.held); assert.ok(!s1.rejected);
