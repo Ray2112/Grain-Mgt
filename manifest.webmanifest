@@ -1,6 +1,6 @@
 {
-  "name": "Silos Management-App",
-  "short_name": "Silos Management-App",
+  "name": "Grain Mgt-App",
+  "short_name": "Grain Mgt-App",
   "description": "Recepção de cereal e registo de silos para moagens (FSSC 22000) — funciona sem rede.",
   "lang": "pt",
   "start_url": "./index.html",
