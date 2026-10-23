@@ -37,6 +37,33 @@ assert.strictEqual(F.feedCheck(st, 'B01', { id: 'S07', cereal: 'Milho', colour: 
 assert.deepStrictEqual(F.reconcile(40000, 40000), { diffKg: 0, ok: true });
 assert.strictEqual(F.reconcile(40000, 39999.5).ok, false);
 assert.strictEqual(F.reconcile(40000, 39999.5, 1).ok, true);
+// capacidade não definida na Mill-QC: ficheiro válido, sem verificação de espaço
+const noCap = base({ bins: [Object.assign({}, st.bins[0], { capKg: null })] });
+assert.strictEqual(F.parseBinsStatus(JSON.stringify(noCap)).bins[0].capKg, null);
+assert.strictEqual(F.feedCheck(noCap, 'B01', silo, NOW, 999999).ok, true);
+assert.strictEqual(F.feedCheck(noCap, 'B01', silo, NOW).freeKg, null);
+// conciliação por bin e silo (ciclo atual, até generatedAt)
+const evMs = e => Date.parse(e.at);
+const out = (at, silo, kg, bin) => ({ type: 'OUT', bin: bin || 'B01', silo, kg, at });
+const rc = (evs, s) => F.reconcileBins(s || st, evs, evMs)[0];
+let x = rc([out('2026-10-23T08:10:00Z', 'S05', 40000)]);
+assert.deepStrictEqual([x.ok, x.appKg, x.qcKg, x.diffKg, x.silos.length], [true, 40000, 40000, 0, 1]);
+x = rc([out('2026-10-23T08:10:00Z', 'S05', 39999.5)]);                       // 0,5 kg a menos: tolerância 0
+assert.deepStrictEqual([x.ok, x.diffKg, x.silos[0].diffKg], [false, -0.5, -0.5]);
+x = rc([out('2026-10-23T08:10:00Z', 'S05', 30000), out('2026-10-23T08:12:00Z', 'S06', 10000)]);   // total igual, silos trocados
+assert.deepStrictEqual([x.ok, x.diffKg, x.silos.map(s => s.silo + ':' + s.diffKg).join(' ')], [false, 0, 'S05:-10000 S06:10000']);
+x = rc([out('2026-10-23T06:00:00Z', 'S05', 5000), out('2026-10-23T08:10:00Z', 'S05', 40000)]);     // antes do último vazio: não conta
+assert.deepStrictEqual([x.ok, x.appKg], [true, 40000]);
+x = rc([out('2026-10-23T08:10:00Z', 'S05', 40000), out('2026-10-23T11:45:00Z', 'S05', 8000)]);     // depois do ficheiro: por chegar
+assert.deepStrictEqual([x.ok, x.pendingN, x.pendingKg], [true, 1, 8000]);
+x = rc([out('2026-10-23T08:10:00Z', 'S05', 40000), out('2026-10-23T08:20:00Z', 'S05', 1000, 'B02'), { type: 'IN', silo: 'S05', kg: 9 }]);   // outra bin / outro tipo
+assert.deepStrictEqual([x.ok, x.appKg], [true, 40000]);
+x = rc([out('2026-10-23T08:10:00Z', 'S05', 40000), out('sem hora', 'S05', 100)]);                 // hora inválida: não conciliado
+assert.deepStrictEqual([x.ok, x.badN], [false, 1]);
+x = rc([], base({ bins: [Object.assign({}, st.bins[0], { since: null, transfers: [] })] }));        // bin sem movimentos
+assert.deepStrictEqual([x.ok, x.empty, x.diffKg], [true, true, 0]);
+x = rc([out('2026-10-23T08:10:00Z', 'S05', 40000)], base({ bins: [Object.assign({}, st.bins[0], { transfers: [] })] }));   // receção em falta na Mill-QC
+assert.deepStrictEqual([x.ok, x.diffKg], [false, 40000]);
 // download
 const r = D.buildDownloadRequest({ accessToken: 't', path: '/bins-status.json' });
 assert.strictEqual(r.url, 'https://content.dropboxapi.com/2/files/download');

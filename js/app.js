@@ -551,7 +551,7 @@
   function silosView() {
     if (!S.settings.silos.length) return '<p class="warn">' + esc(t('no_silos')) + '</p>';
     const lotsById = {}; S.lots.forEach(function (l) { lotsById[l.id] = l; });
-    let h = '<button class="btn primary block" data-action="discharge">' + esc(t('act_out')) + '</button>';
+    let h = '<button class="btn primary block" data-action="discharge">' + esc(t('act_out')) + '</button>' + reconCard();
     S.settings.silos.forEach(function (s) {
       const ss = siloSt(s), c = { kg: ss.kg, lots: ss.lots };
       const bs = L.binState(s, S.events), cap = bs.cap;
@@ -584,6 +584,42 @@
         '<div class="muted">' + esc(e.date) + ' ' + esc(e.time) + (e.lots && e.lots.length ? ' · ' + e.lots.map(function (x) { return esc(L.lotLabel(S.lots, x)); }).join(', ') : '') + (e.prodLot ? ' · ' + esc(e.prodLot) : '') + (e.operator ? ' · ' + esc(e.operator) : '') + '</div></div><div>' + (e.kg ? fmtKg(e.kg) : (e.type === 'EMPTY' && e.writeOff ? '−' + fmtKg(e.writeOff) : '')) + '</div></div>';
     }).join('') : '<p class="muted">' + esc(t('no_events')) + '</p>';
     return h;
+  }
+
+  // Conciliação com a Mill-QC: descargas para as bins (esta app) vs receção nas bins (ficheiro). Tolerância 0 kg (P4).
+  const evMs = function (e) { return new Date(e.date + 'T' + (e.time || '00:00')).getTime(); }; // hora local do telemóvel
+  const fmtDiff = function (d) { return (d > 0 ? '+' : d < 0 ? '−' : '') + fmtNum(Math.abs(d), 3) + ' kg'; };
+  function refreshRecon() {
+    S.recon = { loading: true }; render();
+    window.FeedSync.fetchStatus().then(function (st) { S.recon = { status: st }; })
+      .catch(function (e) { S.recon = { error: e.message, last: window.FeedSync.lastStatus() }; })
+      .then(function () { if (S.tab === 'silos') render(); });
+  }
+  function reconCard() {
+    const r = S.recon;
+    let h = '<details class="card stack"' + (r ? ' open' : '') + '><summary class="strong">Conciliação das bins (Mill-QC)</summary>';
+    if (!window.FeedSync || !window.FeedSync.configured() || !window.BinsFeed) return h + '<p class="small muted">' + esc(FEED_MSG.FEED_NOT_CONFIGURED) + '.</p></details>';
+    h += '<p class="small muted">Descargas registadas aqui para cada bin, comparadas com a receção na Mill-QC, silo a silo, desde o último vazio da bin. Tolerância 0 kg.</p>';
+    h += '<button type="button" class="btn small" data-action="recon-refresh"' + (r && r.loading ? ' disabled' : '') + '>' + (r && r.loading ? 'A ler…' : 'Ler ficheiro e conciliar') + '</button>';
+    if (!r || r.loading) return h + '</details>';
+    const status = r.status || r.last;
+    if (r.error) h += '<p class="warn small">' + esc('Ficheiro das bins indisponível: ' + (FEED_MSG['FEED_' + r.error] || r.error) + (status ? '. A mostrar a última cópia guardada.' : '.')) + '</p>';
+    if (!status) return h + '</details>';
+    const fr = window.BinsFeed.freshness(status, Date.now());
+    h += '<p class="small muted">Ficheiro de ' + esc(lt(status.generatedAt)) + (fr.ageMin !== null ? ' (há ' + fr.ageMin + ' min)' : '') + '</p>';
+    if (!fr.ok) h += '<p class="warn small">' + esc((FEED_MSG['FRESHNESS_' + fr.reason.toUpperCase()] || fr.reason) + ': confirmar com o chefe de turno antes de dar a conciliação por fechada.') + '</p>';
+    window.BinsFeed.reconcileBins(status, S.events, evMs).forEach(function (b) {
+      h += '<div class="stack"><div class="row"><span class="strong grow">' + esc(b.bin) + '</span><span class="badge ' + (b.ok ? 'b-ACCEPTED">Confere' : 'b-REJECTED">Diferença ' + esc(fmtDiff(b.diffKg))) + '</span></div>';
+      if (b.empty) h += '<p class="small muted">Sem descargas nem receções neste ciclo.</p>';
+      else h += '<div class="row small muted"><span class="grow">Silo</span><span>Mill-App · Mill-QC · diferença</span></div>' + b.silos.map(function (x) {
+        return '<div class="row small"><span class="mono grow">' + esc(x.silo) + '</span><span>' + fmtKg(x.appKg) + ' · ' + fmtKg(x.qcKg) + ' · ' + (x.ok ? '<span>' : '<span class="flag">') + esc(fmtDiff(x.diffKg)) + '</span></span></div>';
+      }).join('');
+      if (b.pendingN) h += '<p class="small muted">' + b.pendingN + ' descarga(s) depois do ficheiro (' + fmtKg(b.pendingKg) + '): ainda não contam.</p>';
+      if (b.badN) h += '<p class="warn small">' + b.badN + ' descarga(s) sem data/hora válida: verificar os registos.</p>';
+      if (!b.ok && !b.badN) h += '<p class="warn small">Diferença: parar e perguntar ao chefe de turno (descarga em falta ou quantidade diferente numa das apps).</p>';
+      h += '</div>';
+    });
+    return h + '</details>';
   }
 
   // ---------------- monitorização / storage monitoring (SOP-OPS-002) ----------------
@@ -1285,7 +1321,8 @@
     if (a === 'dest-rm') { S.form.dest = S.form.dest.filter(function (x) { return x !== b.dataset.silo; }); updateDyn(); }
     if (a === 'discharge') { openSheet('out', { order: b.dataset.silo ? [b.dataset.silo] : [] }); }
     if (a === 'feed-in') { window.FeedSync.signIn().catch(function (e) { toast(e.message); }); return; }
-    if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; render(); toast('Dropbox desligado neste telemóvel.'); return; }
+    if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast('Dropbox desligado neste telemóvel.'); return; }
+    if (a === 'recon-refresh') { refreshRecon(); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
       const id = b.dataset.silo;
       S.sheet.order = S.sheet.order.indexOf(id) >= 0 ? S.sheet.order.filter(function (x) { return x !== id; }) : S.sheet.order.concat([id]);

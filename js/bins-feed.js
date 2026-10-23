@@ -16,7 +16,8 @@
     if (!Array.isArray(o.bins)) throw new Error('bins em falta');
     o.bins.forEach(function (b) {
       if (!b || typeof b.id !== 'string') throw new Error('bin sem id');
-      if (!Number.isFinite(b.kg) || !Number.isFinite(b.capKg)) throw new Error(b.id + ': kg/capKg inválidos');
+      // capKg null = capacidade não definida na Mill-QC (o ficheiro continua válido; só não há verificação de espaço)
+      if (!Number.isFinite(b.kg) || !(b.capKg === null || Number.isFinite(b.capKg))) throw new Error(b.id + ': kg/capKg inválidos');
       if (BIN_STATES.indexOf(b.state) < 0) throw new Error(b.id + ': estado desconhecido');
       if (!Array.isArray(b.transfers)) throw new Error(b.id + ': transferências em falta');
       b.transfers.forEach(function (tr) {
@@ -61,8 +62,8 @@
       else if (p.colour !== silo.colour) reasons.push({ code: 'OTHER_COLOUR', with: p.colour });
       else if (p.grade !== silo.grade) reasons.push({ code: 'GRADE_MISMATCH', with: p.grade });
     });
-    const free = bin.capKg - bin.kg;
-    if (requestKg !== undefined && requestKg > free) reasons.push({ code: 'NO_SPACE', free: free });
+    const free = bin.capKg === null ? null : bin.capKg - bin.kg;
+    if (requestKg !== undefined && free !== null && requestKg > free) reasons.push({ code: 'NO_SPACE', free: free });
     return { ok: reasons.length === 0, reasons: reasons, bin: bin, freshness: fr, freeKg: free };
   }
 
@@ -73,7 +74,37 @@
     return { diffKg: diff, ok: Math.abs(diff) <= tol };
   }
 
-  const api = { parseBinsStatus, freshness, feedCheck, reconcile, MAX_AGE_H, BIN_STATES };
+  // Conciliação por bin e por silo: descargas da Mill-App (eventos OUT com bin) vs transferências no ficheiro.
+  // Só o ciclo atual da bin (depois de bin.since) e só até generatedAt; descargas mais recentes do que o
+  // ficheiro ficam "por chegar" e não contam como diferença. evMs(ev) -> epoch ms da descarga.
+  // Devolve [{bin, ok, empty, appKg, qcKg, diffKg, silos:[{silo, appKg, qcKg, diffKg, ok}], pendingKg, pendingN, badN}].
+  const r3 = n => Math.round(n * 1000) / 1000;
+  function reconcileBins(status, events, evMs, tolKg) {
+    const gen = Date.parse(status.generatedAt);
+    return status.bins.map(function (bin) {
+      const since = bin.since ? Date.parse(bin.since) : null;
+      const rows = {}, row = id => rows[id] = rows[id] || { silo: id, appKg: 0, qcKg: 0 };
+      let pendingKg = 0, pendingN = 0, badN = 0;
+      bin.transfers.forEach(function (tr) { tr.parts.forEach(function (p) { row(p.silo).qcKg += p.kg; }); });
+      (events || []).forEach(function (e) {
+        if (!e || e.type !== 'OUT' || e.bin !== bin.id) return;
+        const ms = evMs(e), kg = Number(e.kg);
+        if (isNaN(ms) || !Number.isFinite(kg)) { badN++; return; }
+        if (since !== null && !(ms > since)) return;      // ciclo anterior (antes do último vazio)
+        if (ms > gen) { pendingKg += kg; pendingN++; return; }
+        row(e.silo).appKg += kg;
+      });
+      const silos = Object.keys(rows).sort().map(function (id) {
+        const x = rows[id], c = reconcile(x.appKg, x.qcKg, tolKg);
+        return { silo: id, appKg: r3(x.appKg), qcKg: r3(x.qcKg), diffKg: c.diffKg, ok: c.ok };
+      });
+      const appKg = r3(silos.reduce((s, x) => s + x.appKg, 0)), qcKg = r3(silos.reduce((s, x) => s + x.qcKg, 0));
+      return { bin: bin.id, ok: badN === 0 && silos.every(x => x.ok), empty: silos.length === 0, appKg, qcKg, diffKg: r3(appKg - qcKg),
+        silos, pendingKg: r3(pendingKg), pendingN, badN };
+    });
+  }
+
+  const api = { parseBinsStatus, freshness, feedCheck, reconcile, reconcileBins, MAX_AGE_H, BIN_STATES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BinsFeed = api;
 })(typeof window !== 'undefined' ? window : this);
