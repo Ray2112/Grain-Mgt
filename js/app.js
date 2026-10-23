@@ -674,7 +674,37 @@
     return '<label>' + esc(label) + '<select name="' + name + '"><option value="">—</option>' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (sv(name) === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>';
   }
   function sInput(name, label, extra, dflt) { return '<label>' + esc(label) + '<input name="' + name + '" value="' + esc(sv(name, dflt)) + '"' + (extra || '') + '></label>'; }
-  function openSheet(kind, data) { S.sheet = Object.assign({ kind: kind, v: { date: L.today(), time: L.nowTime(), operator: S.settings.operator || '' } }, data || {}); renderSheet(); }
+  function openSheet(kind, data) {
+    S.sheet = Object.assign({ kind: kind, v: { date: L.today(), time: L.nowTime(), operator: S.settings.operator || '' } }, data || {}); renderSheet();
+    if (kind === 'out') refreshFeed();
+  }
+  // Estado das bins (Mill-QC) para a descarga. Sem ficheiro válido => a passagem pede confirmação ao operador.
+  function refreshFeed() {
+    if (!window.FeedSync || !window.FeedSync.configured()) { S.feed = { error: 'NOT_CONFIGURED' }; return updateSheetDyn(); }
+    S.feed = { loading: true };
+    window.FeedSync.fetchStatus().then(function (st) { S.feed = { status: st, at: Date.now() }; })
+      .catch(function (e) { S.feed = { error: e.message, last: window.FeedSync.lastStatus() }; })
+      .then(function () { if (S.sheet && S.sheet.kind === 'out') updateSheetDyn(); });
+  }
+  // Verificação de alimentação para a descarga: bin escolhida + silos da descarga (mesmo cereal/cor/grau)
+  function feedCheckNow(sh) {
+    const bin = sh.v.bin, silo = sh.order.length ? siloById(sh.order[0]) : null;
+    const kg = roundKg(L.num(sh.v.kg, 'kg'));
+    const status = S.feed && S.feed.status ? S.feed.status : (S.feed && S.feed.error ? (S.feed.last || null) : null);
+    if (!bin || !window.BinsFeed) return null;
+    const silo0 = silo ? { id: silo.id, cereal: silo.cereal, colour: silo.colour, grade: silo.grade } : null;
+    if (!status) return { ok: false, reasons: [{ code: S.feed && S.feed.error ? 'FEED_' + S.feed.error : 'FEED_LOADING' }] };
+    return window.BinsFeed.feedCheck(status, bin, silo0, Date.now(), (kg && kg > 0) ? kg : undefined);
+  }
+  const FEED_MSG = { FRESHNESS_STALE: 'ficheiro das bins antigo', FRESHNESS_FUTURE: 'hora do ficheiro no futuro', FRESHNESS_INVALID: 'hora do ficheiro inválida', BIN_MISSING: 'bin não existe no ficheiro', BIN_NEG: 'bin com saldo negativo', BIN_OVER: 'bin acima da capacidade', SILO_NOT_DESIGNATED: 'silo sem cereal/cor/grau', OTHER_CEREAL: 'outro cereal na bin', OTHER_COLOUR: 'outra cor na bin', GRADE_MISMATCH: 'grau diferente na bin', NO_SPACE: 'sem espaço na bin', FEED_NOT_CONFIGURED: 'leitor do Dropbox não configurado', FEED_NOT_SIGNED_IN: 'sem sessão Dropbox neste telemóvel', FEED_FILE_MISSING: 'ficheiro das bins não existe', FEED_LOADING: 'a ler o ficheiro das bins…' };
+  function feedText(c) {
+    if (!c) return '';
+    const msgs = c.reasons.map(function (r) { return FEED_MSG[r.code] || (r.code.indexOf('FEED_') === 0 ? 'ficheiro das bins indisponível (' + r.code.slice(5) + ')' : r.code); });
+    if (c.ok) return '<p class="small">Bin ' + esc(sh_bin()) + ': ' + fmtKg(c.bin.kg) + ' kg · ' + esc('ficheiro há ' + c.freshness.ageMin + ' min') + '</p>';
+    return '<p class="warn small">Parar e perguntar ao chefe de turno: ' + esc(msgs.join('; ')) + '</p>' +
+      '<label class="check"><input type="checkbox" name="feed_ok"' + (sv('feed_ok') ? ' checked' : '') + '> Confirmado pelo chefe de turno</label>';
+  }
+  function sh_bin() { return S.sheet && S.sheet.v.bin ? S.sheet.v.bin : ''; }
   const PERSON = { round: ['operator', 'operator'], weekly: ['operator', 'qc_name'], treat: ['operator', 'recorded_by'], disp: ['operator', 'qc_name'], event: ['operator', 'decided_by'], adjust: ['operator', 'corr_by'], override: ['operator', 'corr_by'] };
   function renderSheet() {
     const el = $('#sheet');
@@ -825,6 +855,7 @@
       }
       const grades = Array.from(new Set(sh.order.map(function (id) { const s = siloById(id); return s ? s.cereal + s.colour + s.grade : ''; })));
       if (grades.length > 1) h += '<p class="warn small">' + esc(t('mixed_discharge')) + '</p>';
+      if (sh.v.bin && sh.order.length) h += '<div class="stack">' + feedText(feedCheckNow(sh)) + '</div>';
     }
     if (sh.kind === 'transfer') {
       const c = transferCheck();
@@ -874,8 +905,11 @@
       if (pl.a.short > 0) { toast(t('short_stock') + ' ' + fmtKg(pl.a.short)); return; }
       const badOut = L.binCheck(pl.a.parts.map(function (part) { return { silo: part.silo, type: 'OUT', kg: part.kg }; }), S.events);
       if (badOut.length) { toast(binMsg(badOut[0])); return; }
+      const fc = feedCheckNow(sh);
+      if (fc && !fc.ok && !sv('feed_ok')) { toast('Parar e perguntar ao chefe de turno antes de passar grão para a bin.'); return; }
+      const feedNote = fc && !fc.ok ? 'Alimentação confirmada pelo chefe de turno: ' + fc.reasons.map(function (r) { return r.code; }).join(', ') : '';
       p = DB.addMany(pl.a.parts.map(function (part) {
-        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('line'), bin: sv('bin'), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots }) };
+        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('line'), bin: sv('bin'), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots, notes: feedNote }) };
       }));
     }
     if (sh.kind === 'transfer') {
@@ -1070,7 +1104,9 @@
   // ---------------- definições / settings ----------------
   function settingsView() {
     const s = S.settings;
-    let h = '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
+    let h = '<div class="card stack"><h2>Ficheiro das bins (Dropbox, só leitura)</h2><p class="small muted">' + (window.FeedSync && window.FeedSync.configured() ? (window.FeedSync.signedIn() ? 'Ligado neste telemóvel.' : 'Não ligado.') : 'Aguarda a app de leitura do Dropbox (chave ainda não configurada).') + '</p>' +
+      (window.FeedSync && window.FeedSync.configured() ? '<div class="grid2"><button type="button" class="btn" data-action="feed-in">Ligar ao Dropbox</button><button type="button" class="btn" data-action="feed-out">Desligar</button></div>' : '') + '</div>' +
+      '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
       '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
       '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label>' +
       '<label>' + esc(t('language')) + '<select name="lang"><option value="pt" ' + (s.lang === 'pt' ? 'selected' : '') + '>Português</option><option value="en" ' + (s.lang === 'en' ? 'selected' : '') + '>English</option></select></label></div>';
@@ -1248,6 +1284,8 @@
     if (a === 'dest-add') { if (S.form.dest.indexOf(b.dataset.silo) < 0) S.form.dest.push(b.dataset.silo); updateDyn(); }
     if (a === 'dest-rm') { S.form.dest = S.form.dest.filter(function (x) { return x !== b.dataset.silo; }); updateDyn(); }
     if (a === 'discharge') { openSheet('out', { order: b.dataset.silo ? [b.dataset.silo] : [] }); }
+    if (a === 'feed-in') { window.FeedSync.signIn().catch(function (e) { toast(e.message); }); return; }
+    if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; render(); toast('Dropbox desligado neste telemóvel.'); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
       const id = b.dataset.silo;
       S.sheet.order = S.sheet.order.indexOf(id) >= 0 ? S.sheet.order.filter(function (x) { return x !== id; }) : S.sheet.order.concat([id]);
@@ -1312,7 +1350,7 @@
   });
 
   // ---------------- arranque / start ----------------
-  load().then(function () { render(); DB.persist(); });
+  load().then(function () { render(); DB.persist(); if (window.FeedSync) window.FeedSync.handleReturn().then(function (r) { if (r) { toast(r.msg); render(); } }); });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
   window.__app = { S: S }; // apenas para testes / for tests only
 })();
