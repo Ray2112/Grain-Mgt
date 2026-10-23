@@ -3,7 +3,7 @@
 // Vazio = início de sessão desligado (não usar a chave da app Mill-CD, que tem permissão de escrita).
 (function (root) {
   const FEED = {
-    appKey: null,                               // a preencher quando a app de leitura existir
+    appKey: 'sb1ldzr5quuacxw',                  // app key da app de leitura (pública, não é segredo)
     binsStatusPath: '/Apps/Mill-CD/bins-status.json'  // caminho completo (app Full Dropbox); confirmar com o titular
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = FEED;
