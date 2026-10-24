@@ -3,7 +3,7 @@
   'use strict';
   const T = {
     pt: {
-      app_name: 'Moagem — Registos', offline_badge: 'Funciona sem rede', footer: 'Dados guardados apenas neste dispositivo.',
+      app_name: 'Grain-Mgt — Registos de grão', offline_badge: 'Funciona sem rede', footer: 'Dados guardados apenas neste dispositivo.',
       tab_intake: 'Recepção', tab_silos: 'Silos', tab_insp: 'Monitorização', tab_export: 'Exportar', tab_settings: 'Definições',
       intake_title: 'Recepção de cereal', silos_title: 'Silos e lotes', insp_title: 'Monitorização da armazenagem', export_title: 'Exportar e cópia de segurança', settings_title: 'Definições',
       new_lot: 'Novo lote', lots_today: 'Lotes de hoje', lots_older: 'Lotes anteriores', lots_held: 'Lotes retidos (aguardam CQ)', no_lots: 'Ainda não há lotes registados.',
@@ -119,7 +119,7 @@
       err_points: 'pontos de temperatura: 1 a 50', err_ascending: 'os valores têm de subir', err_shifts: 'use HH:MM separados por vírgula'
     },
     en: {
-      app_name: 'Mill — Records', offline_badge: 'Works offline', footer: 'Data stored on this device only.',
+      app_name: 'Grain-Mgt — Grain records', offline_badge: 'Works offline', footer: 'Data stored on this device only.',
       tab_intake: 'Intake', tab_silos: 'Silos', tab_insp: 'Monitoring', tab_export: 'Export', tab_settings: 'Settings',
       intake_title: 'Grain intake', silos_title: 'Silos and lots', insp_title: 'Storage monitoring', export_title: 'Export and backup', settings_title: 'Settings',
       new_lot: 'New lot', lots_today: "Today's lots", lots_older: 'Earlier lots', lots_held: 'Lots on hold (awaiting QC)', no_lots: 'No lots recorded yet.',

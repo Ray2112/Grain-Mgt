@@ -450,7 +450,7 @@
   // ---------- identificadores de registo (sincronização futura) ----------
   // Cada registo tem um uid global (UUID v4) e o deviceId de origem. A chave local (IndexedDB) não é partilhada.
   const UID_STORES = ['lots', 'events', 'monitor', 'sevents'];
-  const APP_VERSION = '0.6.0';
+  const APP_VERSION = '0.6.1';
   // Versão do mestre partilhado (silos e capacidades). Muda sempre que SILO_IDS ou as capacidades mudarem.
   const MASTER_VERSION = '2026-10-14.1';   // não muda: silos e capacidades iguais (só unidades internas)
   // Compara a versão do mestre gravada num registo/cópia com a desta app: 'same' | 'older' | 'newer' | 'missing'.

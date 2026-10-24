@@ -1,5 +1,7 @@
 # Moagem — Registos (v0.6.0, Fase A)
 
+> **v0.6.1 (24-10-2026) — novo nome: Grain-Mgt** (antes Mill-App). Novo endereço: https://ray2112.github.io/Grain-Mgt/ — reinstale a app a partir deste endereço; os registos guardados no dispositivo mantêm-se. New name **Grain-Mgt** (formerly Mill-App); reinstall from the new address; records on the device are kept.
+
 Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)** e **registo de silos e lotes (RG-13)** numa moagem. Funciona sem rede depois da primeira abertura. Os dados ficam **apenas no telemóvel**.
 
 *English version below.*
@@ -7,10 +9,10 @@ Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)**
 ---
 
 ## Novidades na v0.6.0
-- **Ligação ao Dropbox (só leitura):** Definições → "Ligar ao Dropbox", uma vez por telemóvel. A app lê o `bins-status.json` que a Mill-QC escreve em `/Apps/Mill-CD/`; nunca escreve no Dropbox.
+- **Ligação ao Dropbox (só leitura):** Definições → "Ligar ao Dropbox", uma vez por telemóvel. A app lê o `bins-status.json` que a Prod-Mgt escreve em `/Apps/Mill-CD/`; nunca escreve no Dropbox.
 - **Verificação na descarga para a bin:** ao escolher a bin, a app confirma que o ficheiro tem menos de 2 h e que o silo tem o mesmo cereal, cor e grau do que já está na bin neste ciclo, e que há espaço. Qualquer diferença: parar e perguntar ao chefe de turno (com confirmação registada na descarga).
-- **Conciliação das bins** (separador Silos): descargas registadas aqui para cada bin comparadas com a receção na Mill-QC, silo a silo, desde o último vazio da bin. Tolerância 0 kg. Descargas mais recentes do que o ficheiro aparecem como "ainda não contam".
-- Bins sem capacidade definida na Mill-QC já não invalidam o ficheiro (só não há verificação de espaço).
+- **Conciliação das bins** (separador Silos): descargas registadas aqui para cada bin comparadas com a receção na Prod-Mgt, silo a silo, desde o último vazio da bin. Tolerância 0 kg. Descargas mais recentes do que o ficheiro aparecem como "ainda não contam".
+- Bins sem capacidade definida na Prod-Mgt já não invalidam o ficheiro (só não há verificação de espaço).
 
 ## Novidades na v0.4.2
 - **Capacidade da bin (kg) fixa no código** (S01–S12: 6 000 000 kg; S13–S21: 3 000 000 kg). O campo nas Definições é só de leitura. Não se pode gravar quantidade negativa nem acima da capacidade (entrada, descarga, transferência).
@@ -88,10 +90,10 @@ Altere `const CACHE = 'moagem-v0.4.2-a'` em `sw.js` (por exemplo para `v0.4.3-a`
 A serverless phone app for **grain intake (RG-21)** and **silo and lot records (RG-13)**. It works offline after the first load. Data stays **on the phone only**.
 
 ## New in v0.6.0
-- **Dropbox link (read-only):** Settings → "Ligar ao Dropbox", once per phone. The app reads the `bins-status.json` that Mill-QC writes to `/Apps/Mill-CD/`; it never writes to Dropbox.
+- **Dropbox link (read-only):** Settings → "Ligar ao Dropbox", once per phone. The app reads the `bins-status.json` that Prod-Mgt writes to `/Apps/Mill-CD/`; it never writes to Dropbox.
 - **Check on discharge to a bin:** when a bin is chosen, the app checks the file is under 2 h old, the silo has the same cereal, colour and grade as what is already in the bin this cycle, and there is space. Any difference: stop and ask the shift lead (confirmation is recorded on the discharge).
-- **Bin reconciliation** (Silos tab): discharges recorded here for each bin compared with the receipt in Mill-QC, silo by silo, since the bin was last emptied. Tolerance 0 kg. Discharges newer than the file show as "not counted yet".
-- Bins with no capacity set in Mill-QC no longer make the file invalid (only the space check is skipped).
+- **Bin reconciliation** (Silos tab): discharges recorded here for each bin compared with the receipt in Prod-Mgt, silo by silo, since the bin was last emptied. Tolerance 0 kg. Discharges newer than the file show as "not counted yet".
+- Bins with no capacity set in Prod-Mgt no longer make the file invalid (only the space check is skipped).
 
 ## New in v0.4.2
 - **Bin capacity (kg) fixed in the code** (S01–S12: 6,000,000 kg; S13–S21: 3,000,000 kg). The field in Settings is read-only. Negative quantities and quantities above capacity cannot be saved (intake, discharge, transfer).
