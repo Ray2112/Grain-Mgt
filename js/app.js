@@ -597,9 +597,9 @@
   }
   function reconCard() {
     const r = S.recon;
-    let h = '<details class="card stack"' + (r ? ' open' : '') + '><summary class="strong">Conciliação das bins (Prod-Mgt)</summary>';
+    let h = '<details class="card stack"' + (r ? ' open' : '') + '><summary class="strong">Conciliação das bins (Prodn-Mgt)</summary>';
     if (!window.FeedSync || !window.FeedSync.configured() || !window.BinsFeed) return h + '<p class="small muted">' + esc(FEED_MSG.FEED_NOT_CONFIGURED) + '.</p></details>';
-    h += '<p class="small muted">Descargas registadas aqui para cada bin, comparadas com a receção na Prod-Mgt, silo a silo, desde o último vazio da bin. Tolerância 0 kg.</p>';
+    h += '<p class="small muted">Descargas registadas aqui para cada bin, comparadas com a receção na Prodn-Mgt, silo a silo, desde o último vazio da bin. Tolerância 0 kg.</p>';
     h += '<button type="button" class="btn small" data-action="recon-refresh"' + (r && r.loading ? ' disabled' : '') + '>' + (r && r.loading ? 'A ler…' : 'Ler ficheiro e conciliar') + '</button>';
     if (!r || r.loading) return h + '</details>';
     const status = r.status || r.last;
@@ -611,7 +611,7 @@
     window.BinsFeed.reconcileBins(status, S.events, evMs).forEach(function (b) {
       h += '<div class="stack"><div class="row"><span class="strong grow">' + esc(b.bin) + '</span><span class="badge ' + (b.ok ? 'b-ACCEPTED">Confere' : 'b-REJECTED">Diferença ' + esc(fmtDiff(b.diffKg))) + '</span></div>';
       if (b.empty) h += '<p class="small muted">Sem descargas nem receções neste ciclo.</p>';
-      else h += '<div class="row small muted"><span class="grow">Silo</span><span>Grain-Mgt · Prod-Mgt · diferença</span></div>' + b.silos.map(function (x) {
+      else h += '<div class="row small muted"><span class="grow">Silo</span><span>Grain-Mgt · Prodn-Mgt · diferença</span></div>' + b.silos.map(function (x) {
         return '<div class="row small"><span class="mono grow">' + esc(x.silo) + '</span><span>' + fmtKg(x.appKg) + ' · ' + fmtKg(x.qcKg) + ' · ' + (x.ok ? '<span>' : '<span class="flag">') + esc(fmtDiff(x.diffKg)) + '</span></span></div>';
       }).join('');
       if (b.pendingN) h += '<p class="small muted">' + b.pendingN + ' descarga(s) depois do ficheiro (' + fmtKg(b.pendingKg) + '): ainda não contam.</p>';
