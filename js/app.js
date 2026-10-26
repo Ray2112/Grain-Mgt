@@ -1137,11 +1137,29 @@
     }).catch(function () { reset(); toast(t('bad_backup')); });
   }
 
+  // ---------------- envio dos registos para o Dropbox (0.7.0) ----------------
+  function recSyncCard() {
+    const R = window.RecSync;
+    if (!R || !R.configured()) return '';
+    const st = R.status();
+    let line = 'Ainda não enviados neste dispositivo.';
+    if (st.lastTryAt) {
+      line = st.lastOkAt ? 'Último envio completo: ' + new Date(st.lastOkAt).toLocaleString('pt-PT') + '.' : 'Nenhum envio completo.';
+      if (st.failed) line += ' Falha: ' + st.lastError + '. Os dias em falta são reenviados na próxima gravação.';
+      if (st.undated) line += ' ' + st.undated + ' registo(s) sem data ou sem uid não entram nos ficheiros diários.';
+    }
+    return '<div class="card stack"><h2>Registos para o Dropbox (envio diário)</h2><p class="small muted">' +
+      (R.signedIn() ? 'Ligado neste dispositivo (Mill-App-Sync). Os registos de cada dia de produção são enviados após cada gravação e o dia é fechado depois das 07:00.' : 'Não ligado. Sem ligação, nada é enviado (os registos continuam guardados neste dispositivo).') +
+      '</p><p class="small">' + esc(line) + '</p><div class="grid2"><button type="button" class="btn" data-action="rec-in">Ligar envio ao Dropbox</button>' +
+      '<button type="button" class="btn" data-action="rec-now">Enviar agora</button><button type="button" class="btn" data-action="rec-out">Desligar envio</button></div></div>';
+  }
+
   // ---------------- definições / settings ----------------
   function settingsView() {
     const s = S.settings;
     let h = '<div class="card stack"><h2>Ficheiro das bins (Dropbox, só leitura)</h2><p class="small muted">' + (window.FeedSync && window.FeedSync.configured() ? (window.FeedSync.signedIn() ? 'Ligado neste telemóvel.' : 'Não ligado.') : 'Aguarda a app de leitura do Dropbox (chave ainda não configurada).') + '</p>' +
       (window.FeedSync && window.FeedSync.configured() ? '<div class="grid2"><button type="button" class="btn" data-action="feed-in">Ligar ao Dropbox</button><button type="button" class="btn" data-action="feed-out">Desligar</button></div>' : '') + '</div>' +
+      recSyncCard() +
       '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
       '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
       '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label>' +
@@ -1321,6 +1339,13 @@
     if (a === 'dest-rm') { S.form.dest = S.form.dest.filter(function (x) { return x !== b.dataset.silo; }); updateDyn(); }
     if (a === 'discharge') { openSheet('out', { order: b.dataset.silo ? [b.dataset.silo] : [] }); }
     if (a === 'feed-in') { window.FeedSync.signIn().catch(function (e) { toast(e.message); }); return; }
+    if (a === 'rec-in') { window.RecSync.signIn().catch(function (e) { toast(e.message); }); return; }
+    if (a === 'rec-out') { window.RecSync.signOut(); render(); toast('Envio para o Dropbox desligado neste dispositivo.'); return; }
+    if (a === 'rec-now') {
+      if (!window.RecSync.signedIn()) { toast('Envio para o Dropbox: não ligado.'); return; }
+      window.RecSync.sync(true).then(function (r) { render(); if (r) toast(r.failed ? 'Dropbox: ' + r.failed + ' envio(s) falhado(s).' : 'Dropbox: registos enviados (' + r.ok + ' dia(s)).'); });
+      return;
+    }
     if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast('Dropbox desligado neste telemóvel.'); return; }
     if (a === 'recon-refresh') { refreshRecon(); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
@@ -1387,7 +1412,16 @@
   });
 
   // ---------------- arranque / start ----------------
-  load().then(function () { render(); DB.persist(); if (window.FeedSync) window.FeedSync.handleReturn().then(function (r) { if (r) { toast(r.msg); render(); } }); });
+  // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
+  load().then(function () {
+    render(); DB.persist();
+    const R = window.RecSync;
+    if (R) { R.setContext({ deviceId: S.settings.deviceId, site: S.settings.site || '' }); DB.onWrite(R.schedule); }
+    (R ? R.handleReturn() : Promise.resolve(null)).then(function (r) {
+      if (r) { toast(r.msg); render(); }
+      if (window.FeedSync) return window.FeedSync.handleReturn().then(function (r2) { if (r2) { toast(r2.msg); render(); } });
+    }).then(function () { if (R) R.schedule(); });
+  });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
   window.__app = { S: S }; // apenas para testes / for tests only
 })();

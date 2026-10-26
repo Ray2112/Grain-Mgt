@@ -27,6 +27,9 @@
     return dbp;
   }
 
+  // Avisos de gravação (0.7.0): chamados depois de cada escrita concluída (envio dos ficheiros diários)
+  const writeListeners = [];
+  function notifyWrite() { writeListeners.forEach(function (f) { try { f(); } catch (e) { console.warn('onWrite', e); } }); }
   function tx(store, mode, fn) {
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
@@ -34,7 +37,7 @@
         const s = t.objectStore(store);
         let result;
         Promise.resolve(fn(s)).then(function (r) { result = r; }, function () {});
-        t.oncomplete = function () { resolve(result); };
+        t.oncomplete = function () { resolve(result); if (mode === 'readwrite' && store !== 'settings') notifyWrite(); };
         t.onerror = function (e) { e.preventDefault && e.preventDefault(); reject(t.error); };
         t.onabort = function () { reject(t.error); };
       });
@@ -49,6 +52,7 @@
   function stamp(store, obj, noVersion) { return root.Logic.stampRecord(store, obj, Object.assign({}, CTX, { uid: uidGen(), noVersion: !!noVersion })); }
 
   const DB = {
+    onWrite: function (f) { writeListeners.push(f); },
     setDevice: function (id) { CTX.deviceId = id; },
     setContext: function (c) { CTX = Object.assign({}, CTX, c || {}); },
     all: function (store) { return tx(store, 'readonly', function (s) { return reqP(s.getAll()); }); },
@@ -62,7 +66,7 @@
         return new Promise(function (resolve, reject) {
           const t = db.transaction(names, 'readwrite');
           items.forEach(function (i) { const s = t.objectStore(i.store); if (i.del !== undefined) { s.delete(i.del); return; } const o = stamp(i.store, i.obj, !!i.put); if (i.put) s.put(o); else s.add(o); });
-          t.oncomplete = function () { resolve(); };
+          t.oncomplete = function () { resolve(); notifyWrite(); };
           t.onerror = function (e) { e.preventDefault && e.preventDefault(); reject(t.error); };
           t.onabort = function () { reject(t.error); };
         });
@@ -87,7 +91,7 @@
             s.clear();
             (data[name] || []).forEach(function (o) { s.put(o); });
           });
-          t.oncomplete = resolve; t.onerror = function () { reject(t.error); };
+          t.oncomplete = function () { resolve(); notifyWrite(); }; t.onerror = function () { reject(t.error); };
         });
       });
     },

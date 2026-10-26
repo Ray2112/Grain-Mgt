@@ -1,5 +1,7 @@
 # Moagem — Registos (v0.6.0, Fase A)
 
+> **v0.7.0 (26-10-2026) — envio dos registos para o Dropbox (FMIP).** Definições → "Ligar envio ao Dropbox" (app de escrita Mill-App-Sync, separada da leitura do ficheiro das bins). Depois de cada gravação, ao abrir a app e a cada 15 min, envia um ficheiro por dia de produção (07:00–07:00) para `/Apps/Mill-App-Sync/records/AAAA-MM-DD_FMO_GrainMgt.json`: lotes, movimentos dos silos, monitorização e eventos, com manifesto. Depois das 07:00 o dia terminado é fechado (reenviado; vazio se não houver registos). Registos em modo de teste vão para `/records-test/`. Estado e falhas em Definições; "Enviar agora" para repetir. / Settings → "Ligar envio ao Dropbox": daily record files to `/Apps/Mill-App-Sync/records/`, closed after 07:00.
+
 > **v0.6.1 (24-10-2026) — novo nome: Grain-Mgt** (antes Mill-App). Novo endereço: https://ray2112.github.io/Grain-Mgt/ — reinstale a app a partir deste endereço; os registos guardados no dispositivo mantêm-se. New name **Grain-Mgt** (formerly Mill-App); reinstall from the new address; records on the device are kept.
 
 Aplicação para telemóvel, sem servidor, para **recepção de cereal (RG-21)** e **registo de silos e lotes (RG-13)** numa moagem. Funciona sem rede depois da primeira abertura. Os dados ficam **apenas no telemóvel**.
