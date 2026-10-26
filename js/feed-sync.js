@@ -10,7 +10,9 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.warn('storage', e); } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignorar */ } }
   };
-  const redirect = () => location.origin + location.pathname;
+  // Endereço de retorno sem 'index.html' (v0.6.3): a app instalada abre em ./index.html, mas no Dropbox está registado
+  // o endereço da pasta; assim o retorno é o mesmo seja qual for a forma como a app foi aberta.
+  const redirect = () => location.origin + location.pathname.replace(/index\.html$/i, '');
   const configured = () => !!(cfg().appKey && auth() && rd() && feed());
   const signedIn = () => { const s = store.get(KEY); return !!(s && s.refreshToken); };
 
