@@ -2,8 +2,10 @@
  * Criada pela app com MaintUI(C):
  *   C.lang() 'pt'|'en' · C.esc(v) · C.toast(msg) · C.render() (redesenha a página)
  *   C.load() -> Promise<[registos da loja 'maint']> · C.add(rec) -> Promise (grava registo novo; a app carimba uid, dispositivo, teste)
- *   C.codes() lista de códigos FMO · C.codesSource() fonte da lista · C.lines() [{id, name}] · C.passages() [{id, lineId, name, fluteSpec, refluteEveryDays}]
- *   C.rolls e C.kpiNote (true só na Prodn-Mgt: rolos; nota sobre o diário de turno) · C.shiftNow() {day, period} · C.crewOf(day, period) · C.operator() · C.setOperator(nome)
+ *   C.codes() lista de códigos FMO · C.codesSource() fonte da lista · C.lines() [{id, name}] · C.shiftNow() {day, period} · C.crewOf(day, period)
+ *   C.operator() · C.setOperator(nome) · C.kpiNote (true só na Prodn-Mgt: nota sobre o diário de turno)
+ *   Rolos (só Prodn-Mgt, C.rolls = true): C.passages() pares de rolos (js/roll-passages.js) · C.rollDefaults() horas ideais por grupo
+ *   · C.rollHours() roll-hours.json (ou null) · C.rollHoursRefresh() -> Promise<bool> · C.checkPin(pin) -> {ok} · C.pinMsg(r)
  * Eventos próprios (data-mact, data-mf, data-mp); não usa os atributos das apps. */
 window.MaintUI = function (C) {
   'use strict';
@@ -33,13 +35,26 @@ window.MaintUI = function (C) {
       update: 'Actualizar', status: 'Estado', progressPct: 'Progresso (%)', newDue: 'Nova data-limite', note: 'Nota / motivo', overdue: 'EM ATRASO',
       daysLate: '{n} dia(s) de atraso', due: 'limite',
       rollsMissing: 'Lista de passagens de rolos por carregar (a enviar por Zhax). As verificações e trocas ficam disponíveis quando a lista estiver na app.',
-      passage: 'Passagem', condition: 'Estado', r_good: 'Bom', r_monitor: 'Vigiar', r_worn: 'Gasto', r_damaged: 'Danificado', notChecked: 'por verificar esta semana',
-      plannedChange: 'Troca planeada', planCalc: 'calculada pelo intervalo de reestriagem', lastChange: 'Última troca', changes12m: 'trocas em 12 meses',
-      avgDays: 'média entre trocas', days: 'dias', fluteSpec: 'Estriagem', refluted: 'Reestriado', check: 'Verificação semanal', change: 'Troca de rolos',
-      date: 'Data', reason: 'Motivo', rr_scheduled: 'Planeada', rr_wear: 'Desgaste', rr_damage: 'Dano', rr_other: 'Outro', nextPlanned: 'Próxima troca planeada',
-      register: 'Registo de reestriagem', pairsChecked: 'pares verificados esta semana', refluteEvery: 'intervalo', checkedWeek: 'verificado',
+      passage: 'Passagem', condition: 'Estado dos rolos', r_good: 'Ainda bom', r_due: 'Para reestriar', r_critical: 'Estado crítico',
+      lastChange: 'Desde', days: 'dias', fluteSpec: 'Estriagem', refluted: 'Reestriado', check: 'Inspecção', change: 'Troca / reestriagem',
+      date: 'Data', reason: 'Motivo', rr_scheduled: 'Horas atingidas', rr_wear: 'Desgaste', rr_damage: 'Dano', rr_other: 'Outro',
+      register: 'Registo de reestriagem', trocas: 'trocas', avgHours: 'média entre trocas', inspected: 'inspeccionado', inspectNow: 'inspecção semanal em falta',
+      hoursOf: 'horas de marcha', hoursUntil: 'Horas da linha até {d} (OEE, ENGINEERING, "Hours Run")', hoursMissing: 'dias sem horas no OEE: {l} — não contados',
+      hoursNone: 'Ficheiro de horas (roll-hours.json) ainda não carregado: as horas aparecem depois de ligar o Dropbox e o pipeline o enviar.',
+      reload: 'Actualizar horas', missingDaysN: '{n} dia(s) sem horas', machine: 'Máquina',
+      rollIds: 'IDs dos rolos', fast: 'rápido', slow: 'lento', dia: 'Diâmetro (mm)', diaFast: 'Ø rolo rápido (mm)', diaSlow: 'Ø rolo lento (mm)', measure: 'Diâmetros',
+      newFast: 'ID novo — rolo rápido', newSlow: 'ID novo — rolo lento', measured: 'medido',
+      brushes: 'Escovas', state: 'Estado', b_good: 'Boas', b_worn: 'Gastas', b_critical: 'Estado crítico', b_missing: 'Em falta', brushNone: 'escovas por inspeccionar',
+      fAttention: 'Precisam de atenção', fAll: 'Todos os pares', noAttention: 'Nenhum par precisa de atenção nesta linha.',
+      rollSet: 'Definições dos rolos', rollSetHelp: 'Horas de marcha ideais até à reestriagem e IDs dos rolos. Cada alteração pede o PIN de supervisor e um motivo, e fica registada.',
+      group: 'Passagem', hours: 'Horas ideais', pin: 'PIN de supervisor', changeReason: 'Motivo da alteração', pinWrong: 'PIN errado ou bloqueado.', allR: 'R (todas)',
+      rollId: 'ID', editIds: 'Alterar IDs', saveHours: 'Gravar horas',
+      wRollCritical: 'Rolos em estado crítico: {p} (linha {l})', wRollDue: 'Rolos para reestriar: {p} (linha {l})',
+      wRollInspect: 'Inspecção semanal em falta: {p} (linha {l}, {h} de {lim} h)', wBrush_critical: 'Escovas em estado crítico: {p} (linha {l})', wBrush_missing: 'Escovas em falta: {p} (linha {l})',
+      t_notes: 'Notas', newNote: 'Nova nota', topic: 'Tipo', n_observation: 'Observação', n_requirement: 'Requisito', n_other: 'Outra informação', text: 'Texto',
+      dayNotes: 'Notas do dia',
       newCons: 'Novo consumível', purpose: 'Para quê / onde', totShift: 'Total do turno', totDay: 'Total do dia',
-      wPm: 'Preventiva em atraso: {eq} — {task} (limite {d}, {n} dia(s))', wRoll: 'Troca de rolos em atraso: {p} (linha {l}, planeada {d}, {n} dia(s))',
+      wPm: 'Preventiva em atraso: {eq} — {task} (limite {d}, {n} dia(s))',
       u_un: 'un', u_kg: 'kg', u_l: 'l', u_m: 'm', u_par: 'par', u_cx: 'cx'
     },
     en: {
@@ -61,13 +76,26 @@ window.MaintUI = function (C) {
       update: 'Update', status: 'Status', progressPct: 'Progress (%)', newDue: 'New due date', note: 'Note / reason', overdue: 'OVERDUE',
       daysLate: '{n} day(s) late', due: 'due',
       rollsMissing: 'Roll passage list not loaded yet (to be sent by Zhax). Checks and changes become available once the list is in the app.',
-      passage: 'Passage', condition: 'Condition', r_good: 'Good', r_monitor: 'Monitor', r_worn: 'Worn', r_damaged: 'Damaged', notChecked: 'not checked this week',
-      plannedChange: 'Planned change', planCalc: 'calculated from the re-fluting interval', lastChange: 'Last change', changes12m: 'changes in 12 months',
-      avgDays: 'average between changes', days: 'days', fluteSpec: 'Fluting', refluted: 'Re-fluted', check: 'Weekly check', change: 'Roll change',
-      date: 'Date', reason: 'Reason', rr_scheduled: 'Scheduled', rr_wear: 'Wear', rr_damage: 'Damage', rr_other: 'Other', nextPlanned: 'Next planned change',
-      register: 'Re-fluting register', pairsChecked: 'pairs checked this week', refluteEvery: 'interval', checkedWeek: 'checked',
+      passage: 'Passage', condition: 'Roll condition', r_good: 'Still good', r_due: 'Due for re-fluting', r_critical: 'Critical state',
+      lastChange: 'Since', days: 'days', fluteSpec: 'Fluting', refluted: 'Re-fluted', check: 'Inspection', change: 'Change / re-flute',
+      date: 'Date', reason: 'Reason', rr_scheduled: 'Hours reached', rr_wear: 'Wear', rr_damage: 'Damage', rr_other: 'Other',
+      register: 'Re-fluting register', trocas: 'changes', avgHours: 'average between changes', inspected: 'inspected', inspectNow: 'weekly inspection missing',
+      hoursOf: 'run hours', hoursUntil: 'Line hours up to {d} (OEE, ENGINEERING, "Hours Run")', hoursMissing: 'days with no hours in the OEE: {l} — not counted',
+      hoursNone: 'Hours file (roll-hours.json) not loaded yet: hours appear once Dropbox is connected and the pipeline sends it.',
+      reload: 'Refresh hours', missingDaysN: '{n} day(s) without hours', machine: 'Machine',
+      rollIds: 'Roll IDs', fast: 'fast', slow: 'slow', dia: 'Diameter (mm)', diaFast: 'Fast roll Ø (mm)', diaSlow: 'Slow roll Ø (mm)', measure: 'Diameters',
+      newFast: 'New ID — fast roll', newSlow: 'New ID — slow roll', measured: 'measured',
+      brushes: 'Brushes', state: 'State', b_good: 'Good', b_worn: 'Worn', b_critical: 'Critical state', b_missing: 'Missing', brushNone: 'brushes not inspected',
+      fAttention: 'Need attention', fAll: 'All pairs', noAttention: 'No pair needs attention on this line.',
+      rollSet: 'Roll settings', rollSetHelp: 'Ideal run hours until re-fluting, and roll IDs. Each change needs the supervisor PIN and a reason, and is recorded.',
+      group: 'Passage', hours: 'Ideal hours', pin: 'Supervisor PIN', changeReason: 'Reason for change', pinWrong: 'Wrong or locked PIN.', allR: 'R (all)',
+      rollId: 'ID', editIds: 'Change IDs', saveHours: 'Save hours',
+      wRollCritical: 'Rolls in critical state: {p} (line {l})', wRollDue: 'Rolls due for re-fluting: {p} (line {l})',
+      wRollInspect: 'Weekly inspection missing: {p} (line {l}, {h} of {lim} h)', wBrush_critical: 'Brushes in critical state: {p} (line {l})', wBrush_missing: 'Brushes missing: {p} (line {l})',
+      t_notes: 'Notes', newNote: 'New note', topic: 'Type', n_observation: 'Observation', n_requirement: 'Requirement', n_other: 'Other information', text: 'Text',
+      dayNotes: 'Notes of the day',
       newCons: 'New consumable', purpose: 'Purpose / where', totShift: 'Shift total', totDay: 'Day total',
-      wPm: 'Preventive job overdue: {eq} — {task} (due {d}, {n} day(s))', wRoll: 'Roll change overdue: {p} (line {l}, planned {d}, {n} day(s))',
+      wPm: 'Preventive job overdue: {eq} — {task} (due {d}, {n} day(s))',
       u_un: 'pcs', u_kg: 'kg', u_l: 'l', u_m: 'm', u_par: 'pair', u_cx: 'box'
     }
   };
@@ -115,27 +143,30 @@ window.MaintUI = function (C) {
   function errs(list) { if (list.length) { C.toast(t('fill') + ': ' + list.map(x => t(x)).join(', ')); return true; } return false; }
 
   // ---------- avisos (app e cartão da página inicial) ----------
-  function warnings() { return M.warnings(st.entries, C.passages(), today()); }
+  // Contexto dos rolos: horas da linha (roll-hours.json) e horas ideais em vigor (lista mestre + Definições)
+  function rollCtx() { return { hours: C.rollHours ? C.rollHours() : null, limits: M.effectiveLimits(C.rollDefaults ? C.rollDefaults() : {}, st.entries) }; }
+  function warnings() { return M.warnings(st.entries, C.passages(), today(), rollCtx()); }
+  const WT = { roll_critical: 'wRollCritical', roll_due: 'wRollDue', roll_inspect: 'wRollInspect', brush_critical: 'wBrush_critical', brush_missing: 'wBrush_missing' };
   function warnText(w) {
-    return w.type === 'pm_overdue' ? t('wPm', { eq: w.equipment, task: w.task, d: ddmm(w.due), n: w.daysLate })
-      : t('wRoll', { p: w.name || w.passageId, l: w.lineId, d: ddmm(w.due), n: w.daysLate });
+    if (w.type === 'pm_overdue') return t('wPm', { eq: w.equipment, task: w.task, d: ddmm(w.due), n: w.daysLate });
+    return t(WT[w.type] || 'wRollDue', { p: w.name || w.passageId, l: w.lineId, h: nf(w.hours), lim: nf(w.limit) }) + (w.note ? ' — ' + w.note : '');
   }
   function banners() {
-    return warnings().map(w => `<div class="mt-bn mt-bad" data-mact="tab" data-v="${w.type === 'pm_overdue' ? 'pm' : 'rolls'}">⏰ ${esc(warnText(w))}</div>`).join('');
+    return warnings().map(w => `<div class="mt-bn ${w.level === 'warn' ? 'mt-amb' : 'mt-bad'}" data-mact="tab" data-v="${w.type === 'pm_overdue' ? 'pm' : 'rolls'}">${w.type === 'pm_overdue' ? '⏰' : '⚙'} ${esc(warnText(w))}</div>`).join('');
   }
 
   // ---------- vista ----------
   function view() {
     if (!st.loaded) { reload().then(C.render); return `<section class="card"><p>${esc(t('loading'))}</p></section>`; }
-    const tabs = ['shift', 'stops', 'work', 'pm'].concat(C.rolls ? ['rolls'] : []).concat(['cons']);
-    if (tabs.indexOf(st.tab) < 0) st.tab = 'shift';
+    const tabs = ['shift', 'stops', 'work', 'pm'].concat(C.rolls ? ['rolls'] : []).concat(['cons', 'notes']);
+    if (tabs.indexOf(st.tab) < 0 && !(st.tab === 'rollset' && C.rolls)) st.tab = 'shift';
     const s = sh();
     const head = `<section class="card"><h2>${esc(t('title'))}</h2>
       <div class="mt-tabs">${tabs.map(k => `<button type="button" class="btn small ${st.tab === k ? 'primary' : ''}" data-mact="tab" data-v="${k}">${esc(t('t_' + k))}</button>`).join('')}</div>
-      ${st.tab === 'pm' || st.tab === 'rolls' ? '' : `<div class="grid2">${fld(t('prodDay'), `<input type="date" id="mDay" value="${esc(s.day)}">`)}
+      ${st.tab === 'pm' || st.tab === 'rolls' || st.tab === 'rollset' ? '' : `<div class="grid2">${fld(t('prodDay'), `<input type="date" id="mDay" value="${esc(s.day)}">`)}
         ${fld(t('period'), `<select id="mPeriod">${opt('D', s.period, t('p_D'))}${opt('N', s.period, t('p_N'))}</select>`)}</div>
         <p class="mt-sub">${esc(t('crew'))} ${esc(C.crewOf(s.day, s.period) || '—')}</p>`}</section>`;
-    const body = { shift: vShift, stops: vStops, work: vWork, pm: vPm, rolls: vRolls, cons: vCons }[st.tab]();
+    const body = { shift: vShift, stops: vStops, work: vWork, pm: vPm, rolls: vRolls, rollset: vRollSet, cons: vCons, notes: vNotes }[st.tab]();
     return banners() + head + body;
   }
   function voidBox(uid) {
@@ -292,61 +323,152 @@ window.MaintUI = function (C) {
   }
 
   // ----- rolos (só Prodn-Mgt) -----
-  const COND_CLS = { good: 'mt-ok', monitor: 'mt-warn', worn: 'mt-warn', damaged: 'mt-bad' };
+  // Um registo por par de rolos. Horas desde a última troca (ou 01-08-2026) contra as horas ideais da passagem;
+  // inspecção semanal só depois das horas ideais (ou enquanto a última disser 'para reestriar'/'crítico'). Escovas: aviso se críticas/em falta.
+  const COND_CLS = { good: 'mt-ok', due: 'mt-warn', critical: 'mt-bad' };
+  const BRUSH_CLS = { good: 'mt-ok', worn: 'mt-warn', critical: 'mt-bad', missing: 'mt-bad' };
+  const attention = r => r.status !== 'ok' || r.brushAlert;
+  function hoursLine(H) {
+    if (!H) return `<p class="mt-sub mt-amb">${esc(t('hoursNone'))}</p>`;
+    const L = (H.lines || {})[st.rollLine] || {};
+    return `<p class="mt-sub">${esc(t('hoursUntil', { d: ddmm(H.lastDay) }))}${(L.missing || []).length ? '<br>' + esc(t('hoursMissing', { l: L.missing.map(ddmm).join(', ') })) : ''}</p>`;
+  }
+  function rollForm(r) {
+    const f = st.form;
+    if (!f || f.passageId !== r.id) return '';
+    if (f.kind === 'rollCheck') return `<div class="mt-box">${fld(t('condition'), `<select data-mf="condition"><option value="">—</option>${M.ROLL_COND.map(c => opt(c, f.condition, t('r_' + c))).join('')}</select>`, 1)}
+        ${fld(t('note'), area('note', f.note), f.condition && f.condition !== 'good')}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saverchk')}</div>`;
+    if (f.kind === 'brushCheck') return `<div class="mt-box">${fld(t('brushes'), `<select data-mf="state"><option value="">—</option>${M.BRUSH_STATES.map(c => opt(c, f.state, t('b_' + c))).join('')}</select>`, 1)}
+        ${fld(t('note'), area('note', f.note), f.state === 'critical' || f.state === 'missing')}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savebrush')}</div>`;
+    if (f.kind === 'rollMeasure') return `<div class="mt-box"><div class="grid2">${fld(t('diaFast'), inp('diaFast', f.diaFast, 'inputmode="decimal"'))}${fld(t('diaSlow'), inp('diaSlow', f.diaSlow, 'inputmode="decimal"'))}
+        ${fld(t('date'), inp('date', f.date, 'type="date"'), 1)}</div>${fld(t('note'), area('note', f.note))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savemeas')}</div>`;
+    if (f.kind === 'rollChange') return `<div class="mt-box"><div class="grid2">${fld(t('date'), inp('date', f.date, 'type="date"'), 1)}
+        ${fld(t('reason'), `<select data-mf="reason"><option value="">—</option>${M.ROLL_REASONS.map(c => opt(c, f.reason, t('rr_' + c))).join('')}</select>`, 1)}
+        ${fld(t('newFast'), inp('newFast', f.newFast))}${fld(t('newSlow'), inp('newSlow', f.newSlow))}
+        ${fld(t('diaFast'), inp('diaFast', f.diaFast, 'inputmode="decimal"'))}${fld(t('diaSlow'), inp('diaSlow', f.diaSlow, 'inputmode="decimal"'))}</div>
+        <label class="mt-chk"><input type="checkbox" data-mf="refluted" ${f.refluted ? 'checked' : ''}> ${esc(t('refluted'))}</label>
+        ${fld(t('note'), area('note', f.note))}${fld(t('doneBy'), inp('doneBy', f.doneBy), 1)}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saverchg')}</div>`;
+    return '';
+  }
   function vRolls() {
     const P = C.passages() || [];
     if (!P.length) return `<section class="card"><h3>${esc(t('t_rolls'))}</h3><p>${esc(t('rollsMissing'))}</p></section>`;
     const lines = Array.from(new Set(P.map(p => p.lineId)));
     if (lines.indexOf(st.rollLine) < 0) st.rollLine = lines[0];
-    const f = st.form, all = M.rollState(P, st.entries, today()), R = all.filter(r => r.lineId === st.rollLine);
-    const lateN = id => all.filter(r => r.lineId === id && r.overdue).length;
+    const ctx = rollCtx(), all = M.rollState(P, st.entries, today(), ctx), R = all.filter(r => r.lineId === st.rollLine);
+    const attN = id => all.filter(r => r.lineId === id && attention(r)).length;
+    const show = st.rollFilter === 'all' ? R : R.filter(attention);
     let prev = null;
-    const rows = R.map(r => {
-      const grp = r.passage.passage && r.passage.passage !== prev ? `<h4 class="mt-grp">${esc(r.passage.passage)}</h4>` : '';
-      prev = r.passage.passage || prev;
-      const fc = f && f.kind === 'rollCheck' && f.passageId === r.id, fx = f && f.kind === 'rollChange' && f.passageId === r.id;
-      return `${grp}<div class="mt-item ${r.overdue ? 'mt-late' : ''}"><div><b>${esc(r.passage.name || r.id)}</b> · ${esc(lineName(r.lineId))}
+    const rows = show.map(r => {
+      const grp = r.passage.passage !== prev ? `<h4 class="mt-grp">${esc(r.passage.passage)} · ${esc(t('hours'))} ${esc(nf(r.limit))} h</h4>` : '';
+      prev = r.passage.passage;
+      const pct = r.pct === null ? '' : ` (${esc(nf(r.pct))} %)`;
+      return `${grp}<div class="mt-item ${r.status === 'critical' || r.brushAlert ? 'mt-late' : ''}">
+        <div><b>${esc(r.passage.name)}</b>${r.machine ? ' · ' + esc(t('machine')) + ' ' + esc(r.machine) : ''}
+          <span class="mt-c ${r.over ? 'mt-warn' : ''}">${r.hours === null ? '— h' : esc(nf(r.hours)) + ' / ' + esc(nf(r.limit)) + ' h' + pct}</span>
           ${r.condition ? `<span class="mt-c ${COND_CLS[r.condition] || ''}">${esc(t('r_' + r.condition))}</span>` : ''}
-          ${r.checkedThisWeek ? `<span class="mt-c mt-ok">${esc(t('checkedWeek'))} ${esc(M.weekOf(today()))}</span>` : `<span class="mt-c mt-warn">${esc(t('notChecked'))}</span>`}
-          ${r.overdue ? `<span class="mt-c mt-bad">${esc(t('overdue'))} · ${esc(t('daysLate', { n: r.daysLate }))}</span>` : ''}</div>
-        <div class="mt-sub">${esc(t('plannedChange'))}: ${r.plan ? esc(ddmm(r.plan)) + (r.planCalc ? ' (' + esc(t('planCalc')) + ')' : '') : '—'}
-          · ${esc(t('lastChange'))}: ${r.lastChange ? esc(ddmm(r.lastChange.date)) : '—'}</div>
-        <div class="mt-sub">${esc(t('register'))}: ${r.changes12m} ${esc(t('changes12m'))} · ${esc(t('refluted'))} ${r.refluted}
-          · ${esc(t('avgDays'))} ${r.avgDaysBetween === null ? '—' : r.avgDaysBetween + ' ' + esc(t('days'))}
-          ${isNum(r.passage.refluteEveryDays) ? ' · ' + esc(t('refluteEvery')) + ' ' + r.passage.refluteEveryDays + ' ' + esc(t('days')) : ''}${r.fluteSpec ? ' · ' + esc(t('fluteSpec')) + ': ' + esc(r.fluteSpec) : ''}</div>
-        ${fc ? `<div class="mt-box"><div class="grid2">${fld(t('week'), inp('week', f.week), 1)}
-            ${fld(t('condition'), `<select data-mf="condition"><option value="">—</option>${M.ROLL_COND.map(c => opt(c, f.condition, t('r_' + c))).join('')}</select>`, 1)}
-            ${fld(t('plannedChange'), inp('plannedChange', f.plannedChange, 'type="date"'))}</div>
-            ${fld(t('note'), area('note', f.note), f.condition === 'worn' || f.condition === 'damaged')}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saverchk')}</div>` : ''}
-        ${fx ? `<div class="mt-box"><div class="grid2">${fld(t('date'), inp('date', f.date, 'type="date"'), 1)}
-            ${fld(t('reason'), `<select data-mf="reason"><option value="">—</option>${M.ROLL_REASONS.map(c => opt(c, f.reason, t('rr_' + c))).join('')}</select>`, 1)}
-            ${fld(t('fluteSpec'), inp('fluteSpec', f.fluteSpec))}${fld(t('nextPlanned'), inp('nextPlanned', f.nextPlanned, 'type="date"'))}</div>
-            <label class="mt-chk"><input type="checkbox" data-mf="refluted" ${f.refluted ? 'checked' : ''}> ${esc(t('refluted'))}</label>
-            ${fld(t('note'), area('note', f.note))}${fld(t('doneBy'), inp('doneBy', f.doneBy), 1)}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saverchg')}</div>` : ''}
-        ${f ? '' : `<div class="row"><button type="button" class="btn small" data-mact="rchk" data-uid="${esc(r.id)}">${esc(t('check'))}</button>
+          ${r.status === 'inspect' ? `<span class="mt-c mt-warn">${esc(t('inspectNow'))}</span>` : (r.checkedThisWeek ? `<span class="mt-c mt-ok">${esc(t('inspected'))} ${esc(M.weekOf(today()))}</span>` : '')}
+          <span class="mt-c ${BRUSH_CLS[r.brush] || ''}">${esc(t('brushes'))}: ${esc(r.brush ? t('b_' + r.brush) : t('brushNone'))}</span></div>
+        ${r.inspection && r.inspection.note ? `<div class="mt-sub">${esc(r.inspection.note)}</div>` : ''}${r.brushAlert && r.brushNote ? `<div class="mt-sub">${esc(t('brushes'))}: ${esc(r.brushNote)}</div>` : ''}
+        <div class="mt-sub">${esc(t('lastChange'))} ${esc(ddmm(r.startDay))}${r.missingDays.length ? ' · ' + esc(t('missingDaysN', { n: r.missingDays.length })) : ''}
+          · ${esc(t('rollIds'))}: ${esc(t('fast'))} ${esc(r.rollIds.fast || '—')}, ${esc(t('slow'))} ${esc(r.rollIds.slow || '—')}
+          · Ø ${esc(t('fast'))} ${r.diaFast === null ? '—' : esc(nf(r.diaFast))}, ${esc(t('slow'))} ${r.diaSlow === null ? '—' : esc(nf(r.diaSlow))} mm${r.measuredOn ? ' (' + esc(ddmm(r.measuredOn)) + ')' : ''}</div>
+        <div class="mt-sub">${esc(t('register'))}: ${r.changes} ${esc(t('trocas'))} · ${esc(t('refluted'))} ${r.refluted}${r.avgHoursBetween === null ? '' : ' · ' + esc(t('avgHours')) + ' ' + esc(nf(r.avgHoursBetween)) + ' h'}
+          ${r.register.length ? ' · ' + r.register.map(x => esc(ddmm(x.date)) + (x.hours === null ? '' : ' (' + esc(nf(x.hours)) + ' h' + (x.missingDays ? '+' : '') + ')')).join(', ') : ''}</div>
+        <div class="mt-sub">${esc(t('fluteSpec'))}: ${esc(r.fluteSpec)}</div>
+        ${rollForm(r)}
+        ${st.form ? '' : `<div class="row">${r.needsInspection ? `<button type="button" class="btn small primary" data-mact="rchk" data-uid="${esc(r.id)}">${esc(t('check'))}</button>` : ''}
+          <button type="button" class="btn small" data-mact="rbrush" data-uid="${esc(r.id)}">${esc(t('brushes'))}</button>
+          <button type="button" class="btn small" data-mact="rmeas" data-uid="${esc(r.id)}">${esc(t('measure'))}</button>
           <button type="button" class="btn small" data-mact="rchg" data-uid="${esc(r.id)}">${esc(t('change'))}</button></div>`}</div>`;
     });
-    const done = R.filter(r => r.checkedThisWeek).length;
     return `<section class="card"><h3>${esc(t('t_rolls'))} · ${esc(t('week'))} ${esc(M.weekOf(today()))}</h3>
-      <div class="mt-tabs">${lines.map(id => `<button type="button" class="btn small ${st.rollLine === id ? 'primary' : ''}" data-mact="rline" data-v="${esc(id)}">${esc(lineName(id))}${lateN(id) ? ' ⏰' + lateN(id) : ''}</button>`).join('')}</div>
-      <p class="mt-sub">${done}/${R.length} ${esc(t('pairsChecked'))}</p>${rows.join('')}</section>`;
+      <div class="mt-tabs">${lines.map(id => `<button type="button" class="btn small ${st.rollLine === id ? 'primary' : ''}" data-mact="rline" data-v="${esc(id)}">${esc(lineName(id))}${attN(id) ? ' ⚠' + attN(id) : ''}</button>`).join('')}</div>
+      ${hoursLine(ctx.hours)}
+      <div class="mt-tabs"><button type="button" class="btn small ${st.rollFilter !== 'all' ? 'primary' : ''}" data-mact="rfilter" data-v="att">${esc(t('fAttention'))} (${R.filter(attention).length})</button>
+        <button type="button" class="btn small ${st.rollFilter === 'all' ? 'primary' : ''}" data-mact="rfilter" data-v="all">${esc(t('fAll'))} (${R.length})</button>
+        ${C.rollHoursRefresh ? `<button type="button" class="btn small" data-mact="rhours">${esc(t('reload'))}</button>` : ''}
+        <button type="button" class="btn small" data-mact="tab" data-v="rollset">${esc(t('rollSet'))}</button></div>
+      ${rows.join('') || `<p class="mt-sub">${esc(t('noAttention'))}</p>`}</section>`;
   }
+  const passOf = id => M.passageOf(id, C.passages()) || {};
+  const rollBase = f => { const p = passOf(f.passageId); st.sh = Object.assign({}, C.shiftNow()); return { passageId: f.passageId, lineId: p.lineId || null, passageName: p.name || null }; };
   async function saveRollCheck() {
     const f = st.form;
     if (errs(M.validateRollCheck(f, C.passages()))) return;
-    st.sh = Object.assign({}, C.shiftNow());
-    const p = M.passageOf(f.passageId, C.passages()) || {};
-    await save({ kind: 'rollCheck', passageId: f.passageId, lineId: p.lineId || null, passageName: p.name || null, week: f.week,
-      condition: f.condition, plannedChange: f.plannedChange || null, note: f.note.trim(), by: f.by.trim() });
+    await save(Object.assign({ kind: 'rollCheck' }, rollBase(f), { week: f.week, condition: f.condition, note: f.note.trim(), by: f.by.trim() }));
+  }
+  async function saveBrush() {
+    const f = st.form;
+    if (errs(M.validateBrushCheck(f, C.passages()))) return;
+    await save(Object.assign({ kind: 'brushCheck' }, rollBase(f), { state: f.state, note: f.note.trim(), by: f.by.trim() }));
+  }
+  async function saveMeasure() {
+    const f = st.form;
+    const e = M.validateRollMeasure(f, C.passages());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) e.push('date');
+    if (errs(e)) return;
+    await save(Object.assign({ kind: 'rollMeasure' }, rollBase(f), { date: f.date, diaFast: M.num(f.diaFast), diaSlow: M.num(f.diaSlow), note: f.note.trim(), by: f.by.trim() }));
   }
   async function saveRollChange() {
     const f = st.form;
     if (errs(M.validateRollChange(f, C.passages()))) return;
-    const p = M.passageOf(f.passageId, C.passages());
+    await save(Object.assign({ kind: 'rollChange' }, rollBase(f), { date: f.date, reason: f.reason, refluted: !!f.refluted,
+      newFast: f.newFast.trim(), newSlow: f.newSlow.trim(), diaFast: M.num(f.diaFast), diaSlow: M.num(f.diaSlow), note: f.note.trim(), doneBy: f.doneBy.trim(), by: f.by.trim() }));
+  }
+
+  // ----- Definições dos rolos (horas ideais por passagem; IDs dos rolos por par) — PIN de supervisor -----
+  function vRollSet() {
+    const D = C.rollDefaults ? C.rollDefaults() : {}, lim = rollCtx().limits, f = st.form && st.form.kind === 'rollConfig' ? st.form : null;
+    const groups = Object.keys(D);
+    const P = (C.passages() || []).filter(p => p.lineId === (st.rollLine || 'C'));
+    const pinBox = () => `<div class="grid2">${fld(t('changeReason'), inp('reason', f.reason), 1)}${fld(t('pin'), `<input type="password" inputmode="numeric" data-mf="pin" value="${esc(f.pin)}">`, 1)}</div>${fld(t('by'), inp('by', f.by), 1)}`;
+    const hoursRows = groups.map(g => `<tr><td>${esc(g === 'R' ? t('allR') : g)}</td><td class="mt-n">${esc(nf(lim[g]))} h</td><td class="mt-sub">${lim[g] !== D[g] ? esc(nf(D[g])) + ' h' : ''}</td></tr>`).join('');
+    const hoursForm = f && f.scope === 'hours' ? `<div class="mt-box"><div class="grid2">${fld(t('group'), `<select data-mf="group">${groups.map(g => opt(g, f.group, g === 'R' ? t('allR') : g)).join('')}</select>`, 1)}
+        ${fld(t('hours'), inp('hours', f.hours, 'inputmode="numeric"'), 1)}</div>${pinBox()}${saveBtns('saverset')}</div>` : '';
+    const idRows = P.map(p => {
+      const ids = M.rollIdsOf(p.id, st.entries);
+      const edit = f && f.scope === 'rollIds' && f.passageId === p.id;
+      return `<div class="mt-item"><b>${esc(p.name)}</b> · ${esc(t('fast'))} ${esc(ids.fast || '—')} · ${esc(t('slow'))} ${esc(ids.slow || '—')}
+        ${edit ? `<div class="mt-box"><div class="grid2">${fld(t('rollId') + ' — ' + t('fast'), inp('rollFast', f.rollFast))}${fld(t('rollId') + ' — ' + t('slow'), inp('rollSlow', f.rollSlow))}</div>${pinBox()}${saveBtns('saverset')}</div>`
+          : (f ? '' : ` <button type="button" class="btn small" data-mact="rsetids" data-uid="${esc(p.id)}">${esc(t('editIds'))}</button>`)}</div>`;
+    }).join('');
+    const lines = Array.from(new Set((C.passages() || []).map(p => p.lineId)));
+    return `<section class="card"><h3>${esc(t('rollSet'))}</h3><p class="mt-sub">${esc(t('rollSetHelp'))}</p>
+        <table class="mt-t"><tr><th>${esc(t('group'))}</th><th>${esc(t('hours'))}</th><th></th></tr>${hoursRows}</table>
+        ${hoursForm || (f ? '' : `<button type="button" class="btn small" data-mact="rsethours">${esc(t('saveHours'))}…</button>`)}</section>
+      <section class="card"><h3>${esc(t('rollIds'))}</h3>
+        <div class="mt-tabs">${lines.map(id => `<button type="button" class="btn small ${(st.rollLine || 'C') === id ? 'primary' : ''}" data-mact="rline" data-v="${esc(id)}">${esc(lineName(id))}</button>`).join('')}</div>${idRows}</section>`;
+  }
+  async function saveRollSet() {
+    const f = st.form;
+    const groups = Object.keys(C.rollDefaults ? C.rollDefaults() : {});
+    if (errs(M.validateRollConfig(f, C.passages(), groups))) return;
+    if (!C.checkPin) return C.toast(t('pinWrong'));
+    const r = await C.checkPin(f.pin);
+    if (!r || !r.ok) { f.pin = ''; return C.toast(C.pinMsg ? C.pinMsg(r || {}) : t('pinWrong')); }
+    const rec = f.scope === 'hours' ? { kind: 'rollConfig', scope: 'hours', group: f.group, hours: M.num(f.hours), previous: rollCtx().limits[f.group] }
+      : Object.assign({ kind: 'rollConfig', scope: 'rollIds' }, rollBase(f), { rollFast: f.rollFast.trim(), rollSlow: f.rollSlow.trim() });
     st.sh = Object.assign({}, C.shiftNow());
-    await save({ kind: 'rollChange', passageId: f.passageId, lineId: p.lineId || null, passageName: p.name || null, date: f.date, reason: f.reason,
-      refluted: !!f.refluted, fluteSpec: f.fluteSpec.trim(), nextPlanned: f.nextPlanned || null, note: f.note.trim(), doneBy: f.doneBy.trim(),
-      refluteEveryDays: isNum(p.refluteEveryDays) ? p.refluteEveryDays : null, by: f.by.trim() });
+    await save(Object.assign(rec, { reason: f.reason.trim(), by: f.by.trim() }));
+  }
+
+  // ----- notas: informação adicional, observações e requisitos -----
+  function vNotes() {
+    const f = st.form && st.form.kind === 'note' ? st.form : null, day = M.shiftSummary(st.entries, sh().day);
+    const item = r => `<div class="mt-item"><div><span class="mt-c">${esc(t('n_' + (M.NOTE_TOPICS.indexOf(r.topic) >= 0 ? r.topic : 'other')))}</span>
+        ${r.lineId ? esc(lineName(r.lineId)) : ''}${r.equipment ? ' · ' + esc(r.equipment) : ''} <small class="mt-sub">${esc(t('p_' + (r.period === 'N' ? 'N' : 'D')))}</small></div>
+      <div>${esc(r.text)}</div>${meta(r)}<div>${voidBox(r.uid)}</div></div>`;
+    return `<section class="card">${f ? `<div class="mt-box"><div class="grid2">
+        ${fld(t('topic'), `<select data-mf="topic"><option value="">—</option>${M.NOTE_TOPICS.map(x => opt(x, f.topic, t('n_' + x))).join('')}</select>`, 1)}
+        ${fld(t('line'), lineSel(f.lineId))}</div>${fld(t('equipment'), inp('equipment', f.equipment))}${fld(t('text'), area('text', f.text), 1)}
+        ${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savenote')}</div>` : newBtn('note', t('newNote'))}</section>
+      <section class="card"><h3>${esc(t('dayNotes'))} ${esc(ddmm(sh().day))}</h3>${day.notes.map(item).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
+  }
+  async function saveNote() {
+    const f = st.form;
+    if (errs(M.validateNote(f))) return;
+    await save({ kind: 'note', topic: f.topic, lineId: f.lineId || null, equipment: f.equipment.trim(), text: f.text.trim(), by: f.by.trim() });
   }
 
   // ----- consumíveis -----
@@ -376,9 +498,14 @@ window.MaintUI = function (C) {
       work: { workType: '', stopUid: '', pmJobUid: '', lineId: '', equipment: '', startTime: '', endTime: '', description: '', parts: [{ item: '', qty: '', unit: 'un' }], doneBy: '' },
       pmJob: { week: week(), dueDate: (M.weekRange(week()) || [])[1] || '', lineId: '', equipment: '', task: '', responsible: '' },
       pmUpdate: { jobUid: ref, status: '', progressPct: '', newDue: '', doneBy: '', note: '' },
-      rollCheck: { passageId: ref, week: M.weekOf(today()), condition: '', plannedChange: '', note: '' },
-      rollChange: { passageId: ref, date: today(), reason: '', refluted: false, fluteSpec: '', nextPlanned: '', note: '', doneBy: '' },
-      consumable: { item: '', qty: '', unit: 'un', lineId: '', purpose: '' }
+      rollCheck: { passageId: ref, week: M.weekOf(today()), condition: '', note: '' },
+      brushCheck: { passageId: ref, state: '', note: '' },
+      rollMeasure: { passageId: ref, date: today(), diaFast: '', diaSlow: '', note: '' },
+      rollChange: { passageId: ref, date: today(), reason: '', refluted: true, newFast: '', newSlow: '', diaFast: '', diaSlow: '', note: '', doneBy: '' },
+      rollHours: { kind: 'rollConfig', scope: 'hours', group: 'B1', hours: '', reason: '', pin: '' },
+      rollIds: { kind: 'rollConfig', scope: 'rollIds', passageId: ref, rollFast: (M.rollIdsOf(ref, st.entries) || {}).fast || '', rollSlow: (M.rollIdsOf(ref, st.entries) || {}).slow || '', reason: '', pin: '' },
+      consumable: { item: '', qty: '', unit: 'un', lineId: '', purpose: '' },
+      note: { topic: '', lineId: '', equipment: '', text: '' }
     }[kind];
     st.form = Object.assign({ kind, by }, F); st.act = null;
   }
@@ -386,7 +513,8 @@ window.MaintUI = function (C) {
   // ---------- eventos ----------
   function keep() { const y = window.scrollY; C.render(); window.scrollTo(0, y); }
   const SAVE = { saveshift: () => save(Object.assign({ kind: 'shift', technicians: st.form.technicians.trim(), notes: st.form.notes.trim(), by: st.form.by.trim() })),
-    savestop: saveStop, savework: saveWork, savepm: savePm, savepmup: savePmUp, saverchk: saveRollCheck, saverchg: saveRollChange, savecons: saveCons };
+    savestop: saveStop, savework: saveWork, savepm: savePm, savepmup: savePmUp, saverchk: saveRollCheck, saverchg: saveRollChange, savecons: saveCons,
+    savebrush: saveBrush, savemeas: saveMeasure, saverset: saveRollSet, savenote: saveNote };
   document.addEventListener('click', async e => {
     const el = e.target.closest('[data-mact]');
     if (!el) return;
@@ -396,6 +524,12 @@ window.MaintUI = function (C) {
     if (a === 'pmup') { newForm('pmUpdate', uid); keep(); return; }
     if (a === 'rchk') { newForm('rollCheck', uid); keep(); return; }
     if (a === 'rline') { st.rollLine = v; st.form = null; keep(); return; }
+    if (a === 'rbrush') { newForm('brushCheck', uid); keep(); return; }
+    if (a === 'rmeas') { newForm('rollMeasure', uid); keep(); return; }
+    if (a === 'rfilter') { st.rollFilter = v; keep(); return; }
+    if (a === 'rsethours') { newForm('rollHours'); keep(); return; }
+    if (a === 'rsetids') { newForm('rollIds', uid); keep(); return; }
+    if (a === 'rhours' && C.rollHoursRefresh) { C.rollHoursRefresh().then(ok => { C.toast(ok ? t('saved') : t('hoursNone')); C.render(); }); return; }
     if (a === 'rchg') { newForm('rollChange', uid); keep(); return; }
     if (a === 'cancel') { st.form = null; st.act = null; keep(); return; }
     if (a === 'addpart' && st.form && st.form.parts) { st.form.parts.push({ item: '', qty: '', unit: 'un' }); keep(); return; }
@@ -445,7 +579,7 @@ window.MaintUI = function (C) {
       '.mt-late{border-left:4px solid #b91c1c;padding-left:8px}.mt-bn{border-radius:10px;padding:10px 12px;margin:0 0 10px;font-weight:600;cursor:pointer;background:#fee2e2;color:#b91c1c}' +
       '.mt-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;text-align:center;margin:6px 0}.mt-kpi div{background:#f6f7f4;border-radius:10px;padding:8px 4px}' +
       '.mt-kpi b{display:block;font-size:20px}.mt-kpi span{font-size:11px;color:#5b6a60}.mt-t{width:100%;border-collapse:collapse;font-size:14px}.mt-t td{border-bottom:1px solid #dde3dc;padding:5px 4px}' +
-      '.mt-grp{margin:12px 0 2px;font-size:15px;border-bottom:2px solid #dde3dc}.mt-n{text-align:right;font-variant-numeric:tabular-nums}.mt-chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0}.mt-chk input{width:20px;height:20px}';
+      '.mt-amb{color:#b45309}.mt-bn.mt-amb{background:#fef3c7;color:#b45309}.mt-grp{margin:12px 0 2px;font-size:15px;border-bottom:2px solid #dde3dc}.mt-n{text-align:right;font-variant-numeric:tabular-nums}.mt-chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0}.mt-chk input{width:20px;height:20px}';
     document.head.appendChild(s);
   }
 

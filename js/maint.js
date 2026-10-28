@@ -5,15 +5,19 @@
  *   work        — intervenção: o que se fez, material usado, quem fez, início/fim
  *   pmJob       — trabalho de manutenção preventiva planeado para uma semana ISO
  *   pmUpdate    — progresso de um trabalho preventivo (em curso, feito, adiado, cancelado)
- *   rollCheck   — verificação semanal do estado de uma passagem de rolos (só Prodn-Mgt)
- *   rollChange  — troca de rolos de uma passagem, com reestriagem (só Prodn-Mgt)
+ *   rollCheck   — inspecção semanal de um par de rolos depois das horas ideais (bom | para reestriar | crítico) (só Prodn-Mgt)
+ *   rollChange  — troca/reestriagem de um par de rolos, com IDs e diâmetros novos (só Prodn-Mgt)
+ *   rollMeasure — diâmetro de cada rolo do par (rápido e lento), em mm (só Prodn-Mgt)
+ *   brushCheck  — estado das escovas do par (bom | gasto | crítico | em falta) (só Prodn-Mgt)
+ *   rollConfig  — Definições dos rolos: horas ideais por passagem, ou IDs dos rolos de um par (com PIN; só Prodn-Mgt)
  *   consumable  — consumível pedido/usado no turno
+ *   note        — informação adicional: observação, requisito ou outra
  *   void        — anulação de um registo (os registos nunca se alteram nem se apagam)
  * Registos de manutenção são separados do diário de turno da Prodn-Mgt (decisão de Zhax, 27-10-2026):
  * os minutos aqui NÃO entram no indicador de paragens de 72 min/dia. */
 (function (root) {
   'use strict';
-  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'consumable', 'void'];
+  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'consumable', 'note', 'void'];
   // Categorias pedidas por Zhax; os códigos vêm da lista FMO pela primeira letra (P = Process, A = Breakdown, O = Other),
   // como no diário de turno. Códigos sem P/A/O ficam em Other.
   const CATEGORIES = ['Process', 'Breakdown', 'Other'];
@@ -21,7 +25,10 @@
   const WORK_TYPES = ['corrective', 'preventive', 'inspection', 'other'];
   const PM_STATUS = ['planned', 'in_progress', 'done', 'postponed', 'cancelled'];
   const PM_UPDATES = ['in_progress', 'done', 'postponed', 'cancelled'];
-  const ROLL_COND = ['good', 'monitor', 'worn', 'damaged'];
+  // Inspecção semanal depois das horas ideais (Zhax, 28-10-2026): ainda bom | para reestriar | estado crítico
+  const ROLL_COND = ['good', 'due', 'critical'];
+  const BRUSH_STATES = ['good', 'worn', 'critical', 'missing'];   // aviso: crítico ou em falta
+  const NOTE_TOPICS = ['observation', 'requirement', 'other'];
   const ROLL_REASONS = ['scheduled', 'wear', 'damage', 'other'];
   const UNITS = ['un', 'kg', 'l', 'm', 'par', 'cx'];
   const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -142,18 +149,57 @@
     if (!passageOf(o.passageId, passages)) e.push('passageId');
     if (!validWeek(o.week)) e.push('week');
     if (ROLL_COND.indexOf(o.condition) < 0) e.push('condition');
-    if (o.plannedChange && !DAY_RE.test(o.plannedChange)) e.push('plannedChange');
-    if ((o.condition === 'worn' || o.condition === 'damaged') && !txt(o.note)) e.push('note');
+    if (o.condition && o.condition !== 'good' && !txt(o.note)) e.push('note');
     if (!txt(o.by)) e.push('by');
     return e;
   }
+  // Diâmetro (mm): vazio = não medido; com valor, entre 150 e 300 mm (rolos de Ø 250 mm nas tabelas de estriagem)
+  const badDia = v => { const n = num(v); return n !== null && (isNaN(n) || n < 150 || n > 300); };
   function validateRollChange(o, passages) {
     const e = [];
     if (!passageOf(o.passageId, passages)) e.push('passageId');
     if (!DAY_RE.test(o.date || '')) e.push('date');
     if (ROLL_REASONS.indexOf(o.reason) < 0) e.push('reason');
-    if (o.nextPlanned && (!DAY_RE.test(o.nextPlanned) || (DAY_RE.test(o.date || '') && o.nextPlanned <= o.date))) e.push('nextPlanned');
+    if (badDia(o.diaFast)) e.push('diaFast');
+    if (badDia(o.diaSlow)) e.push('diaSlow');
     if (!txt(o.doneBy)) e.push('doneBy');
+    if (!txt(o.by)) e.push('by');
+    return e;
+  }
+  function validateRollMeasure(o, passages) {
+    const e = [];
+    if (!passageOf(o.passageId, passages)) e.push('passageId');
+    if (num(o.diaFast) === null && num(o.diaSlow) === null) e.push('diaFast');
+    else { if (badDia(o.diaFast)) e.push('diaFast'); if (badDia(o.diaSlow)) e.push('diaSlow'); }
+    if (!txt(o.by)) e.push('by');
+    return e;
+  }
+  function validateBrushCheck(o, passages) {
+    const e = [];
+    if (!passageOf(o.passageId, passages)) e.push('passageId');
+    if (BRUSH_STATES.indexOf(o.state) < 0) e.push('state');
+    if ((o.state === 'critical' || o.state === 'missing') && !txt(o.note)) e.push('note');
+    if (!txt(o.by)) e.push('by');
+    return e;
+  }
+  // Definições dos rolos: horas ideais de um grupo (B1…G3, R) ou IDs dos dois rolos (rápido e lento) de um par
+  function validateRollConfig(o, passages, groups) {
+    const e = [];
+    if (o.scope === 'hours') {
+      if ((groups || []).indexOf(o.group) < 0) e.push('group');
+      const h = num(o.hours);
+      if (h === null || isNaN(h) || h < 100 || h > 20000) e.push('hours');
+    } else if (o.scope === 'rollIds') {
+      if (!passageOf(o.passageId, passages)) e.push('passageId');
+    } else e.push('scope');
+    if (!txt(o.reason)) e.push('reason');
+    if (!txt(o.by)) e.push('by');
+    return e;
+  }
+  function validateNote(o) {
+    const e = [];
+    if (NOTE_TOPICS.indexOf(o.topic) < 0) e.push('topic');
+    if (!txt(o.text)) e.push('text');
     if (!txt(o.by)) e.push('by');
     return e;
   }
@@ -201,33 +247,81 @@
   }
 
   // ---------- rolos ----------
-  // passages: [{id, lineId, name, fluteSpec, refluteEveryDays}] (lista de Zhax, por enviar).
-  // Data planeada de troca: a mais recente indicada numa verificação ou numa troca (próxima troca).
-  // Uma troca sem próxima data limpa o plano; sem plano e com intervalo de reestriagem, a data é calculada (calc: true).
-  function rollState(passages, entries, today) {
-    const eff = effective(entries).filter(e => e.kind === 'rollCheck' || e.kind === 'rollChange').sort(byTime);
+  // Horas de marcha da linha: ficheiro roll-hours.json do pipeline (coluna "Hours Run" da folha ENGINEERING do OEE).
+  // H = {start, lastDay, lines: {C: {days: {dia: h}, missing: [dias]}}}. Soma de first..last (inclusive), limitada ao último dia
+  // com dados, e os dias em falta no intervalo (nunca contados como zero).
+  function lineHours(H, lineId, first, last) {
+    const L = H && H.lines && H.lines[lineId];
+    if (!L || !DAY_RE.test(first || '')) return { hours: null, missing: [] };
+    const end = last && H.lastDay ? (last < H.lastDay ? last : H.lastDay) : (H.lastDay || last);
+    let h = 0;
+    Object.keys(L.days || {}).forEach(d => { if (d >= first && d <= end) h += L.days[d]; });
+    return { hours: Math.round(h * 10) / 10, missing: (L.missing || []).filter(d => d >= first && d <= end) };
+  }
+  // Horas ideais em vigor: as da lista mestre, alteradas pelo último rollConfig (scope 'hours') de cada grupo
+  function effectiveLimits(defaults, entries) {
+    const out = Object.assign({}, defaults || {});
+    effective(entries).filter(e => e.kind === 'rollConfig' && e.scope === 'hours').sort(byTime).forEach(e => { const h = num(e.hours); if (isNum(h)) out[e.group] = h; });
+    return out;
+  }
+  // IDs actuais dos dois rolos do par: último rollConfig (rollIds) ou troca com IDs novos (campos em branco mantêm o ID anterior)
+  function rollIdsOf(passageId, entries) {
+    let ids = { fast: '', slow: '' };
+    effective(entries).filter(e => e.passageId === passageId && ((e.kind === 'rollConfig' && e.scope === 'rollIds') || e.kind === 'rollChange')).sort(byTime).forEach(e => {
+      if (e.kind === 'rollConfig') ids = { fast: txt(e.rollFast), slow: txt(e.rollSlow) };
+      else ids = { fast: txt(e.newFast) || ids.fast, slow: txt(e.newSlow) || ids.slow };
+    });
+    return ids;
+  }
+  // Estado de cada par de rolos em 'today'. ctx = {hours: H (ou null = horas por carregar), limits: {B1: 1200, …, R: 3000}}.
+  // Horas desde o dia seguinte à última troca (ou desde o início da contagem, 01-08-2026, com o estado inicial do registo).
+  // Inspecção semanal só é pedida depois das horas ideais, ou enquanto a última inspecção disser 'para reestriar' ou 'crítico'.
+  function rollState(passages, entries, today, ctx) {
+    const c = ctx || {};
+    const eff = effective(entries).sort(byTime);
     const thisWeek = DAY_RE.test(today || '') ? weekOf(today) : null;
     return (passages || []).map(p => {
+      const base = p.baseline || {};
       const mine = eff.filter(e => e.passageId === p.id);
-      let plan = null, lastCheck = null, lastChange = null;
-      const changes = [];
-      mine.forEach(e => {
-        if (e.kind === 'rollCheck') { lastCheck = e; if (e.plannedChange) plan = e.plannedChange; }
-        else { lastChange = e; changes.push(e); plan = e.nextPlanned || null; }
+      const changes = mine.filter(e => e.kind === 'rollChange').sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : byTime(a, b)));
+      const last = changes[changes.length - 1] || null;
+      const lastChangeDate = last ? last.date : (base.lastChange || null);
+      const startDay = lastChangeDate ? addDays(lastChangeDate, 1) : (base.start || null);
+      const lh = c.hours ? lineHours(c.hours, p.lineId, startDay, today) : { hours: null, missing: [] };
+      const limit = c.limits ? c.limits[p.hoursGroup || p.passage] : undefined;
+      const over = isNum(lh.hours) && isNum(limit) && lh.hours >= limit;
+      // inspecção em vigor: a última da app depois da última troca; sem trocas na app, a do estado inicial
+      const checks = mine.filter(e => e.kind === 'rollCheck' && (!last || byTime(e, last) > 0));
+      let insp = checks[checks.length - 1] || null;
+      if (!insp && !last && base.inspection) insp = { condition: base.inspection, prodDay: base.inspectionDate, week: weekOf(base.inspectionDate), note: base.note || '', baseline: true };
+      const condition = insp ? insp.condition : null;
+      const needsInspection = over || condition === 'due' || condition === 'critical';
+      const checkedThisWeek = !!(insp && !insp.baseline && thisWeek && insp.week === thisWeek);
+      const brushes = mine.filter(e => e.kind === 'brushCheck'), brush = brushes[brushes.length - 1] || null;
+      const meas = mine.filter(e => e.kind === 'rollMeasure' || (e.kind === 'rollChange' && (num(e.diaFast) !== null || num(e.diaSlow) !== null)));
+      const m = meas[meas.length - 1] || null;
+      // registo de reestriagem: horas de marcha entre trocas consecutivas (sem valor se faltarem dias de horas)
+      let prevStart = base.start || null;
+      const register = changes.map(ch => {
+        const hh = c.hours && prevStart ? lineHours(c.hours, p.lineId, prevStart, ch.date) : { hours: null, missing: [] };
+        prevStart = addDays(ch.date, 1);
+        return { date: ch.date, reason: ch.reason, refluted: !!ch.refluted, hours: hh.hours, missingDays: hh.missing.length };
       });
-      let calc = false;
-      if (!plan && lastChange && isNum(p.refluteEveryDays) && p.refluteEveryDays > 0) { plan = addDays(lastChange.date, p.refluteEveryDays); calc = true; }
-      const dates = changes.map(c => c.date).sort();
-      const gaps = dates.slice(1).map((d, i) => daysBetween(dates[i], d));
-      const last12 = DAY_RE.test(today || '') ? dates.filter(d => d > addDays(today, -365) && d <= today) : dates;
-      const overdue = !!(plan && DAY_RE.test(today || '') && today > plan);
-      return { passage: p, id: p.id, lineId: p.lineId, plan, planCalc: calc, overdue, daysLate: overdue ? daysBetween(plan, today) : 0,
-        // estado: só da verificação feita depois da última troca (rolos novos ainda sem verificação = null)
-        lastCheck, condition: lastCheck && (!lastChange || byTime(lastCheck, lastChange) > 0) ? lastCheck.condition : null,
-        checkedThisWeek: !!(lastCheck && thisWeek && lastCheck.week === thisWeek),
-        lastChange, changes: changes.length, changes12m: last12.length, refluted: changes.filter(c => c.refluted).length,
-        avgDaysBetween: gaps.length ? Math.round(gaps.reduce((s, g) => s + g, 0) / gaps.length) : null,
-        fluteSpec: (lastChange && txt(lastChange.fluteSpec)) || p.fluteSpec || '' };
+      const withH = register.filter(r => isNum(r.hours) && !r.missingDays);
+      let status = 'ok';
+      if (condition === 'critical') status = 'critical';
+      else if (needsInspection && !checkedThisWeek) status = 'inspect';
+      else if (condition === 'due') status = 'due';
+      else if (over) status = 'over';
+      return { passage: p, id: p.id, lineId: p.lineId, startDay, lastChangeDate, hours: lh.hours, missingDays: lh.missing, limit: isNum(limit) ? limit : null,
+        pct: isNum(lh.hours) && isNum(limit) && limit > 0 ? Math.round(lh.hours / limit * 1000) / 10 : null, over,
+        inspection: insp, condition, needsInspection, checkedThisWeek, status,
+        brush: brush ? brush.state : null, brushNote: brush ? txt(brush.note) : '', brushAlert: !!(brush && (brush.state === 'critical' || brush.state === 'missing')),
+        diaFast: m ? num(m.diaFast) : null, diaSlow: m ? num(m.diaSlow) : null, measuredOn: m ? (m.date || m.prodDay || null) : null,
+        rollIds: rollIdsOf(p.id, entries), machine: base.machine || '',
+        changes: changes.length, refluted: changes.filter(x => x.refluted).length, register,
+        avgHoursBetween: withH.length ? Math.round(withH.reduce((s, r) => s + r.hours, 0) / withH.length) : null,
+        fluteSpec: (last && txt(last.fluteSpec)) || p.fluteSpec || '' };
     });
   }
 
@@ -250,23 +344,30 @@
     const stops = eff.filter(e => e.kind === 'stop'), works = eff.filter(e => e.kind === 'work'), cons = eff.filter(e => e.kind === 'consumable');
     const byCat = {}; CATEGORIES.forEach(c => { byCat[c] = 0; });
     stops.forEach(s => { const d = num(s.durationMin); if (isNum(d)) byCat[CATEGORIES.indexOf(s.category) >= 0 ? s.category : 'Other'] += d; });
-    return { shifts: eff.filter(e => e.kind === 'shift'), stops, works, consumables: cons, stopMin: CATEGORIES.reduce((s, c) => s + byCat[c], 0), byCat,
+    return { shifts: eff.filter(e => e.kind === 'shift'), notes: eff.filter(e => e.kind === 'note'), stops, works, consumables: cons, stopMin: CATEGORIES.reduce((s, c) => s + byCat[c], 0), byCat,
       consumableTotals: consumableTotals(cons) };
   }
-  // Avisos para a app e para o relatório: preventiva em atraso e troca de rolos com data passada
-  function warnings(entries, passages, today) {
+  // Avisos para a app e para o relatório: preventiva em atraso; rolos em estado crítico, para reestriar, ou sem inspecção
+  // semanal depois das horas ideais; escovas em estado crítico ou em falta. level: 'bad' (vermelho) | 'warn' (âmbar)
+  function warnings(entries, passages, today, ctx) {
     const w = [];
-    pmState(entries, today).filter(s => s.overdue).forEach(s => w.push({ type: 'pm_overdue', uid: s.uid, equipment: s.job.equipment, task: s.job.task,
+    pmState(entries, today).filter(s => s.overdue).forEach(s => w.push({ type: 'pm_overdue', level: 'bad', uid: s.uid, equipment: s.job.equipment, task: s.job.task,
       due: s.due, daysLate: s.daysLate, responsible: s.job.responsible, week: s.week }));
-    rollState(passages, entries, today).filter(r => r.overdue).forEach(r => w.push({ type: 'roll_overdue', passageId: r.id, lineId: r.lineId,
-      name: r.passage.name, due: r.plan, calc: r.planCalc, daysLate: r.daysLate }));
+    rollState(passages, entries, today, ctx).forEach(r => {
+      const x = { passageId: r.id, lineId: r.lineId, name: r.passage.name, hours: r.hours, limit: r.limit };
+      if (r.status === 'critical') w.push(Object.assign({ type: 'roll_critical', level: 'bad', note: (r.inspection && r.inspection.note) || '' }, x));
+      else if (r.status === 'inspect') w.push(Object.assign({ type: 'roll_inspect', level: 'warn' }, x));
+      else if (r.status === 'due') w.push(Object.assign({ type: 'roll_due', level: 'warn', note: (r.inspection && r.inspection.note) || '' }, x));
+      if (r.brushAlert) w.push(Object.assign({ type: 'brush_' + r.brush, level: 'bad', note: r.brushNote }, x));
+    });
     return w;
   }
 
-  const api = { KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, UNITS,
+  const api = { KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
     num, addDays, daysBetween, weekOf, weekRange, validWeek, catOfCode, codesFor, findCode, effective, cleanParts,
-    validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateConsumable,
-    pmState, pmWeek, rollState, consumableTotals, shiftSummary, warnings, passageOf };
+    validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
+    validateBrushCheck, validateRollConfig, validateNote, validateConsumable,
+    pmState, pmWeek, lineHours, effectiveLimits, rollIdsOf, rollState, consumableTotals, shiftSummary, warnings, passageOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Maint = api;
 })(typeof window !== 'undefined' ? window : this);

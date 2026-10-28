@@ -392,7 +392,7 @@
     if (d.monitor !== undefined && !Array.isArray(d.monitor)) return false;
     if (d.sevents !== undefined && !Array.isArray(d.sevents)) return false;
     if (d.maint !== undefined && !Array.isArray(d.maint)) return false;
-    const MAINT_KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'consumable', 'void'];   // = Maint.KINDS (js/maint.js)
+    const MAINT_KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'consumable', 'note', 'void'];   // = Maint.KINDS (js/maint.js)
     if (!(d.maint || []).every(function (m) { return m && typeof m.uid === 'string' && MAINT_KINDS.indexOf(m.kind) >= 0; })) return false;
     const okMon = (d.monitor || []).every(function (r) { return r && ['ROUND', 'WEEKLY', 'TREAT', 'DISP'].indexOf(r.kind) >= 0 && typeof r.silo === 'string'; });
     const okSev = (d.sevents || []).every(function (e) { return e && typeof e.id === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(e.id) && ['OPEN', 'CLOSED'].indexOf(e.status) >= 0; });

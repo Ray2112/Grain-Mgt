@@ -107,32 +107,85 @@ t('preventiva: validação do progresso', () => {
     ['week', 'dueDate', 'equipment', 'task', 'responsible', 'by']);
 });
 
-t('rolos: plano, atraso, intervalo de reestriagem, registo de frequência', () => {
-  const P = [{ id: 'C-B1', lineId: 'C', name: 'B1', fluteSpec: '', refluteEveryDays: 90 }, { id: 'C-B2', lineId: 'C', name: 'B2', fluteSpec: '' }];
-  let E = [rec('rollCheck', { passageId: 'C-B1', week: '2026-W43', condition: 'worn', note: 'desgaste', plannedChange: '2026-10-30' })];
-  let r = M.rollState(P, E, '2026-10-30');
-  assert.deepStrictEqual([r[0].plan, r[0].overdue, r[0].condition, r[0].checkedThisWeek], ['2026-10-30', false, 'worn', false]);
-  assert.strictEqual(M.rollState(P, E, '2026-10-24')[0].checkedThisWeek, true);
-  r = M.rollState(P, E, '2026-10-31');
-  assert.deepStrictEqual([r[0].overdue, r[0].daysLate, r[1].plan, r[1].overdue], [true, 1, null, false]);
-  assert.deepStrictEqual(M.warnings(E, P, '2026-10-31').map(w => [w.type, w.passageId, w.due]), [['roll_overdue', 'C-B1', '2026-10-30']]);
-  // troca sem próxima data: plano calculado pelo intervalo de 90 dias
-  E = E.concat([rec('rollChange', { passageId: 'C-B1', date: '2026-10-31', reason: 'wear', refluted: true, fluteSpec: '10 estrias/cm', doneBy: 'Rui' })]);
-  r = M.rollState(P, E, '2026-11-01');
-  assert.deepStrictEqual([r[0].plan, r[0].planCalc, r[0].overdue, r[0].changes, r[0].refluted, r[0].fluteSpec], ['2027-01-29', true, false, 1, 1, '10 estrias/cm']);
-  assert.strictEqual(r[0].condition, null, 'rolos novos: estado anterior à troca não conta');
-  E = E.concat([rec('rollChange', { passageId: 'C-B1', date: '2027-01-20', reason: 'scheduled', refluted: false, nextPlanned: '2027-04-20', doneBy: 'Rui' })]);
-  r = M.rollState(P, E, '2027-01-21');
-  assert.deepStrictEqual([r[0].plan, r[0].planCalc, r[0].avgDaysBetween, r[0].changes12m], ['2027-04-20', false, 81, 2]);
+
+// Horas de marcha de teste (formato roll-hours.json): 10 h/dia de 01-08 a 10-08, 31-08 em falta; linha D sem horas
+const H = { start: '2026-08-01', lastDay: '2026-09-02', lines: {
+  C: { days: Object.assign({}, ...Array.from({ length: 10 }, (_, i) => ({ ['2026-08-' + String(i + 1).padStart(2, '0')]: 10 })), { '2026-09-01': 5, '2026-09-02': 5 }), missing: ['2026-08-31'] },
+  D: { days: {}, missing: [] } } };
+const P = [
+  { id: 'C-B1-1', lineId: 'C', passage: 'B1', hoursGroup: 'B1', name: 'B1 · par 1/3', baseline: { start: '2026-08-01' } },
+  { id: 'C-R3-3', lineId: 'C', passage: 'R3', hoursGroup: 'R', name: 'R3 · par 3/3', baseline: { start: '2026-08-01', lastChange: '2026-08-05' } },
+  { id: 'C-B3-1', lineId: 'C', passage: 'B3', hoursGroup: 'B3', name: 'B3 · par 1/2', baseline: { start: '2026-08-01', inspection: 'due', inspectionDate: '2026-08-10', note: 'gasto' } }
+];
+const LIM = { B1: 100, B3: 2400, R: 3000 };
+
+t('horas da linha: soma, dias em falta, limite ao último dia com dados', () => {
+  assert.deepStrictEqual(M.lineHours(H, 'C', '2026-08-01', '2026-09-30'), { hours: 110, missing: ['2026-08-31'] });
+  assert.deepStrictEqual(M.lineHours(H, 'C', '2026-08-06', '2026-08-08'), { hours: 30, missing: [] });
+  assert.deepStrictEqual(M.lineHours(H, 'D', '2026-08-01', '2026-09-30'), { hours: 0, missing: [] });
+  assert.deepStrictEqual(M.lineHours(null, 'C', '2026-08-01'), { hours: null, missing: [] });
 });
 
-t('rolos: validação', () => {
-  const P = [{ id: 'C-B1' }];
-  assert.deepStrictEqual(M.validateRollCheck({ passageId: 'C-B1', week: '2026-W44', condition: 'good', by: 'X' }, P), []);
-  assert.deepStrictEqual(M.validateRollCheck({ passageId: 'C-B1', week: '2026-W44', condition: 'damaged', by: 'X' }, P), ['note']);
-  assert.deepStrictEqual(M.validateRollCheck({ passageId: 'Z', week: '2026-W44', condition: 'good', plannedChange: '30/10', by: 'X' }, P), ['passageId', 'plannedChange']);
-  assert.deepStrictEqual(M.validateRollChange({ passageId: 'C-B1', date: '2026-10-31', reason: 'wear', nextPlanned: '2026-10-31', doneBy: 'R', by: 'X' }, P), ['nextPlanned']);
-  assert.deepStrictEqual(M.validateRollChange({ passageId: 'C-B1', date: '2026-10-31', reason: 'x', doneBy: '', by: 'X' }, P), ['reason', 'doneBy']);
+t('horas ideais: lista mestre, alteradas nas Definições (último registo manda)', () => {
+  const E = [rec('rollConfig', { scope: 'hours', group: 'B1', hours: '1500', reason: 'x' }), rec('rollConfig', { scope: 'hours', group: 'B1', hours: 1300, reason: 'y' })];
+  assert.deepStrictEqual(M.effectiveLimits({ B1: 1200, R: 3000 }, E), { B1: 1300, R: 3000 });
+});
+
+t('rolos: horas desde o início ou a troca; inspecção só depois das horas ideais', () => {
+  let r = M.rollState(P, [], '2026-09-02', { hours: H, limits: LIM });
+  assert.deepStrictEqual([r[0].hours, r[0].over, r[0].status, r[0].missingDays], [110, true, 'inspect', ['2026-08-31']]);
+  assert.deepStrictEqual([r[1].startDay, r[1].hours, r[1].over, r[1].status], ['2026-08-06', 60, false, 'ok']);
+  // estado inicial do registo: B3-1 'para reestriar' → precisa de inspecção semanal, mesmo abaixo das horas
+  assert.deepStrictEqual([r[2].condition, r[2].needsInspection, r[2].status, r[2].inspection.baseline], ['due', true, 'inspect', true]);
+  // sem ficheiro de horas: horas desconhecidas, sem aviso de horas
+  r = M.rollState(P, [], '2026-09-02', { hours: null, limits: LIM });
+  assert.deepStrictEqual([r[0].hours, r[0].over, r[0].status], [null, false, 'ok']);
+  // inspecção desta semana: 'ainda bom' → sem aviso (fica 'over'); na semana seguinte volta a pedir inspecção
+  const E = [rec('rollCheck', { passageId: 'C-B1-1', week: M.weekOf('2026-09-02'), condition: 'good', prodDay: '2026-09-02' })];
+  assert.strictEqual(M.rollState(P, E, '2026-09-02', { hours: H, limits: LIM })[0].status, 'over');
+  assert.strictEqual(M.rollState(P, E, '2026-09-08', { hours: H, limits: LIM })[0].status, 'inspect');
+  E.push(rec('rollCheck', { passageId: 'C-B1-1', week: M.weekOf('2026-09-08'), condition: 'critical', note: 'aquece', prodDay: '2026-09-08' }));
+  assert.strictEqual(M.rollState(P, E, '2026-09-08', { hours: H, limits: LIM })[0].status, 'critical');
+  assert.deepStrictEqual(M.warnings(E, P.slice(0, 1), '2026-09-08', { hours: H, limits: LIM }).map(w => [w.type, w.level]), [['roll_critical', 'bad']]);
+});
+
+t('rolos: troca recomeça horas e estado; IDs e diâmetros; registo de reestriagem em horas', () => {
+  const E = [
+    rec('rollConfig', { scope: 'rollIds', passageId: 'C-B1-1', rollFast: 'R-101', rollSlow: 'R-102', reason: 'inicial' }),
+    rec('rollCheck', { passageId: 'C-B1-1', week: '2026-W32', condition: 'critical', note: 'x' }),
+    rec('rollMeasure', { passageId: 'C-B1-1', diaFast: '249,5', diaSlow: 249.2, date: '2026-08-08' }),
+    rec('rollChange', { passageId: 'C-B1-1', date: '2026-08-08', reason: 'wear', refluted: true, newFast: 'R-201', newSlow: '', diaFast: 248, doneBy: 'Rui' })
+  ];
+  const r = M.rollState(P, E, '2026-09-02', { hours: H, limits: LIM })[0];
+  assert.deepStrictEqual([r.startDay, r.hours, r.condition, r.status, r.lastChangeDate], ['2026-08-09', 30, null, 'ok', '2026-08-08']);
+  assert.deepStrictEqual(r.rollIds, { fast: 'R-201', slow: 'R-102' }, 'ID em branco na troca mantém o anterior');
+  assert.deepStrictEqual([r.diaFast, r.diaSlow, r.measuredOn], [248, null, '2026-08-08'], 'a troca com diâmetro é a medição mais recente');
+  assert.deepStrictEqual(r.register, [{ date: '2026-08-08', reason: 'wear', refluted: true, hours: 80, missingDays: 0 }]);
+  assert.deepStrictEqual([r.changes, r.refluted, r.avgHoursBetween], [1, 1, 80]);
+});
+
+t('escovas: aviso quando críticas ou em falta', () => {
+  const E = [rec('brushCheck', { passageId: 'C-R3-3', state: 'missing', note: 'sem escovas' })];
+  assert.deepStrictEqual(M.warnings(E, P, '2026-09-02', { hours: H, limits: LIM }).map(w => w.type), ['roll_inspect', 'brush_missing', 'roll_inspect']);
+  E.push(rec('brushCheck', { passageId: 'C-R3-3', state: 'good' }));
+  assert.deepStrictEqual(M.warnings(E, P, '2026-09-02', { hours: H, limits: LIM }).map(w => w.type), ['roll_inspect', 'roll_inspect']);
+});
+
+t('rolos, escovas, Definições e notas: validação', () => {
+  assert.deepStrictEqual(M.validateRollCheck({ passageId: 'C-B1-1', week: '2026-W44', condition: 'good', by: 'X' }, P), []);
+  assert.deepStrictEqual(M.validateRollCheck({ passageId: 'C-B1-1', week: '2026-W44', condition: 'due', by: 'X' }, P), ['note']);
+  assert.deepStrictEqual(M.validateRollCheck({ passageId: 'Z', week: '2026-W44', condition: 'worn', by: 'X' }, P), ['passageId', 'condition', 'note']);
+  assert.deepStrictEqual(M.validateRollChange({ passageId: 'C-B1-1', date: '2026-10-31', reason: 'wear', diaFast: '249', diaSlow: '', doneBy: 'R', by: 'X' }, P), []);
+  assert.deepStrictEqual(M.validateRollChange({ passageId: 'C-B1-1', date: '2026-10-31', reason: 'x', diaFast: '2490', doneBy: '', by: 'X' }, P), ['reason', 'diaFast', 'doneBy']);
+  assert.deepStrictEqual(M.validateRollMeasure({ passageId: 'C-B1-1', diaFast: '', diaSlow: '', by: 'X' }, P), ['diaFast']);
+  assert.deepStrictEqual(M.validateRollMeasure({ passageId: 'C-B1-1', diaFast: '249,8', diaSlow: '100', by: 'X' }, P), ['diaSlow']);
+  assert.deepStrictEqual(M.validateBrushCheck({ passageId: 'C-B1-1', state: 'critical', by: 'X' }, P), ['note']);
+  assert.deepStrictEqual(M.validateBrushCheck({ passageId: 'C-B1-1', state: 'worn', by: 'X' }, P), []);
+  assert.deepStrictEqual(M.validateRollConfig({ scope: 'hours', group: 'B1', hours: '1200', reason: 'r', by: 'X' }, P, ['B1', 'R']), []);
+  assert.deepStrictEqual(M.validateRollConfig({ scope: 'hours', group: 'B9', hours: '50', reason: '', by: 'X' }, P, ['B1', 'R']), ['group', 'hours', 'reason']);
+  assert.deepStrictEqual(M.validateRollConfig({ scope: 'rollIds', passageId: 'C-B1-1', rollFast: 'A1', reason: 'r', by: 'X' }, P, []), []);
+  assert.deepStrictEqual(M.validateNote({ topic: 'requirement', text: '72 escovas', by: 'X' }), []);
+  assert.deepStrictEqual(M.validateNote({ topic: 'x', text: ' ', by: '' }), ['topic', 'text', 'by']);
 });
 
 t('resumo do turno e totais de consumíveis', () => {
