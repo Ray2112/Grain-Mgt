@@ -2,6 +2,7 @@
  * Criada pela app com FsscUI(C):
  *   C.lang() · C.esc(v) · C.toast(msg) · C.render() · C.load() -> Promise<[registos 'fssc']> · C.add(rec) -> Promise
  *   C.area 'mill' (Prodn-Mgt) | 'grain' (Grain-Mgt) · C.operator() · C.pin(pin) -> Promise<{ok, msg}> (PIN de supervisor da app)
+ *   C.complaints (true só na Prodn-Mgt: reclamações de clientes) · C.products() nomes dos produtos (sugestões)
  * Eventos próprios (data-fact, data-ff); não usa os atributos das apps. */
 window.FsscUI = function (C) {
   'use strict';
@@ -26,7 +27,14 @@ window.FsscUI = function (C) {
       openActions: 'Acções em aberto', doneActions: 'Concluídas', complete: 'Concluir', note: 'Nota', overdue: 'em atraso', daysLate: '{n} dia(s)',
       histNone: 'Ainda não há meses fechados.', counts: 'C {c} · menor {mi} · maior {ma} · crítica {cr} · N/A {na}',
       w_month_open: 'FSSC: avaliação de {m} por fechar', w_action_overdue: 'FSSC: acção em atraso — {r} ({g}, prazo {d})', w_doc_review: 'FSSC: revisão em atraso — {c} {t}', w_month_critical: 'FSSC: {n} NC crítica(s) em {m}',
-      reqDoc: 'exige documento', naHint: 'Pode ser N/A'
+      reqDoc: 'exige documento', naHint: 'Pode ser N/A',
+      t_complaints: 'Reclamações', newComplaint: 'Nova reclamação de cliente', received: 'Recebida em', customer: 'Cliente', ref: 'Referência do cliente / contacto', product: 'Produto', lot: 'Lote nº',
+      reason: 'Motivo', description: 'Descrição da reclamação', foodSafety: 'Afecta a segurança alimentar', remedy: 'Correcção (remédio ao cliente)', further: 'Acção adicional (investigação, causa)',
+      prevention: 'Prevenção da repetição', verification: 'Verificação da eficácia', followUp: 'Seguimento', closeIt: 'Fechar a reclamação', c_open: 'Aberta', c_closed: 'Fechada',
+      daysOpen: '{n} dia(s)', fOpen: 'Abertas', fAll: 'Todas', fsChip: 'Segurança alimentar', voidIt: 'Anular registo', voidReason: 'Motivo da anulação', closedOn: 'Fechada em', recBy: 'Registada por',
+      cr_foreign: 'Corpo estranho', cr_infestation: 'Infestação / insectos', cr_quality: 'Qualidade (cor, granulometria)', cr_moisture: 'Humidade / bolor', cr_weight: 'Peso / quantidade',
+      cr_packaging: 'Embalagem', cr_labelling: 'Rotulagem', cr_allergen: 'Alergénio', cr_taste: 'Sabor / cheiro', cr_other: 'Outro',
+      w_complaint_fs: 'Reclamação {id} ({c}) afecta a segurança alimentar — em aberto', w_complaint_overdue: 'Reclamação {id} ({c}) em atraso (prazo {d})'
     },
     en: {
       title: 'FSSC 22000 compliance', t_month: 'Monthly check', t_docs: 'Documents', t_actions: 'Actions', t_hist: 'History',
@@ -44,7 +52,14 @@ window.FsscUI = function (C) {
       openActions: 'Open actions', doneActions: 'Completed', complete: 'Complete', note: 'Note', overdue: 'overdue', daysLate: '{n} day(s)',
       histNone: 'No closed months yet.', counts: 'C {c} · minor {mi} · major {ma} · critical {cr} · N/A {na}',
       w_month_open: 'FSSC: {m} check not closed', w_action_overdue: 'FSSC: action overdue — {r} ({g}, due {d})', w_doc_review: 'FSSC: review overdue — {c} {t}', w_month_critical: 'FSSC: {n} critical NC(s) in {m}',
-      reqDoc: 'needs a document', naHint: 'May be N/A'
+      reqDoc: 'needs a document', naHint: 'May be N/A',
+      t_complaints: 'Complaints', newComplaint: 'New customer complaint', received: 'Received on', customer: 'Customer', ref: 'Customer reference / contact', product: 'Product', lot: 'Lot no.',
+      reason: 'Reason', description: 'Complaint description', foodSafety: 'Affects food safety', remedy: 'Remedy (to the customer)', further: 'Further action (investigation, cause)',
+      prevention: 'Prevention of recurrence', verification: 'Verification of effectiveness', followUp: 'Follow-up', closeIt: 'Close the complaint', c_open: 'Open', c_closed: 'Closed',
+      daysOpen: '{n} day(s)', fOpen: 'Open', fAll: 'All', fsChip: 'Food safety', voidIt: 'Void record', voidReason: 'Reason for voiding', closedOn: 'Closed on', recBy: 'Recorded by',
+      cr_foreign: 'Foreign body', cr_infestation: 'Infestation / insects', cr_quality: 'Quality (colour, particle size)', cr_moisture: 'Moisture / mould', cr_weight: 'Weight / quantity',
+      cr_packaging: 'Packaging', cr_labelling: 'Labelling', cr_allergen: 'Allergen', cr_taste: 'Taste / smell', cr_other: 'Other',
+      w_complaint_fs: 'Complaint {id} ({c}) affects food safety — open', w_complaint_overdue: 'Complaint {id} ({c}) overdue (due {d})'
     }
   };
   function t(k, v) { let s = (T[C.lang()] || T.pt)[k] || T.pt[k] || k; if (v) Object.keys(v).forEach(x => { s = s.split('{' + x + '}').join(v[x]); }); return s; }
@@ -77,17 +92,18 @@ window.FsscUI = function (C) {
     if (w.type === 'month_open') return t('w_month_open', { m: w.month });
     if (w.type === 'action_overdue') return t('w_action_overdue', { r: w.reqId, g: t('g_' + w.grade), d: ddmm(w.due) });
     if (w.type === 'doc_review') return t('w_doc_review', { c: w.code, t: w.title });
+    if (w.type === 'complaint_fs' || w.type === 'complaint_overdue') return t('w_' + w.type, { id: w.id, c: w.customer, d: ddmm(w.due) });
     return t('w_month_critical', { n: w.n, m: w.month });
   }
 
   // ---------- vista ----------
   function view() {
     if (!st.loaded) { reload().then(C.render); return `<section class="card"><p>${esc(t('loading'))}</p></section>`; }
-    const tabs = ['month', 'docs', 'actions', 'hist'];
+    const tabs = ['month', 'docs', 'actions'].concat(C.complaints ? ['complaints'] : []).concat(['hist']);
     const head = `<section class="card"><h2>${esc(t('title'))}</h2><p class="fs-sub">${esc(t('area_' + C.area))} · ${esc(Q.SOURCE)}</p>
       <div class="fs-tabs">${tabs.map(k => `<button type="button" class="btn small ${st.tab === k ? 'primary' : ''}" data-fact="tab" data-v="${k}">${esc(t('t_' + k))}</button>`).join('')}</div></section>`;
     const bn = warnings().map(w => `<div class="fs-bn ${w.level === 'bad' ? 'fs-bad' : 'fs-warn'}">✔ ${esc(warnText(w))}</div>`).join('');
-    return bn + head + ({ month: vMonth, docs: vDocs, actions: vActions, hist: vHist }[st.tab] || vMonth)();
+    return bn + head + ({ month: vMonth, docs: vDocs, actions: vActions, complaints: vComplaints, hist: vHist }[st.tab] || vMonth)();
   }
 
   // ----- avaliação mensal -----
@@ -193,6 +209,56 @@ window.FsscUI = function (C) {
       ${done.length ? `<details class="card"><summary>${esc(t('doneActions'))} (${done.length})</summary>${done.map(item).join('')}</details>` : ''}`;
   }
 
+  // ----- reclamações de clientes (só Prodn-Mgt) -----
+  function vComplaints() {
+    const L = F.complaints(st.entries, today()), f = st.form;
+    const lots = Array.from(new Set(L.map(x => x.complaint.lot).filter(Boolean))).sort();
+    const prods = Array.from(new Set((C.products ? C.products() : []).concat(L.map(x => x.complaint.product)).filter(Boolean)));
+    const nf_ = f && f.kind === 'complaint' ? f : null;
+    const form = nf_ ? `<div class="fs-box"><div class="grid2">${fld(t('received'), inp('received', nf_.received, 'type="date"'), 1)}${fld(t('customer'), inp('customer', nf_.customer), 1)}
+        ${fld(t('product'), inp('product', nf_.product, 'list="fsProds"'), 1)}${fld(t('lot'), inp('lot', nf_.lot, 'list="fsLots"'), 1)}
+        ${fld(t('reason'), `<select data-ff="reason"><option value="">—</option>${F.COMPLAINT_REASONS.map(r => opt(r, nf_.reason, t('cr_' + r))).join('')}</select>`, 1)}${fld(t('ref'), inp('ref', nf_.ref))}</div>
+        ${fld(t('description'), area('description', nf_.description), 1)}
+        <label class="fs-chk"><input type="checkbox" data-ff="foodSafety" ${nf_.foodSafety ? 'checked' : ''}> ${esc(t('foodSafety'))}</label>
+        <div class="grid2">${fld(t('owner'), inp('owner', nf_.owner), 1)}${fld(t('due'), inp('due', nf_.due, 'type="date"'), 1)}</div>${fld(t('by'), inp('by', nf_.by), 1)}
+        <datalist id="fsLots">${lots.map(x => `<option value="${esc(x)}">`).join('')}</datalist><datalist id="fsProds">${prods.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+        <div class="row"><button type="button" class="btn primary" data-fact="ccsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
+      : `<button type="button" class="btn primary" data-fact="ccnew">＋ ${esc(t('newComplaint'))}</button>`;
+    const show = st.ccFilter === 'all' ? L : L.filter(x => x.open);
+    const item = x => {
+      const c = x.complaint, up = f && f.kind === 'complaintUpd' && f.complaintUid === x.uid, vd = f && f.kind === 'ccvoid' && f.uid === x.uid;
+      return `<div class="fs-item ${x.open && (x.overdue || c.foodSafety) ? 'fs-late' : ''}"><div><b>${esc(x.id)}</b> · ${esc(c.customer)} <span class="fs-c ${x.open ? 'fs-warn' : 'fs-ok'}">${esc(t(x.open ? 'c_open' : 'c_closed'))}</span>
+          ${c.foodSafety ? `<span class="fs-c fs-bad">${esc(t('fsChip'))}</span>` : ''}${x.overdue ? `<span class="fs-c fs-bad">${esc(t('overdue'))}</span>` : ''}</div>
+        <div class="fs-sub">${esc(t('received'))} ${esc(ddmm(c.received))} · ${esc(c.product)} · ${esc(t('lot'))} <b>${esc(c.lot)}</b> · ${esc(t('cr_' + (F.COMPLAINT_REASONS.indexOf(c.reason) >= 0 ? c.reason : 'other')))}${c.ref ? ' · ' + esc(c.ref) : ''} · ${esc(t('daysOpen', { n: x.daysOpen }))}</div>
+        <div>${esc(c.description)}</div>
+        <div class="fs-sub">${esc(t('owner'))}: ${esc(c.owner)} · ${esc(t('due'))} ${esc(ddmm(c.due))} · ${esc(t('recBy'))} ${esc(c.by)}</div>
+        <div class="fs-cc"><div><b>${esc(t('remedy'))}</b><span>${esc(x.remedy || '—')}</span></div><div><b>${esc(t('further'))}</b><span>${esc(x.further || '—')}</span></div>
+          <div><b>${esc(t('prevention'))}</b><span>${esc(x.prevention || '—')}</span></div>${x.open ? '' : `<div><b>${esc(t('verification'))}</b><span>${esc(x.verification)} · ${esc(t('closedOn'))} ${esc(ddmm(x.closedOn))} · ${esc(x.closedBy)}</span></div>`}</div>
+        ${up ? `<div class="fs-box">${fld(t('remedy'), area('remedy', f.remedy))}${fld(t('further'), area('further', f.further))}${fld(t('prevention'), area('prevention', f.prevention))}
+            <label class="fs-chk"><input type="checkbox" data-ff="close" ${f.close ? 'checked' : ''}> ${esc(t('closeIt'))}</label>${f.close ? fld(t('verification'), area('verification', f.verification), 1) : ''}
+            ${fld(t('by'), inp('by', f.by), 1)}<div class="row"><button type="button" class="btn primary" data-fact="ccupsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : ''}
+        ${vd ? `<div class="fs-box">${fld(t('voidReason'), area('reason', f.reason), 1)}${fld(t('name'), inp('by', f.by), 1)}<div class="row"><button type="button" class="btn primary" data-fact="ccvoidsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : ''}
+        ${st.form ? '' : `<div class="row">${x.open ? `<button type="button" class="btn small primary" data-fact="ccup" data-v="${esc(x.uid)}">${esc(t('followUp'))}</button>` : ''}<button type="button" class="btn small" data-fact="ccvoid" data-v="${esc(x.uid)}">${esc(t('voidIt'))}</button></div>`}</div>`;
+    };
+    return `<section class="card">${form}</section>
+      <section class="card"><div class="fs-tabs"><button type="button" class="btn small ${st.ccFilter !== 'all' ? 'primary' : ''}" data-fact="ccfilter" data-v="open">${esc(t('fOpen'))} (${L.filter(x => x.open).length})</button>
+        <button type="button" class="btn small ${st.ccFilter === 'all' ? 'primary' : ''}" data-fact="ccfilter" data-v="all">${esc(t('fAll'))} (${L.length})</button></div>
+        ${show.map(item).join('') || `<p class="fs-sub">${esc(t('none'))}</p>`}</section>`;
+  }
+  async function ccSave() {
+    const f = st.form;
+    if (errs(F.validateComplaint(f))) return;
+    await save({ kind: 'complaint', received: f.received, customer: f.customer.trim(), ref: f.ref.trim(), product: f.product.trim(), lot: f.lot.trim().toUpperCase(),
+      reason: f.reason, description: f.description.trim(), foodSafety: !!f.foodSafety, owner: f.owner.trim(), due: f.due, by: f.by.trim() });
+  }
+  async function ccUpSave() {
+    const f = st.form, x = F.complaints(st.entries, today()).find(y => y.uid === f.complaintUid);
+    const o = { remedy: f.remedy, further: f.further, prevention: f.prevention, status: f.close ? 'closed' : undefined, verification: f.verification, by: f.by };
+    if (errs(F.validateComplaintUpd(o, x))) return;
+    await save({ kind: 'complaintUpd', complaintUid: f.complaintUid, complaintId: x.id, remedy: String(f.remedy).trim(), further: String(f.further).trim(),
+      prevention: String(f.prevention).trim(), status: f.close ? 'closed' : null, verification: f.close ? String(f.verification).trim() : '', by: String(f.by).trim() });
+  }
+
   // ----- histórico -----
   function vHist() {
     const closes = {};
@@ -226,12 +292,19 @@ window.FsscUI = function (C) {
     if (a === 'docver') { const d = F.docs(st.entries, today()).find(x => x.code === v); if (d) { const o = d.doc; st.form = { kind: 'doc', code: d.code, title: o.title, version: '', status: 'approved', owner: o.owner || '', approvedOn: today(), reviewMonths: String(o.reviewMonths || 12), location: o.location || '', reqIds: (o.reqIds || []).slice(), by: op() }; keep(); } return; }
     if (a === 'docsave') return docSave();
     if (a === 'done') { st.form = { kind: 'actionDone', gradeUid: v, note: '', by: op() }; keep(); return; }
+    if (a === 'ccnew') { const d = today(); st.form = { kind: 'complaint', received: d, customer: '', ref: '', product: '', lot: '', reason: '', description: '', foodSafety: false, owner: op(), due: new Date(Date.parse(d) + 7 * 86400000).toISOString().slice(0, 10), by: op() }; keep(); return; }   // prazo por defeito: 7 dias (proposta FMIP)
+    if (a === 'ccsave') return ccSave();
+    if (a === 'ccup') { st.form = { kind: 'complaintUpd', complaintUid: v, remedy: '', further: '', prevention: '', close: false, verification: '', by: op() }; keep(); return; }
+    if (a === 'ccupsave') return ccUpSave();
+    if (a === 'ccfilter') { st.ccFilter = v; keep(); return; }
+    if (a === 'ccvoid') { st.form = { kind: 'ccvoid', uid: v, reason: '', by: op() }; keep(); return; }
+    if (a === 'ccvoidsave') { const f = st.form; if (!String(f.reason).trim() || !String(f.by).trim()) return C.toast(t('fill') + ': ' + t('voidReason') + ', ' + t('name')); return save({ kind: 'void', voids: f.uid, reason: f.reason.trim(), by: f.by.trim() }); }
     if (a === 'donesave') { const f = st.form; if (!String(f.note).trim() || !String(f.by).trim()) return C.toast(t('fill') + ': ' + t('note') + ', ' + t('name')); return save({ kind: 'actionDone', gradeUid: f.gradeUid, note: f.note.trim(), by: f.by.trim() }); }
   });
-  document.addEventListener('input', e => { const el = e.target; if (el.dataset && el.dataset.ff !== undefined && st.form) st.form[el.dataset.ff] = el.value; });
+  document.addEventListener('input', e => { const el = e.target; if (el.dataset && el.dataset.ff !== undefined && st.form && el.type !== 'checkbox') st.form[el.dataset.ff] = el.value; });
   document.addEventListener('change', e => {
     const el = e.target;
-    if (el.dataset && el.dataset.ff !== undefined && st.form) { st.form[el.dataset.ff] = el.value; if (el.tagName === 'SELECT') keep(); return; }
+    if (el.dataset && el.dataset.ff !== undefined && st.form) { st.form[el.dataset.ff] = el.type === 'checkbox' ? el.checked : el.value; if (el.tagName === 'SELECT' || el.dataset.ff === 'close') keep(); return; }
     if (el.dataset && el.dataset.freq && st.form && st.form.reqIds) { const id = el.dataset.freq, i = st.form.reqIds.indexOf(id); if (el.checked && i < 0) st.form.reqIds.push(id); if (!el.checked && i >= 0) st.form.reqIds.splice(i, 1); return; }
     if (el.id === 'fsMonth' && /^\d{4}-\d{2}$/.test(el.value)) { st.month = el.value; st.form = null; keep(); }
   });
@@ -248,7 +321,8 @@ window.FsscUI = function (C) {
       '.fs-kpi div{background:#f6f7f4;border-radius:10px;padding:8px 4px}.fs-kpi b{display:block;font-size:20px}.fs-kpi span{font-size:11px;color:#5b6a60}' +
       '.fs-reqs{max-height:260px;overflow:auto;border:1px solid #dde3dc;border-radius:8px;padding:4px}.fs-chk{display:flex;gap:6px;align-items:flex-start;font-size:13px;padding:4px 2px}.fs-chk input{margin-top:2px}' +
       '.fs-hist{display:grid;grid-template-columns:70px 1fr 64px;gap:8px;align-items:center;margin-top:8px}.fs-bar{height:12px;background:#eef1ec;border-radius:6px;overflow:hidden}.fs-bar div{height:100%;background:#15803d}' +
-      '.fs-bar div.fs-warn{background:#d97706}.fs-bar div.fs-bad{background:#b91c1c}';
+      '.fs-bar div.fs-warn{background:#d97706}.fs-bar div.fs-bad{background:#b91c1c}' +
+      '.fs-cc{display:grid;gap:4px;margin:6px 0}.fs-cc div{background:#f6f7f4;border-radius:8px;padding:6px 8px;font-size:13px}.fs-cc b{display:block;font-size:12px;color:#5b6a60}';
     document.head.appendChild(s);
   }
   return { view, reload, warnings, warnText, t };

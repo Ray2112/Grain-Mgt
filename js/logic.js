@@ -399,7 +399,7 @@
     if (d.sevents !== undefined && !Array.isArray(d.sevents)) return false;
     if (d.maint !== undefined && !Array.isArray(d.maint)) return false;
     if (d.fssc !== undefined && !Array.isArray(d.fssc)) return false;
-    if (!(d.fssc || []).every(function (m) { return m && typeof m.uid === 'string' && ['doc', 'grade', 'actionDone', 'close', 'reopen', 'void'].indexOf(m.kind) >= 0; })) return false;   // = Fssc.KINDS
+    if (!(d.fssc || []).every(function (m) { return m && typeof m.uid === 'string' && ['doc', 'grade', 'actionDone', 'close', 'reopen', 'complaint', 'complaintUpd', 'void'].indexOf(m.kind) >= 0; })) return false;   // = Fssc.KINDS
     const MAINT_KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'note', 'void'];   // = Maint.KINDS (js/maint.js)
     if (!(d.maint || []).every(function (m) { return m && typeof m.uid === 'string' && MAINT_KINDS.indexOf(m.kind) >= 0; })) return false;
     const okMon = (d.monitor || []).every(function (r) { return r && ['ROUND', 'WEEKLY', 'TREAT', 'DISP', 'OVERRIDE', 'SENSOR'].indexOf(r.kind) >= 0 && typeof r.silo === 'string'; });

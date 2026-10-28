@@ -94,4 +94,27 @@ t('fecho e reabertura do mês; acções e avisos', () => {
   assert.deepStrictEqual(A.map(a => [a.grade.reqId, !!a.done, a.overdue]), [['B', false, false], ['A', true, false]]);
 });
 
+t('reclamações: registo, ID, seguimento, fecho com prevenção e verificação, avisos', () => {
+  const ok = { received: '2026-10-20', customer: 'TESTE Cliente', product: 'Fuba 2', lot: 'L2610-C2', reason: 'foreign', description: 'pedra no saco', foodSafety: true, owner: 'QC', due: '2026-10-27', by: 'X' };
+  assert.deepStrictEqual(F.validateComplaint(ok), []);
+  assert.deepStrictEqual(F.validateComplaint(Object.assign({}, ok, { reason: 'x', due: '2026-10-19', lot: '' })), ['lot', 'reason', 'due']);
+  const c = rec('complaint', ok);
+  assert.ok(/^RC-261020-[A-Z0-9]{1,4}$/.test(F.complaintId(c)));
+  let L = F.complaints([c], '2026-10-27');
+  assert.deepStrictEqual([L[0].open, L[0].overdue, L[0].daysOpen], [true, false, 7]);
+  assert.deepStrictEqual(F.warnings([c], [], 'mill', '2026-10-05').map(w => w.type), ['complaint_fs']);
+  const st = L[0];
+  assert.deepStrictEqual(F.validateComplaintUpd({ by: 'X' }, st), ['remedy']);
+  assert.deepStrictEqual(F.validateComplaintUpd({ status: 'closed', verification: '', by: 'X' }, st), ['remedy', 'prevention', 'verification']);
+  const u1 = rec('complaintUpd', { complaintUid: c.uid, remedy: 'saco substituído', further: 'rever peneiro', by: 'X' });
+  const u2 = rec('complaintUpd', { complaintUid: c.uid, prevention: 'íman antes da ensacagem', by: 'X' });
+  L = F.complaints([c, u1, u2], '2026-10-28');
+  assert.deepStrictEqual([L[0].remedy, L[0].further, L[0].prevention, L[0].overdue], ['saco substituído', 'rever peneiro', 'íman antes da ensacagem', true]);
+  assert.deepStrictEqual(F.validateComplaintUpd({ status: 'closed', verification: 'sem novas reclamações em 30 dias', by: 'X' }, L[0]), []);
+  const u3 = rec('complaintUpd', Object.assign({ complaintUid: c.uid, status: 'closed', verification: 'ok', by: 'Y' }, { date: '2026-10-29' }));
+  L = F.complaints([c, u1, u2, u3], '2026-11-30');
+  assert.deepStrictEqual([L[0].open, L[0].status, L[0].closedBy, L[0].daysOpen], [false, 'closed', 'Y', 9]);
+  assert.deepStrictEqual(F.warnings([c, u1, u2, u3], [], 'mill', '2026-11-05').filter(w => /complaint/.test(w.type)), []);
+});
+
 console.log('fssc: ' + n + ' testes OK');

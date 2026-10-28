@@ -5,6 +5,8 @@
  *   actionDone — acção de uma avaliação concluída: gradeUid, note
  *   close      — fecho do mês pelo supervisor de CQ com PIN (guarda a pontuação e as contagens)
  *   reopen     — reabertura de um mês fechado (PIN e motivo)
+ *   complaint  — reclamação de cliente (só Prodn-Mgt): recebida em, cliente, produto, lote, motivo, descrição, segurança alimentar, responsável, prazo
+ *   complaintUpd — seguimento: correcção (remedy), acção adicional (further), prevenção da repetição (prevention), fecho com verificação
  *   void       — anulação de um registo
  * Classificação (Zhax, 28-10-2026: como na auditoria FSSC, Parte 3 §6.2): Conforme, NC Menor, NC Maior, NC Crítica, N/A.
  * Pontuação (proposta FMIP, a confirmar): C = 1, Menor = 0,7, Maior = 0,3, Crítica = 0; média × 100 dos requisitos aplicáveis.
@@ -12,7 +14,9 @@
  * Prodn-Mgt e Grain-Mgt avaliam a sua área; as pontuações ficam separadas (Zhax, 28-10-2026). */
 (function (root) {
   'use strict';
-  const KINDS = ['doc', 'grade', 'actionDone', 'close', 'reopen', 'void'];
+  const KINDS = ['doc', 'grade', 'actionDone', 'close', 'reopen', 'complaint', 'complaintUpd', 'void'];
+  // Motivos de reclamação (lista FMIP para farinha de milho; 'other' com descrição)
+  const COMPLAINT_REASONS = ['foreign', 'infestation', 'quality', 'moisture', 'weight', 'packaging', 'labelling', 'allergen', 'taste', 'other'];
   const GRADES = ['C', 'MI', 'MA', 'CR', 'NA'];
   const POINTS = { C: 1, MI: 0.7, MA: 0.3, CR: 0 };
   const CAP = { CR: 49, MA: 89 };
@@ -140,6 +144,54 @@
       return { grade: g, done: d, overdue: !d && DAY_RE.test(g.due || '') && today > g.due, daysLate: !d && today > g.due ? Math.round((Date.parse(today) - Date.parse(g.due)) / 86400000) : 0 };
     }).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.grade.due < b.grade.due ? -1 : 1));
   }
+  // ---------- reclamações de clientes ----------
+  // ID legível e único entre telemóveis: RC-AAMMDD-XXXX (data de recepção + início do uid)
+  const complaintId = c => 'RC-' + String(c.received || '').replace(/-/g, '').slice(2) + '-' + String(c.uid || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
+  function validateComplaint(o) {
+    const e = [];
+    if (!DAY_RE.test(o.received || '')) e.push('received');
+    if (!txt(o.customer)) e.push('customer');
+    if (!txt(o.product)) e.push('product');
+    if (!txt(o.lot)) e.push('lot');
+    if (COMPLAINT_REASONS.indexOf(o.reason) < 0) e.push('reason');
+    if (!txt(o.description)) e.push('description');
+    if (!txt(o.owner)) e.push('owner');
+    if (!DAY_RE.test(o.due || '') || (DAY_RE.test(o.received || '') && o.due < o.received)) e.push('due');
+    if (!txt(o.by)) e.push('by');
+    return e;
+  }
+  // Seguimento: pelo menos um campo; fechar exige correcção e prevenção (já registadas ou neste registo) e a verificação da eficácia
+  function validateComplaintUpd(o, c) {
+    const e = [];
+    if (!c) e.push('complaint');
+    const has = k => !!(txt(o[k]) || (c && txt(c[k])));
+    if (!txt(o.remedy) && !txt(o.further) && !txt(o.prevention) && o.status !== 'closed') e.push('remedy');
+    if (o.status === 'closed') {
+      if (!has('remedy')) e.push('remedy');
+      if (!has('prevention')) e.push('prevention');
+      if (!txt(o.verification)) e.push('verification');
+    }
+    if (!txt(o.by)) e.push('by');
+    return e;
+  }
+  // Estado de cada reclamação: campos de seguimento = o último texto registado de cada um; fechada pelo último 'closed'
+  function complaints(entries, today) {
+    const E = effective(entries);
+    const ups = E.filter(e => e.kind === 'complaintUpd');
+    return E.filter(e => e.kind === 'complaint').map(c => {
+      const s = { remedy: '', further: '', prevention: '', status: 'open', verification: '', closedOn: null, closedBy: null };
+      const mine = ups.filter(u => u.complaintUid === c.uid);
+      mine.forEach(u => {
+        ['remedy', 'further', 'prevention'].forEach(k => { if (txt(u[k])) s[k] = txt(u[k]); });
+        if (u.status === 'closed') { s.status = 'closed'; s.verification = txt(u.verification); s.closedOn = u.date || null; s.closedBy = u.by; }
+        else if (u.status === 'open') s.status = 'open';
+      });
+      const open = s.status !== 'closed';
+      return Object.assign({ complaint: c, id: complaintId(c), uid: c.uid, updates: mine, open, overdue: open && DAY_RE.test(c.due || '') && today > c.due,
+        daysOpen: DAY_RE.test(c.received || '') ? Math.round((Date.parse(open ? today : (s.closedOn || today)) - Date.parse(c.received)) / 86400000) : null }, s);
+    }).sort((a, b) => (a.open === b.open ? 0 : a.open ? -1 : 1) || (a.complaint.received < b.complaint.received ? 1 : -1));
+  }
+
   // Avisos: mês anterior por fechar depois do dia 10; acções em atraso; documentos com revisão em atraso; Crítica no último mês fechado
   function warnings(entries, reqs, area, today) {
     const w = [];
@@ -150,10 +202,12 @@
     docs(entries, today).filter(d => d.state === 'overdue').forEach(d => w.push({ type: 'doc_review', level: 'warn', code: d.code, title: d.doc.title, nextReview: d.nextReview }));
     const S = monthState(entries, prev);
     if (S.closed && S.close.counts && S.close.counts.CR) w.push({ type: 'month_critical', level: 'bad', month: prev, n: S.close.counts.CR });
+    complaints(entries, today).filter(c => c.open && (c.overdue || c.complaint.foodSafety)).forEach(c => w.push({ type: c.complaint.foodSafety ? 'complaint_fs' : 'complaint_overdue',
+      level: c.complaint.foodSafety || c.overdue ? 'bad' : 'warn', id: c.id, customer: c.complaint.customer, due: c.complaint.due, overdue: c.overdue }));
     return w;
   }
 
-  const api = { KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, monthOf, addMonths, addMonthsDay, effective, applicable,
-    validateGrade, validateDoc, docs, docCoverage, grades, score, bandOf, monthState, actions, warnings };
+  const api = { KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, COMPLAINT_REASONS, monthOf, addMonths, addMonthsDay, effective, applicable,
+    validateGrade, validateDoc, docs, docCoverage, grades, score, bandOf, monthState, actions, complaintId, validateComplaint, validateComplaintUpd, complaints, warnings };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Fssc = api;
 })(typeof window !== 'undefined' ? window : this);
