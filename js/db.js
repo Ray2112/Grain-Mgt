@@ -4,8 +4,8 @@
 (function (root) {
   'use strict';
   const DB_NAME = 'moagem-app';
-  const DB_VERSION = 4;   // v4 (app 0.8.0): + maint (manutenção, chave uid)
-  const STORES = ['lots', 'events', 'settings', 'monitor', 'sevents', 'maint'];
+  const DB_VERSION = 5;   // v4 (app 0.8.0): + maint (manutenção, chave uid); v5 (app 0.8.0): + fssc (conformidade FSSC 22000, chave uid)
+  const STORES = ['lots', 'events', 'settings', 'monitor', 'sevents', 'maint', 'fssc'];
   let dbp = null;
 
   function open() {
@@ -21,6 +21,7 @@
         if (!db.objectStoreNames.contains('monitor')) db.createObjectStore('monitor', { keyPath: 'seq', autoIncrement: true });
         if (!db.objectStoreNames.contains('sevents')) db.createObjectStore('sevents', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('maint')) db.createObjectStore('maint', { keyPath: 'uid' });
+        if (!db.objectStoreNames.contains('fssc')) db.createObjectStore('fssc', { keyPath: 'uid' });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
@@ -78,7 +79,7 @@
     setSetting: function (key, value) { return DB.put('settings', { key: key, value: value }); },
     exportAll: function () {
       return Promise.all(STORES.map(DB.all)).then(function (r) {
-        return { app: 'moagem-app', format: 4, exportedAt: new Date().toISOString(), lots: r[0], events: r[1], settings: r[2], monitor: r[3], sevents: r[4], maint: r[5] };
+        return { app: 'moagem-app', format: 4, exportedAt: new Date().toISOString(), lots: r[0], events: r[1], settings: r[2], monitor: r[3], sevents: r[4], maint: r[5], fssc: r[6] };
       });
     },
     // Restaurar cópia de segurança: substitui tudo / Restore backup: replaces everything

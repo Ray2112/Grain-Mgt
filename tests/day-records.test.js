@@ -30,9 +30,9 @@ assert.deepStrictEqual(Object.keys(b.files), ['2026-10-24', '2026-10-25']);
 const f = b.files['2026-10-24'].file;
 assert.strictEqual(f.kind, 'grain-mgt-day');
 assert.strictEqual(f.writer, 'grain-mgt');
-assert.deepStrictEqual(Object.keys(f.records), ['lots', 'events', 'monitor', 'sevents', 'maint']);   // 0.8.0: + maint (ficheiro schema 2)
+assert.deepStrictEqual(Object.keys(f.records), ['lots', 'events', 'monitor', 'sevents', 'maint', 'fssc']);   // 0.8.0: + maint, fssc (ficheiro schema 2)
 assert.deepStrictEqual(f.records.events.map(e => e.uid), ['e1', 'e2'], 'ordenado por uid; OUT de madrugada fica no dia');
-assert.deepStrictEqual(f.manifest.counts, { lots: 1, events: 2, monitor: 1, sevents: 0, maint: 0 });
+assert.deepStrictEqual(f.manifest.counts, { lots: 1, events: 2, monitor: 1, sevents: 0, maint: 0, fssc: 0 });
 assert.deepStrictEqual(f.manifest.shifts, { D: 2, N: 2, none: 0 });
 assert.ok(!('settings' in f.records), 'definições (PIN) nunca vão no ficheiro');
 assert.deepStrictEqual(b.undated, { events: 1 });

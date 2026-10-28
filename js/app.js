@@ -150,7 +150,7 @@
   // ---------------- casca / shell ----------------
   // Linhas de moagem e bins de milho sujo (B01–B04, mestre na app de Registos de QC) / mill lines and dirty-maize bins
   const LINES = ['C', 'D'], DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'];
-  const TITLES = { intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', maint: 'maint_title', export: 'export_title', settings: 'settings_title' };
+  const TITLES = { intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', maint: 'maint_title', fssc: 'fssc_title', export: 'export_title', settings: 'settings_title' };
   function renderShell() {
     document.title = t('app_name');
     $('#title').textContent = t(TITLES[S.tab]);
@@ -169,10 +169,12 @@
     if (S.tab === 'silos') main.innerHTML = silosView();
     if (S.tab === 'insp') main.innerHTML = inspView();
     if (S.tab === 'maint') main.innerHTML = MU.view();
+    if (S.tab === 'fssc') main.innerHTML = FU.view();
     if (S.tab === 'export') main.innerHTML = exportView();
     // Avisos de manutenção (preventiva em atraso) nos outros separadores; no separador Manutenção já aparecem no topo
     if (S.tab !== 'maint') MU.warnings().forEach(function (w) { main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint">🔧 ' + esc(MU.warnText(w)) + '</div>'); });
     // Sensores de temperatura: um aviso com o total de avarias/suspeitas por reconhecer (detalhe em Manutenção → Sensores)
+    if (S.tab !== 'fssc') FU.warnings().forEach(function (w) { main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="fssc">✔ ' + esc(FU.warnText(w)) + '</div>'); });
     const sw = S.tab === 'maint' ? [] : sensorWarnings().filter(function (w) { return !w.ack; });
     if (sw.length) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint" data-mact="tab" data-v="sensors">🌡 ' + esc(t('sn_banner').replace('{n}', sw.filter(function (w) { return !w.suspect; }).length).replace('{m}', sw.filter(function (w) { return w.suspect; }).length)) + '</div>');
     if (S.tab === 'settings') main.innerHTML = settingsView();
@@ -1578,9 +1580,16 @@
     setOperator: function (n) { if (S.settings && S.settings.operator !== n) { S.settings.operator = n; saveSettings(); } },
     extraTabs: [{ id: 'sensors', label: function () { return t('sn_tab'); }, view: sensorsView }] });
 
+  // ---------------- conformidade FSSC 22000 (js/fssc-ui.js, igual na Prodn-Mgt) ----------------
+  // Área: recepção e silos; pontuação separada da Prodn-Mgt (Zhax, 28-10-2026). PIN de supervisor desta app.
+  const FU = window.FsscUI({ lang: function () { return I18n.lang; }, esc: esc, toast: toast, render: render, area: 'grain',
+    load: function () { return DB.all('fssc'); }, add: function (rec) { return DB.add('fssc', rec); },
+    operator: function () { return (S.settings && S.settings.operator) || ''; },
+    pin: function (pin) { return checkPin(pin).then(function (r) { return { ok: r === 'ok', msg: r === 'ok' ? '' : pinMsg(r) }; }); } });
+
   // ---------------- arranque / start ----------------
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
-  load().then(MU.reload).then(function () {
+  load().then(MU.reload).then(FU.reload).then(function () {
     render(); DB.persist();
     refreshTemps(false); setInterval(function () { refreshTemps(false); }, 3600000);
     const R = window.RecSync;

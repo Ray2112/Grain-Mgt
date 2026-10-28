@@ -4,8 +4,8 @@
 // Só regras puras: não lê a base de dados nem contacta a rede. O envio fica em rec-sync.js.
 (function (root) {
   'use strict';
-  const FILE_SCHEMA = 2;   // 2 (app 0.8.0): + maint
-  const STORES = ['lots', 'events', 'monitor', 'sevents', 'maint'];   // chave no pipeline: uid (todas)
+  const FILE_SCHEMA = 2;   // 2 (app 0.8.0): + maint, fssc
+  const STORES = ['lots', 'events', 'monitor', 'sevents', 'maint', 'fssc'];   // chave no pipeline: uid (todas)
   const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
   const TIME_RE = /^\d{2}:\d{2}$/;
   const keyOf = rec => String(rec.uid);
