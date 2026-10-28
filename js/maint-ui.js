@@ -4,6 +4,7 @@
  *   C.load() -> Promise<[registos da loja 'maint']> · C.add(rec) -> Promise (grava registo novo; a app carimba uid, dispositivo, teste)
  *   C.codes() lista de códigos FMO · C.codesSource() fonte da lista · C.lines() [{id, name}] · C.shiftNow() {day, period} · C.crewOf(day, period)
  *   C.operator() · C.setOperator(nome) · C.kpiNote (true só na Prodn-Mgt: nota sobre o diário de turno)
+ *   C.extraTabs [{id, label(), view()}] separadores próprios da app (Grain-Mgt: Sensores); os seus botões usam os atributos da app
  *   Rolos (só Prodn-Mgt, C.rolls = true): C.passages() pares de rolos (js/roll-passages.js) · C.rollDefaults() horas ideais por grupo
  *   · C.rollHours() roll-hours.json (ou null) · C.rollHoursRefresh() -> Promise<bool> · C.checkPin(pin) -> {ok} · C.pinMsg(r)
  * Eventos próprios (data-mact, data-mf, data-mp); não usa os atributos das apps. */
@@ -158,15 +159,17 @@ window.MaintUI = function (C) {
   // ---------- vista ----------
   function view() {
     if (!st.loaded) { reload().then(C.render); return `<section class="card"><p>${esc(t('loading'))}</p></section>`; }
-    const tabs = ['shift', 'stops', 'work', 'pm'].concat(C.rolls ? ['rolls'] : []).concat(['cons', 'notes']);
+    const extra = C.extraTabs || [];   // separadores próprios da app (ex.: Sensores na Grain-Mgt): [{id, label(), view()}]
+    const tabs = ['shift', 'stops', 'work', 'pm'].concat(C.rolls ? ['rolls'] : []).concat(extra.map(x => x.id)).concat(['cons', 'notes']);
     if (tabs.indexOf(st.tab) < 0 && !(st.tab === 'rollset' && C.rolls)) st.tab = 'shift';
     const s = sh();
     const head = `<section class="card"><h2>${esc(t('title'))}</h2>
-      <div class="mt-tabs">${tabs.map(k => `<button type="button" class="btn small ${st.tab === k ? 'primary' : ''}" data-mact="tab" data-v="${k}">${esc(t('t_' + k))}</button>`).join('')}</div>
-      ${st.tab === 'pm' || st.tab === 'rolls' || st.tab === 'rollset' ? '' : `<div class="grid2">${fld(t('prodDay'), `<input type="date" id="mDay" value="${esc(s.day)}">`)}
+      <div class="mt-tabs">${tabs.map(k => { const x = extra.find(y => y.id === k); return `<button type="button" class="btn small ${st.tab === k ? 'primary' : ''}" data-mact="tab" data-v="${esc(k)}">${esc(x ? x.label() : t('t_' + k))}</button>`; }).join('')}</div>
+      ${st.tab === 'pm' || st.tab === 'rolls' || st.tab === 'rollset' || extra.some(x => x.id === st.tab) ? '' : `<div class="grid2">${fld(t('prodDay'), `<input type="date" id="mDay" value="${esc(s.day)}">`)}
         ${fld(t('period'), `<select id="mPeriod">${opt('D', s.period, t('p_D'))}${opt('N', s.period, t('p_N'))}</select>`)}</div>
         <p class="mt-sub">${esc(t('crew'))} ${esc(C.crewOf(s.day, s.period) || '—')}</p>`}</section>`;
-    const body = { shift: vShift, stops: vStops, work: vWork, pm: vPm, rolls: vRolls, rollset: vRollSet, cons: vCons, notes: vNotes }[st.tab]();
+    const ex = extra.find(x => x.id === st.tab);
+    const body = ex ? ex.view() : { shift: vShift, stops: vStops, work: vWork, pm: vPm, rolls: vRolls, rollset: vRollSet, cons: vCons, notes: vNotes }[st.tab]();
     return banners() + head + body;
   }
   function voidBox(uid) {
@@ -583,5 +586,5 @@ window.MaintUI = function (C) {
     document.head.appendChild(s);
   }
 
-  return { view, reload, warnings, warnText, banners, t, setTab: v => { st.tab = v; } };
+  return { view, reload, warnings, warnText, banners, t, setTab: v => { st.tab = v; }, entries: () => st.entries, add: rec => save(rec) };
 };

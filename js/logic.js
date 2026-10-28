@@ -335,9 +335,15 @@
     const st = o.st || {}, th = storeTh(st);
     const recs = (o.recs || []).filter(function (r) { return r.silo === o.siloId && (!o.emptyStamp || recStamp(r) > o.emptyStamp); })
       .sort(function (a, b) { return recStamp(a) < recStamp(b) ? -1 : 1; });
-    // Temperatura: inspecção semanal com 3 pontos (base, meio, topo) — sem rondas de turno (v1.x)
+    // Temperatura: inspecção semanal com 3 pontos (base, meio, topo) e, desde a v0.8.0, leituras dos sensores (SENSOR,
+    // uma por relatório do sistema de monitorização; contam como leituras SOP-OPS-002 — Zhax, 28-10-2026).
+    // O ΔT compara com a leitura anterior do mesmo tipo (os pontos do sensor não são os da inspecção manual).
     const weeks = recs.filter(function (r) { return r.kind === 'WEEKLY'; });
-    const temps = weeks.filter(function (w) { return Array.isArray(w.points) && w.points.length > 0; });
+    const seenRep = {};
+    const sensors = recs.filter(function (r) { if (r.kind !== 'SENSOR' || seenRep[r.reportId]) return false; seenRep[r.reportId] = 1; return true; });
+    const temps = weeks.filter(function (w) { return Array.isArray(w.points) && w.points.length > 0; }).concat(sensors)
+      .sort(function (a, b) { return recStamp(a) < recStamp(b) ? -1 : 1; });
+    const prevOf = function (i) { for (let j = i - 1; j >= 0; j--) if (temps[j].kind === temps[i].kind) return temps[j]; return null; };
     const treats = recs.filter(function (r) { return r.kind === 'TREAT'; });
     const disps = recs.filter(function (r) { return r.kind === 'DISP'; });
     const drivers = [];
@@ -345,7 +351,7 @@
     const lastTmp = temps[temps.length - 1] || null;
     let ev = null;
     if (lastTmp) {
-      ev = roundEval(lastTmp, temps[temps.length - 2], st);
+      ev = roundEval(lastTmp, prevOf(temps.length - 1), st);
       add('temp', ev.lv.temp, ev.maxT); add('dt', ev.lv.dt, ev.maxDT); add('odour', ev.lv.odour, lastTmp.odour); add('fault', ev.lv.fault, null);
     }
     const lastW = weeks[weeks.length - 1] || null, prevW = weeks[weeks.length - 2] || null;
@@ -365,7 +371,7 @@
     const noData = !lastTmp && !lastW && !drivers.length;
     // Retenção: leitura Vermelha/Emergência depois da última disposição do CQ
     let lastRed = null;
-    temps.forEach(function (r, i) { if (roundEval(r, temps[i - 1], st).level >= 4) lastRed = recStamp(r); });
+    temps.forEach(function (r, i) { if (roundEval(r, prevOf(i), st).level >= 4) lastRed = recStamp(r); });
     weeks.forEach(function (w) { if (th.m && num(w.moist) !== null && bandMoist(num(w.moist), th.m) >= 4) lastRed = recStamp(w); });
     const lastD = disps[disps.length - 1] || null;
     const dispValid = lastD && lastRed && recStamp(lastD) > lastRed;
@@ -392,9 +398,9 @@
     if (d.monitor !== undefined && !Array.isArray(d.monitor)) return false;
     if (d.sevents !== undefined && !Array.isArray(d.sevents)) return false;
     if (d.maint !== undefined && !Array.isArray(d.maint)) return false;
-    const MAINT_KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'consumable', 'note', 'void'];   // = Maint.KINDS (js/maint.js)
+    const MAINT_KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'note', 'void'];   // = Maint.KINDS (js/maint.js)
     if (!(d.maint || []).every(function (m) { return m && typeof m.uid === 'string' && MAINT_KINDS.indexOf(m.kind) >= 0; })) return false;
-    const okMon = (d.monitor || []).every(function (r) { return r && ['ROUND', 'WEEKLY', 'TREAT', 'DISP'].indexOf(r.kind) >= 0 && typeof r.silo === 'string'; });
+    const okMon = (d.monitor || []).every(function (r) { return r && ['ROUND', 'WEEKLY', 'TREAT', 'DISP', 'OVERRIDE', 'SENSOR'].indexOf(r.kind) >= 0 && typeof r.silo === 'string'; });
     const okSev = (d.sevents || []).every(function (e) { return e && typeof e.id === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(e.id) && ['OPEN', 'CLOSED'].indexOf(e.status) >= 0; });
     if (!okMon || !okSev) return false;
     const okLots = d.lots.every(function (l) { return l && typeof l.id === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(l.id) && STATUS.indexOf(l.status) >= 0 && (l.grade == null || LOT_GRADES.indexOf(l.grade) >= 0); });

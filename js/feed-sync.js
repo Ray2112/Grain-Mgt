@@ -69,9 +69,20 @@
     store.set(LAST, status);
     return status;
   }
+  // Outro ficheiro JSON com a mesma sessão de leitura (ex.: silo-temps.json dos sensores de temperatura, v0.8.0)
+  async function fetchJson(path) {
+    if (!configured()) throw new Error('NOT_CONFIGURED');
+    const tok = await token();
+    if (!tok) throw new Error('NOT_SIGNED_IN');
+    const req = rd().buildDownloadRequest({ accessToken: tok, path });
+    const r = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
+    if (r.status === 409) throw new Error('FILE_MISSING');
+    if (!r.ok) throw new Error('HTTP_' + r.status);
+    return r.json();
+  }
   // Última cópia guardada neste dispositivo (pode estar antiga; a frescura é avaliada pelo generatedAt).
   const lastStatus = () => store.get(LAST);
 
-  const api = { configured, signedIn, signIn, handleReturn, signOut, fetchStatus, lastStatus };
+  const api = { configured, signedIn, signIn, handleReturn, signOut, fetchStatus, fetchJson, lastStatus };
   root.FeedSync = api;
 })(typeof window !== 'undefined' ? window : this);

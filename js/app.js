@@ -172,6 +172,9 @@
     if (S.tab === 'export') main.innerHTML = exportView();
     // Avisos de manutenção (preventiva em atraso) nos outros separadores; no separador Manutenção já aparecem no topo
     if (S.tab !== 'maint') MU.warnings().forEach(function (w) { main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint">🔧 ' + esc(MU.warnText(w)) + '</div>'); });
+    // Sensores de temperatura: um aviso com o total de avarias/suspeitas por reconhecer (detalhe em Manutenção → Sensores)
+    const sw = S.tab === 'maint' ? [] : sensorWarnings().filter(function (w) { return !w.ack; });
+    if (sw.length) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint" data-mact="tab" data-v="sensors">🌡 ' + esc(t('sn_banner').replace('{n}', sw.filter(function (w) { return !w.suspect; }).length).replace('{m}', sw.filter(function (w) { return w.suspect; }).length)) + '</div>');
     if (S.tab === 'settings') main.innerHTML = settingsView();
     if (S.tab === 'intake' && S.form) updateDyn();
     // Aviso permanente enquanto o modo de teste estiver ligado (os registos novos ficam marcados test:true)
@@ -520,8 +523,11 @@
   }
   function drvText(d, ss) {
     const ev = ss.lastEval || {};
-    if (d.p === 'temp') return t('drv_temp') + ' ' + fmt1(d.v) + ' °C' + (ev.maxPoint ? ' (P' + ev.maxPoint + ')' : '');
-    if (d.p === 'dt') return 'ΔT ' + (d.v > 0 ? '+' : '') + fmt1(d.v) + ' °C' + (ev.dtPoint ? ' (P' + ev.dtPoint + ')' : '');
+    // registos SENSOR: ponto = (cabo − 1) × 8 + sensor
+    const sensRec = ss.lastTemp && ss.lastTemp.kind === 'SENSOR';
+    const pl = function (p) { return sensRec ? t('sn_cable') + ' ' + (Math.floor((p - 1) / 8) + 1) + ' · ' + t('sn_sensor') + ' ' + ((p - 1) % 8 + 1) : 'P' + p; };
+    if (d.p === 'temp') return t('drv_temp') + ' ' + fmt1(d.v) + ' °C' + (ev.maxPoint ? ' (' + pl(ev.maxPoint) + ')' : '') + (sensRec ? ' — ' + t('sn_by') : '');
+    if (d.p === 'dt') return 'ΔT ' + (d.v > 0 ? '+' : '') + fmt1(d.v) + ' °C' + (ev.dtPoint ? ' (' + pl(ev.dtPoint) + ')' : '');
     if (d.p === 'odour') return t('od_' + d.v);
     if (d.p === 'fault') return t('drv_fault');
     if (d.p === 'moist') return t('drv_moist') + ' ' + fmtNum(d.v) + ' %';
@@ -554,7 +560,7 @@
   function silosView() {
     if (!S.settings.silos.length) return '<p class="warn">' + esc(t('no_silos')) + '</p>';
     const lotsById = {}; S.lots.forEach(function (l) { lotsById[l.id] = l; });
-    let h = '<button class="btn primary block" data-action="discharge">' + esc(t('act_out')) + '</button>' + reconCard();
+    let h = '<button class="btn primary block" data-action="discharge">' + esc(t('act_out')) + '</button>' + reconCard() + tempLegend();
     S.settings.silos.forEach(function (s) {
       const ss = siloSt(s), c = { kg: ss.kg, lots: ss.lots };
       const bs = L.binState(s, S.events), cap = bs.cap;
@@ -564,12 +570,13 @@
       const blockOut = ss.held || ss.rejected;
       h += '<div class="card stack"><div class="row"><div class="grow"><div class="big2">' + esc(s.id) + ' ' + lvChip(ss) + '</div><div class="small muted">' + esc(siloDesig(s)) + (ageText(ss) ? ' · ' + esc(ageText(ss)) : '') + '</div></div>' +
         '<div class="right"><div class="strong">' + fmtKg(c.kg) + '</div><div class="small muted">' + (hasCap ? esc(t('of')) + ' ' + fmtKg(cap) + ' · ' + pct + '%' : esc(t('cap_not_set'))) + '</div></div></div>';
-      if (hasCap) h += '<div class="bar' + (full ? ' full' : '') + '"><div style="width:' + pct + '%"></div></div>';
+      const tsc = tempScale(s.id);
+      if (hasCap || tsc) h += '<div class="qtrow"><div class="grow">' + (hasCap ? '<div class="bar' + (full ? ' full' : '') + '"><div style="width:' + pct + '%"></div></div>' : '') + '</div>' + tsc + '</div>';
       if (full) h += '<div class="badge b-REJECTED fit">' + esc(t('silo_full')) + '</div>';
       if (bs.state === 'EMPTY') h += '<div class="badge b-HELD fit">' + esc(t('silo_empty')) + '</div>';
       if (bs.state === 'NEG') h += '<p class="warn small">' + esc(t('negative_stock')) + '</p>';
       if (!S.events.some(function (e) { return e.type === 'OPENING' && e.silo === s.id; })) h += '<button type="button" class="btn small" data-action="silo-opening" data-silo="' + esc(s.id) + '">' + esc(t('act_opening')) + '</button>';
-      if (ss.held) h += '<p class="holdbar">⛔ ' + esc(t('held_banner')) + '</p>';
+      if (ss.held) h += '<p class="holdbar">⛔ ' + esc(t('held_banner')) + '</p><button type="button" class="btn small" data-action="corr-status" data-silo="' + esc(s.id) + '">' + esc(t('corr_status')) + '</button>';
       if (ss.rejected) h += '<p class="holdbar">⛔ ' + esc(t('rejected_banner')) + '</p>';
       h += drvList(ss, 1);
       h += '<details><summary class="small muted">' + esc(t('lots_in_silo')) + ' (' + c.lots.length + ')</summary>' +
@@ -688,6 +695,8 @@
       body = t('moisture') + ' ' + fmtNum(L.num(r.moist)) + ' · ' + t('insects_live') + ' ' + fmtNum(L.num(r.insects), 0) + (r.insectType ? ' (' + r.insectType + ')' : '') + ' · ' + t('damaged') + ' ' + (r.damaged === 'S' ? t('yes') : t('no'));
     } else if (r.kind === 'TREAT') body = r.provider + ' · ' + t('cert') + ' ' + r.cert + (r.method ? ' · ' + r.method : '');
     else if (r.kind === 'DISP') body = t('disp_' + r.decision) + ' — ' + r.basis;
+    else if (r.kind === 'SENSOR') { const th = L.storeTh(S.settings.st).t; lv = th && r.maxT !== null && r.maxT !== undefined ? L.bandTemp(r.maxT, th) : null; body = 'Ø ' + fmt1(r.avgT) + ' · ' + t('sn_max') + ' ' + fmt1(r.maxT) + ' °C'; }
+    else if (r.kind === 'OVERRIDE') body = (r.status === 'HELD' ? t('corr_hold') : t('corr_clear')) + (r.role ? ' · ' + t('role_' + r.role) : '') + ' — ' + (r.reason || '');
     return '<div class="card small"><div class="row"><b class="grow">' + esc(t('k_' + r.kind)) + ' · ' + esc(r.silo) + ' · ' + esc(r.date) + ' ' + esc(r.time) + '</b>' + (lv !== null ? '<span class="badge lv' + lv + '">' + esc(t('lv_' + lv)) + '</span>' : '') + '</div><div class="muted">' + esc(body) + ' · ' + esc(r.by) + '</div>' + (r.notes ? '<div>' + esc(r.notes) + '</div>' : '') + '</div>';
   }
   // Abre ou actualiza o evento Âmbar/Vermelho do silo (passo 10) / open or update the silo event
@@ -807,7 +816,8 @@
         '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
     }
     if (sh.kind === 'override') {
-      h += '<label>' + esc(t('corr_status')) + ' *<select name="status"><option value="">—</option><option value="HELD"' + (sv('status') === 'HELD' ? ' selected' : '') + '>' + esc(t('corr_hold')) + '</option><option value="CLEAR"' + (sv('status') === 'CLEAR' ? ' selected' : '') + '>' + esc(t('corr_clear')) + '</option></select></label>' +
+      h += '<label>' + esc(t('corr_role')) + ' *<select name="role"><option value="">—</option>' + ['QC_SUP', 'PROD_MGR'].map(function (r) { return '<option value="' + r + '"' + (sv('role') === r ? ' selected' : '') + '>' + esc(t('role_' + r)) + '</option>'; }).join('') + '</select></label>' +
+        '<label>' + esc(t('corr_status')) + ' *<select name="status"><option value="">—</option><option value="HELD"' + (sv('status') === 'HELD' ? ' selected' : '') + '>' + esc(t('corr_hold')) + '</option><option value="CLEAR"' + (sv('status') === 'CLEAR' ? ' selected' : '') + '>' + esc(t('corr_clear')) + '</option></select></label>' +
         sInput('reason', t('corr_reason') + ' *') + '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
     }
     if (sh.kind === 'event') {
@@ -1009,12 +1019,12 @@
       return;
     }
     if (sh.kind === 'override') {
-      const st = sv('status'), reason = sv('reason').trim();
-      if (!st) { toast(t('need_fields')); return; }
+      const st = sv('status'), reason = sv('reason').trim(), role = sv('role');
+      if (!st || ['QC_SUP', 'PROD_MGR'].indexOf(role) < 0) { toast(t('need_role')); return; }
       if (!reason) { toast(t('need_reason')); return; }
       checkPin(sv('auth_pin')).then(function (r) {
         if (r !== 'ok') { toast(pinMsg(r)); return; }
-        finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'OVERRIDE', status: st, reason: reason })), who);
+        finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'OVERRIDE', status: st, reason: reason, role: role })), who);
       });
       return;
     }
@@ -1414,6 +1424,148 @@
     if (id === 'protform') protSubmit(e.target);
   });
 
+  // ---------------- sensores de temperatura dos silos (v0.8.0) ----------------
+  // silo-temps.json escrito pelo pipeline FMIP em /Apps/Mill-CD/ a partir dos relatórios RTF do sistema de monitorização
+  // (Dropbox /Temperature Readings/). Lido com a sessão de leitura (a mesma do bins-status). Cada relatório novo cria, em
+  // cada silo com stock e com sensores no grão, um registo SENSOR que conta como leitura SOP-OPS-002 (Zhax, 28-10-2026):
+  // Âmbar+ abre evento, Vermelho retém o silo até disposição do CQ ou correcção de estado (supervisor de CQ / Director de Produção).
+  const X = window.SiloSensors;
+  const TEMPS_KEY = 'grain-mgt.siloTemps.v1';
+  function readTemps() { try { const T = JSON.parse(localStorage.getItem(TEMPS_KEY) || 'null'); return X.valid(T) ? T : null; } catch (e) { return null; } }
+  S.temps = readTemps();
+  S.ackForm = null;
+  const sensorReport = function () { return S.temps ? X.report(S.temps) : null; };
+  function sensorAcks() {
+    const set = new Set();
+    window.Maint.effective(MU.entries()).forEach(function (r) { if (r.kind === 'sensorAck' && r.key) set.add(r.key); });
+    return set;
+  }
+  // Avarias e suspeitas dos sensores + diferenças entre os sensores e o stock da app
+  function sensorWarnings() {
+    const rep = sensorReport(); if (!rep) return [];
+    const acks = sensorAcks();
+    const w = X.warnings(rep, acks);
+    Object.keys(rep.silos).forEach(function (sid) {
+      if (!siloById(sid)) return;
+      const kg = L.siloContents(sid, S.events).kg, cov = rep.silos[sid].coverage;
+      const f = kg > 0 && !cov ? 'no_grain' : (kg <= 0 && cov ? 'grain_empty' : null);
+      if (f) { const key = sid + '|' + f; w.push({ type: f, silo: sid, key: key, ack: acks.has(key), suspect: true }); }
+    });
+    return w;
+  }
+  function sensorText(f) {
+    const at = f.c ? (t('sn_cable') + ' ' + f.c + (f.s ? ' · ' + t('sn_sensor') + ' ' + f.s : '')) : '';
+    if (f.type === 'cable') return f.silo + ' ' + at + ': ' + t('sn_f_cable');
+    if (f.type === 'error') return f.silo + ' ' + at + ': ' + t('sn_f_error');
+    if (f.type === 'range') return f.silo + ' ' + at + ': ' + t('sn_f_range') + (f.t !== null && f.t !== undefined ? ' (' + fmt1(f.t) + ' °C)' : '');
+    if (f.type === 'jump') return f.silo + ' ' + at + ': ' + t('sn_f_jump') + ' (' + fmt1(f.prev) + ' → ' + fmt1(f.t) + ' °C)';
+    if (f.type === 'stuck') return f.silo + ' ' + at + ': ' + t('sn_f_stuck') + ' (' + fmt1(f.t) + ' °C, ' + f.n + ' ' + t('sn_reports') + ')';
+    return f.silo + ': ' + t('sn_f_' + f.type);
+  }
+  function refreshTemps(manual) {
+    const F = window.FeedSync, cfg = window.FeedConfig || {};
+    if (!F || !cfg.siloTempsPath || !F.signedIn()) { if (manual) toast(t('sn_signin')); return Promise.resolve(false); }
+    return F.fetchJson(cfg.siloTempsPath).then(function (T) {
+      if (!X.valid(T)) throw new Error('INVALID');
+      S.temps = T;
+      try { localStorage.setItem(TEMPS_KEY, JSON.stringify(T)); } catch (e) { /* sem espaço: só em memória */ }
+      return importSensors();
+    }).then(function (n) { if (manual) toast(t('sn_updated') + (n ? ' · ' + n + ' ' + t('sn_records') : '')); render(); return true; })
+      .catch(function (e) { if (manual) toast(t('sn_fail') + ' (' + e.message + ')'); return false; });
+  }
+  // Relatórios ainda não importados: na primeira vez só o mais recente; depois, todos os mais recentes que o último importado.
+  function importSensors() {
+    const T = S.temps; if (!T || !T.reports.length) return Promise.resolve(0);
+    const have = S.mon.filter(function (r) { return r.kind === 'SENSOR' && r.reportId; }).map(function (r) { return r.reportId; }).sort();
+    const last = have[have.length - 1] || null;
+    const todo = last ? T.reports.filter(function (r) { return r.id > last; }) : T.reports.slice(-1);
+    const items = [], touched = [];
+    todo.forEach(function (r) {
+      const i = T.reports.indexOf(r), prev = T.reports[i - 1] || null;
+      Object.keys(r.silos).forEach(function (sid) {
+        if (!siloById(sid) || !(L.siloContents(sid, S.events).kg > 0)) return;
+        const e = X.evalSilo(r.silos[sid], prev ? prev.silos[sid] : null);
+        if (!e.coverage) return;
+        items.push({ store: 'monitor', obj: { kind: 'SENSOR', silo: sid, date: r.date, time: r.time, reportId: r.id, points: X.sopPoints(r.silos[sid]),
+          maxT: e.maxT, avgT: e.avgT, by: t('sn_by'), notes: '', createdAt: new Date().toISOString() } });
+        if (touched.indexOf(sid) < 0) touched.push(sid);
+      });
+    });
+    if (!items.length) return Promise.resolve(0);
+    return DB.addMany(items).then(load).then(function () {
+      return touched.reduce(function (p, sid) { return p.then(function () { return syncEvent(sid); }); }, Promise.resolve());
+    }).then(load).then(function () { return items.length; });
+  }
+  // Escala vertical da temperatura do silo (topo → base), cores das faixas SOP-OPS-002 (Tabela 5.1)
+  function tempScale(sid) {
+    const rep = sensorReport(); if (!rep || !rep.silos[sid]) return '';
+    const e = rep.silos[sid], th = L.storeTh(S.settings.st).t;
+    const cells = e.levels.map(function (lv) {
+      const cls = lv.avg === null ? (lv.air ? 'tsc-air' : 'tsc-none') : (th ? 'lv' + L.bandTemp(lv.avg, th) : 'tsc-none');
+      return '<div class="tsc-cell ' + cls + '" title="' + esc(t('sn_sensor') + ' ' + lv.level + ': ' + (lv.avg === null ? (lv.air ? t('sn_air') : '—') : fmt1(lv.avg) + ' °C')) + '"></div>';
+    }).join('');
+    const txt = e.coverage ? '<div class="strong">Ø ' + fmt1(e.avgT) + ' °C</div><div class="small muted">' + esc(t('sn_max')) + ' ' + fmt1(e.maxT) + ' °C</div>'
+      : '<div class="small muted">' + esc(t('sn_no_grain')) + '</div>';
+    return '<div class="tsc" aria-label="' + esc(t('sn_scale')) + '"><div class="tsc-col"><span class="tsc-lb">' + esc(t('pt_top')) + '</span>' + cells + '<span class="tsc-lb">' + esc(t('pt_base')) + '</span></div><div class="tsc-txt">' + txt +
+      '<div class="small muted">' + esc(rep.date.slice(8, 10) + '/' + rep.date.slice(5, 7) + ' ' + rep.time) + '</div></div></div>';
+  }
+  function tempLegend() {
+    const th = L.storeTh(S.settings.st).t; if (!th || !sensorReport()) return '';
+    const b = [['lv0', '≤ ' + fmt1(th[0])], ['lv1', '≤ ' + fmt1(th[1])], ['lv2', '≤ ' + fmt1(th[2])], ['lv4', '≤ ' + fmt1(th[3])], ['lv5', '> ' + fmt1(th[3])], ['tsc-air', t('sn_air')]];
+    return '<div class="tsc-leg small">' + esc(t('sn_legend')) + ': ' + b.map(function (x) { return '<span><i class="' + x[0] + '"></i>' + esc(x[1]) + (x[0] === 'tsc-air' ? '' : ' °C') + '</span>'; }).join('') + '</div>';
+  }
+  // Separador Manutenção → Sensores
+  function sensorsView() {
+    const rep = sensorReport(), th = L.storeTh(S.settings.st).t;
+    let h = '<section class="card stack"><h3>' + esc(t('sn_title')) + '</h3>';
+    if (!rep) return h + '<p class="muted">' + esc(t('sn_none')) + '</p><button class="btn" data-action="temps-refresh">' + esc(t('sn_refresh')) + '</button></section>';
+    h += '<p class="small">' + esc(t('sn_report')) + ' <b>' + esc(rep.date + ' ' + rep.time) + '</b>' + (rep.ambient !== null ? ' · ' + esc(t('sn_ambient')) + ' ' + fmt1(rep.ambient) + ' °C' : '') + ' · ' + S.temps.reports.length + ' ' + esc(t('sn_reports')) + '</p>' +
+      '<p class="small muted">' + esc(t('sn_rules')) + '</p><button class="btn small" data-action="temps-refresh">' + esc(t('sn_refresh')) + '</button></section>';
+    const ws = sensorWarnings();
+    const item = function (f) {
+      const form = S.ackForm && S.ackForm.key === f.key;
+      return '<div class="card small ' + (f.ack ? 'muted' : '') + '"><div class="row"><span class="grow">' + (f.suspect ? '⚠ ' : '✖ ') + esc(sensorText(f)) + '</span>' +
+        (f.ack ? '<span class="badge b-none">' + esc(t('sn_acked')) + '</span>' : (form ? '' : '<button type="button" class="btn small" data-action="temps-ack" data-key="' + esc(f.key) + '" data-silo="' + esc(f.silo) + '">' + esc(t('sn_ack')) + '</button>')) + '</div>' +
+        (form ? '<div class="stack"><label>' + esc(t('corr_reason')) + ' *<input id="ack_reason" value="' + esc(S.ackForm.reason) + '"></label><label>' + esc(t('corr_by')) + ' *<input id="ack_by" value="' + esc(S.ackForm.by) + '"></label>' +
+          '<div class="grid2"><button type="button" class="btn" data-action="temps-ack-cancel">' + esc(t('cancel')) + '</button><button type="button" class="btn primary" data-action="temps-ack-save">' + esc(t('save')) + '</button></div></div>' : '') + '</div>';
+    };
+    const open = ws.filter(function (f) { return !f.ack; }), acked = ws.filter(function (f) { return f.ack; });
+    h += '<h2>' + esc(t('sn_faults')) + ' (' + open.length + ')</h2>' + (open.length ? open.map(item).join('') : '<p class="muted">' + esc(t('sn_no_faults')) + '</p>');
+    if (acked.length) h += '<details><summary class="small muted">' + esc(t('sn_acked')) + ' (' + acked.length + ')</summary>' + acked.map(item).join('') + '</details>';
+    h += '<h2>' + esc(t('sn_silos')) + '</h2>' + tempLegend();
+    Object.keys(rep.silos).sort().forEach(function (sid) {
+      const e = rep.silos[sid], band = th && e.maxT !== null ? L.bandTemp(e.maxT, th) : null;
+      const grid = rep && S.temps.reports[S.temps.reports.length - 1].silos[sid];
+      h += '<details class="card"><summary class="row"><b class="grow">' + esc(sid) + '</b>' + (band !== null ? '<span class="badge lv' + band + '">' + esc(t('lv_' + band)) + '</span>' : '<span class="badge b-none">' + esc(t('sn_no_grain')) + '</span>') +
+        '<span class="small">' + (e.coverage ? 'Ø ' + fmt1(e.avgT) + ' · ' + esc(t('sn_max')) + ' ' + fmt1(e.maxT) + ' °C' : '') + (e.faults.length + e.cableFaults.length ? ' · ✖' + (e.faults.length + e.cableFaults.length) : '') + (e.suspects.length ? ' · ⚠' + e.suspects.length : '') + '</span></summary>' +
+        '<div class="tablewrap"><table class="tsc-grid"><tr><th></th>' + [1, 2, 3, 4, 5, 6, 7].map(function (s) { return '<th>' + s + '</th>'; }).join('') + '</tr>' +
+        grid.map(function (sens, ci) {
+          return '<tr><th>' + esc(t('sn_cable')) + ' ' + (ci + 1) + '</th>' + [0, 1, 2, 3, 4, 5, 6].map(function (si) {
+            const x = sens[si]; if (!x) return '<td></td>';
+            if (x.z === 'e') return '<td class="tsc-err">✖</td>';
+            const g = x.z === 'g' || x.z === 'a';
+            return '<td class="' + (g && th ? 'lv' + L.bandTemp(x.t, th) : 'tsc-air') + '">' + fmt1(x.t) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</table></div><p class="small muted">' + esc(t('sn_grid_note')) + '</p></details>';
+    });
+    return h;
+  }
+  function ackSave() {
+    const f = S.ackForm; if (!f) return;
+    const reason = ($('#ack_reason') || {}).value || '', by = ($('#ack_by') || {}).value || '';
+    if (!reason.trim() || !by.trim()) { toast(t('need_reason_by')); return; }
+    S.ackForm = null;
+    MU.add({ kind: 'sensorAck', key: f.key, silo: f.silo, reason: reason.trim(), by: by.trim() });
+  }
+  document.addEventListener('click', function (ev) {
+    const b = ev.target.closest('[data-action^="temps-"]'); if (!b) return;
+    const a = b.dataset.action;
+    if (a === 'temps-refresh') refreshTemps(true);
+    if (a === 'temps-ack') { S.ackForm = { key: b.dataset.key, silo: b.dataset.silo, reason: '', by: (S.settings && S.settings.operator) || '' }; render(); }
+    if (a === 'temps-ack-cancel') { S.ackForm = null; render(); }
+    if (a === 'temps-ack-save') ackSave();
+  });
+
   // ---------------- manutenção / maintenance (js/maint-ui.js, igual na Prodn-Mgt) ----------------
   // Mesma lista de códigos FMO que a Prodn-Mgt (js/maint-codes.js). Sem rolos (só na Prodn-Mgt).
   const MAINT_LINES = [{ id: 'INTAKE', name: 'Recepção / Intake' }, { id: 'SILOS', name: 'Silos' }, { id: 'C', name: 'Linha C' }, { id: 'D', name: 'Linha D' }];
@@ -1423,12 +1575,14 @@
     shiftNow: function () { const sh = L.shiftOf(L.today(), L.nowTime()); return { day: sh.date, period: sh.window }; },
     crewOf: function (day, period) { return L.crewOf(day, period === 'N' ? '20:00' : '08:00'); },
     operator: function () { return (S.settings && S.settings.operator) || ''; },
-    setOperator: function (n) { if (S.settings && S.settings.operator !== n) { S.settings.operator = n; saveSettings(); } } });
+    setOperator: function (n) { if (S.settings && S.settings.operator !== n) { S.settings.operator = n; saveSettings(); } },
+    extraTabs: [{ id: 'sensors', label: function () { return t('sn_tab'); }, view: sensorsView }] });
 
   // ---------------- arranque / start ----------------
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
   load().then(MU.reload).then(function () {
     render(); DB.persist();
+    refreshTemps(false); setInterval(function () { refreshTemps(false); }, 3600000);
     const R = window.RecSync;
     if (R) { R.setContext({ deviceId: S.settings.deviceId, site: S.settings.site || '' }); DB.onWrite(R.schedule); }
     (R ? R.handleReturn() : Promise.resolve(null)).then(function (r) {
@@ -1437,5 +1591,5 @@
     }).then(function () { if (R) R.schedule(); });
   });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
-  window.__app = { S: S }; // apenas para testes / for tests only
+  window.__app = { S: S, importSensors: importSensors, render: render }; // apenas para testes / for tests only
 })();

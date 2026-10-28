@@ -8,10 +8,19 @@
 > - **Preventiva semanal:** progresso e aviso de atraso, também no topo dos outros separadores.
 > - **Consumíveis por turno.**
 > - **Notas:** observações, requisitos e outra informação.
+> - **Sensores de temperatura:** os relatórios do sistema de monitorização (Dropbox /Temperature Readings/) chegam pelo ficheiro silo-temps.json, lido com a ligação de leitura do Dropbox.
+>   - Cada relatório novo conta como leitura SOP-OPS-002: Âmbar abre evento; Vermelho retém o silo.
+>   - O supervisor de CQ ou o Director de Produção podem corrigir o estado, com PIN, função e motivo.
+>   - Em Manutenção → Sensores ficam as avarias e as leituras suspeitas dos sensores, que se podem reconhecer.
+>   - Em Silos, uma escala de temperatura do topo à base, ao lado da quantidade.
 >
 > Os registos vão no ficheiro diário (schema 2). Os rolos ficam só na Prodn-Mgt.
 >
-> *EN:* a new **Maintenance** tab: shift, stoppages (same FMO code list as Prodn-Mgt), interventions, weekly preventive jobs with overdue warnings, consumables per shift, and notes.
+> *EN:* a new **Maintenance** tab: shift, stoppages (same FMO code list as Prodn-Mgt), interventions, weekly preventive jobs with overdue warnings, consumables per shift, and notes. **Temperature sensors:**
+> - Monitoring-system reports arrive in silo-temps.json and count as SOP-OPS-002 readings: Amber opens an event and Red holds the silo.
+> - The QC supervisor or the Production Manager can override, with the PIN.
+> - Maintenance → Sensors lists sensor faults and suspect readings.
+> - The Silos tab shows a top-to-base temperature scale next to the quantity.
 
 > **v0.7.0 (26-10-2026) — envio dos registos para o Dropbox (FMIP).** Definições → "Ligar envio ao Dropbox" (app de escrita Mill-App-Sync, separada da leitura do ficheiro das bins). Depois de cada gravação, ao abrir a app e a cada 15 min, envia um ficheiro por dia de produção (07:00–07:00) para `/Apps/Mill-App-Sync/records/AAAA-MM-DD_FMO_GrainMgt.json`: lotes, movimentos dos silos, monitorização e eventos, com manifesto. Depois das 07:00 o dia terminado é fechado (reenviado; vazio se não houver registos). Registos em modo de teste vão para `/records-test/`. Estado e falhas em Definições; "Enviar agora" para repetir. / Settings → "Ligar envio ao Dropbox": daily record files to `/Apps/Mill-App-Sync/records/`, closed after 07:00.
 

@@ -10,6 +10,7 @@
  *   rollMeasure — diâmetro de cada rolo do par (rápido e lento), em mm (só Prodn-Mgt)
  *   brushCheck  — estado das escovas do par (bom | gasto | crítico | em falta) (só Prodn-Mgt)
  *   rollConfig  — Definições dos rolos: horas ideais por passagem, ou IDs dos rolos de um par (com PIN; só Prodn-Mgt)
+ *   sensorAck   — defeito de sensor de temperatura já conhecido (silo, cabo, sensor; só Grain-Mgt): sai do aviso do topo
  *   consumable  — consumível pedido/usado no turno
  *   note        — informação adicional: observação, requisito ou outra
  *   void        — anulação de um registo (os registos nunca se alteram nem se apagam)
@@ -17,7 +18,7 @@
  * os minutos aqui NÃO entram no indicador de paragens de 72 min/dia. */
 (function (root) {
   'use strict';
-  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'consumable', 'note', 'void'];
+  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'note', 'void'];
   // Categorias pedidas por Zhax; os códigos vêm da lista FMO pela primeira letra (P = Process, A = Breakdown, O = Other),
   // como no diário de turno. Códigos sem P/A/O ficam em Other.
   const CATEGORIES = ['Process', 'Breakdown', 'Other'];
