@@ -4,6 +4,7 @@
  *   C.load() -> Promise<[registos da loja 'maint']> · C.add(rec) -> Promise (grava registo novo; a app carimba uid, dispositivo, teste)
  *   C.codes() lista de códigos FMO · C.codesSource() fonte da lista · C.lines() [{id, name}] · C.shiftNow() {day, period} · C.crewOf(day, period)
  *   C.operator() · C.setOperator(nome) · C.kpiNote (true só na Prodn-Mgt: nota sobre o diário de turno)
+ *   C.pmTasks() lista de preventiva da app (js/pm-list.js): escolher ao planear; bloqueia até voltar a vencer; avisos de atraso
  *   C.extraTabs [{id, label(), view()}] separadores próprios da app (Grain-Mgt: Sensores); os seus botões usam os atributos da app
  *   Rolos (só Prodn-Mgt, C.rolls = true): C.passages() pares de rolos (js/roll-passages.js) · C.rollDefaults() horas ideais por grupo
  *   · C.rollHours() roll-hours.json (ou null) · C.rollHoursRefresh() -> Promise<bool> · C.checkPin(pin) -> {ok} · C.pinMsg(r)
@@ -55,7 +56,10 @@ window.MaintUI = function (C) {
       t_notes: 'Notas', newNote: 'Nova nota', topic: 'Tipo', n_observation: 'Observação', n_requirement: 'Requisito', n_other: 'Outra informação', text: 'Texto',
       dayNotes: 'Notas do dia',
       newCons: 'Novo consumível', purpose: 'Para quê / onde', totShift: 'Total do turno', totDay: 'Total do dia',
-      wPm: 'Preventiva em atraso: {eq} — {task} (limite {d}, {n} dia(s))',
+      wPm: 'Preventiva em atraso: {eq} — {task} (limite {d}, {n} dia(s))', wPmTasks: 'Lista de preventiva: {n} tarefa(s) em atraso',
+      pmList: 'Lista de preventiva', pmPick: 'Da lista de preventiva', pmFree: '— trabalho fora da lista', plan: 'Planear', lastDone: 'feita', nextDue: 'próxima',
+      ps_overdue: 'Em atraso', ps_due: 'Vence esta semana', ps_never: 'Sem registo', ps_planned: 'Planeada', ps_ok: 'Em dia', f_late: 'Em atraso', f_due: 'Para planear', f_all: 'Todas',
+      fq_mensal: 'mensal', fq_trimestral: 'trimestral', fq_semestral: 'semestral', fq_anual: 'anual', pmListNote: 'Só se escolhem tarefas devidas: nunca feitas, em atraso ou que vencem na semana. Depois de feita, a tarefa fica bloqueada até voltar a vencer.',
       u_un: 'un', u_kg: 'kg', u_l: 'l', u_m: 'm', u_par: 'par', u_cx: 'cx'
     },
     en: {
@@ -96,7 +100,10 @@ window.MaintUI = function (C) {
       t_notes: 'Notes', newNote: 'New note', topic: 'Type', n_observation: 'Observation', n_requirement: 'Requirement', n_other: 'Other information', text: 'Text',
       dayNotes: 'Notes of the day',
       newCons: 'New consumable', purpose: 'Purpose / where', totShift: 'Shift total', totDay: 'Day total',
-      wPm: 'Preventive job overdue: {eq} — {task} (due {d}, {n} day(s))',
+      wPm: 'Preventive job overdue: {eq} — {task} (due {d}, {n} day(s))', wPmTasks: 'Preventive list: {n} task(s) overdue',
+      pmList: 'Preventive list', pmPick: 'From the preventive list', pmFree: '— job not on the list', plan: 'Plan', lastDone: 'done', nextDue: 'next',
+      ps_overdue: 'Overdue', ps_due: 'Due this week', ps_never: 'No record', ps_planned: 'Planned', ps_ok: 'Up to date', f_late: 'Overdue', f_due: 'To plan', f_all: 'All',
+      fq_mensal: 'monthly', fq_trimestral: 'quarterly', fq_semestral: 'half-yearly', fq_anual: 'annual', pmListNote: 'Only due tasks can be picked: never done, overdue or due in the week. Once done, a task is locked until it is due again.',
       u_un: 'pcs', u_kg: 'kg', u_l: 'l', u_m: 'm', u_par: 'pair', u_cx: 'box'
     }
   };
@@ -145,11 +152,12 @@ window.MaintUI = function (C) {
 
   // ---------- avisos (app e cartão da página inicial) ----------
   // Contexto dos rolos: horas da linha (roll-hours.json) e horas ideais em vigor (lista mestre + Definições)
-  function rollCtx() { return { hours: C.rollHours ? C.rollHours() : null, limits: M.effectiveLimits(C.rollDefaults ? C.rollDefaults() : {}, st.entries) }; }
+  function rollCtx() { return { hours: C.rollHours ? C.rollHours() : null, limits: M.effectiveLimits(C.rollDefaults ? C.rollDefaults() : {}, st.entries), pmTasks: C.pmTasks ? C.pmTasks() : null }; }
   function warnings() { return M.warnings(st.entries, C.passages(), today(), rollCtx()); }
   const WT = { roll_critical: 'wRollCritical', roll_due: 'wRollDue', roll_inspect: 'wRollInspect', brush_critical: 'wBrush_critical', brush_missing: 'wBrush_missing' };
   function warnText(w) {
     if (w.type === 'pm_overdue') return t('wPm', { eq: w.equipment, task: w.task, d: ddmm(w.due), n: w.daysLate });
+    if (w.type === 'pm_tasks_overdue') return t('wPmTasks', { n: w.n }) + ': ' + w.items.slice(0, 3).map(x => x.code).join(', ') + (w.n > 3 ? '…' : '');
     return t(WT[w.type] || 'wRollDue', { p: w.name || w.passageId, l: w.lineId, h: nf(w.hours), lim: nf(w.limit) }) + (w.note ? ' — ' + w.note : '');
   }
   function banners() {
@@ -281,7 +289,11 @@ window.MaintUI = function (C) {
     const w = week(), W = M.pmWeek(st.entries, w, today()), f = st.form;
     const r = M.weekRange(w);
     let form = '';
-    if (f && f.kind === 'pmJob') form = `<div class="mt-box"><div class="grid2">${fld(t('week'), inp('week', f.week), 1)}${fld(t('dueDate'), inp('dueDate', f.dueDate, 'type="date"'), 1)}
+    const CAT = C.pmTasks ? M.pmCatalog(C.pmTasks(), st.entries, today(), f && f.kind === 'pmJob' && M.validWeek(f.week) ? f.week : w) : [];
+    const pickSel = () => { if (!CAT.length) return ''; const groups = Array.from(new Set(CAT.map(c => c.task.group)));
+      return fld(t('pmPick'), `<select data-mf="taskId"><option value="">${esc(t('pmFree'))}</option>${groups.map(g => `<optgroup label="${esc(g)}">${CAT.filter(c => c.task.group === g).map(c =>
+        `<option value="${esc(c.id)}" ${f.taskId === c.id ? 'selected' : ''} ${c.pickable ? '' : 'disabled'}>${esc(c.task.code + ' ' + c.task.asset + ' — ' + t('fq_' + c.task.freq) + ' · ' + t('ps_' + c.status) + (c.nextDue ? ' · ' + t('nextDue') + ' ' + ddmm(c.nextDue) : ''))}</option>`).join('')}</optgroup>`).join('')}</select>`); };
+    if (f && f.kind === 'pmJob') form = `<div class="mt-box">${pickSel()}<div class="grid2">${fld(t('week'), inp('week', f.week), 1)}${fld(t('dueDate'), inp('dueDate', f.dueDate, 'type="date"'), 1)}
         ${fld(t('line'), lineSel(f.lineId))}${fld(t('equipment'), inp('equipment', f.equipment), 1)}</div>
         ${fld(t('task'), area('task', f.task), 1)}<div class="grid2">${fld(t('responsible'), inp('responsible', f.responsible), 1)}${fld(t('by'), inp('by', f.by), 1)}</div>${saveBtns('savepm')}</div>`;
     const job = s => {
@@ -307,13 +319,35 @@ window.MaintUI = function (C) {
         <div class="${W.overdue ? 'mt-bad' : ''}"><b>${W.overdue}</b><span>${esc(t('overdueN'))}</span></div></div>
       ${W.carried ? `<p class="mt-sub">${W.carried} ${esc(t('carried'))}</p>` : ''}
       ${f && f.kind === 'pmJob' ? form : newBtn('pmJob', t('newPm'))}</section>
-      <section class="card">${W.list.map(job).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
+      <section class="card">${W.list.map(job).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>${pmListCard(CAT, w)}`;
+  }
+  // Lista de preventiva da app para a semana escolhida: em atraso, para planear, ou todas; "Planear" abre o formulário já preenchido
+  const PS_CLS = { overdue: 'mt-bad', due: 'mt-warn', never: '', planned: 'mt-ok', ok: 'mt-ok' };
+  function pmListCard(CAT, w) {
+    if (!CAT.length) return '';
+    const fl = st.pmFilter || 'due';
+    const show = CAT.filter(c => fl === 'all' ? true : fl === 'late' ? c.overdue : c.pickable);
+    const n = k => k === 'late' ? CAT.filter(c => c.overdue).length : k === 'due' ? CAT.filter(c => c.pickable).length : CAT.length;
+    let prev = null;
+    const rows = show.map(c => {
+      const g = c.task.group !== prev ? `<h4 class="mt-grp">${esc(c.task.group)}</h4>` : '';
+      prev = c.task.group;
+      return `${g}<div class="mt-item ${c.overdue ? 'mt-late' : ''}"><div><b>${esc(c.task.code)}</b> ${esc(c.task.asset)} — ${esc(c.task.task)} · ${esc(t('fq_' + c.task.freq))}
+          <span class="mt-c ${PS_CLS[c.status] || ''}">${esc(t('ps_' + c.status))}</span>${c.overdue && c.status !== 'overdue' ? `<span class="mt-c mt-bad">${esc(t('ps_overdue'))}</span>` : ''}</div>
+        <div class="mt-sub">${c.lastDone ? esc(t('lastDone')) + ' ' + esc(ddmm(c.lastDone)) + ' · ' + esc(t('nextDue')) + ' ' + esc(ddmm(c.nextDue)) + (c.overdue ? ' · ' + esc(t('daysLate', { n: c.daysLate })) : '') : esc(t('ps_never'))}</div>
+        ${c.pickable && !st.form ? `<button type="button" class="btn small primary" data-mact="pmplan" data-uid="${esc(c.id)}">${esc(t('plan'))} ${esc(w)}</button>` : ''}</div>`;
+    }).join('');
+    return `<section class="card"><h3>${esc(t('pmList'))} · ${esc(w)}</h3><p class="mt-sub">${esc(t('pmListNote'))}</p>
+      <div class="mt-tabs">${['late', 'due', 'all'].map(k => `<button type="button" class="btn small ${fl === k ? 'primary' : ''}" data-mact="pmfilter" data-v="${k}">${esc(t('f_' + k))} (${n(k)})</button>`).join('')}</div>
+      ${rows || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
   }
   async function savePm() {
     const f = st.form;
-    if (errs(M.validatePmJob(f))) return;
+    const CAT = C.pmTasks && f.taskId ? M.pmCatalog(C.pmTasks(), st.entries, today(), M.validWeek(f.week) ? f.week : week()) : [];
+    if (errs(M.validatePmJob(f, CAT))) return;
+    const tk = f.taskId ? CAT.find(c => c.id === f.taskId).task : null;
     await save({ kind: 'pmJob', week: f.week, dueDate: f.dueDate, lineId: f.lineId || null, equipment: f.equipment.trim(), task: f.task.trim(),
-      responsible: f.responsible.trim(), by: f.by.trim() });
+      taskId: tk ? tk.id : null, taskFreq: tk ? tk.freq : null, responsible: f.responsible.trim(), by: f.by.trim() });
     st.week = f.week;
   }
   async function savePmUp() {
@@ -499,7 +533,7 @@ window.MaintUI = function (C) {
       shift: { technicians: '', notes: '' },
       stop: { category: '', code: '', lineId: '', equipment: '', startTime: '', durationMin: '', description: '' },
       work: { workType: '', stopUid: '', pmJobUid: '', lineId: '', equipment: '', startTime: '', endTime: '', description: '', parts: [{ item: '', qty: '', unit: 'un' }], doneBy: '' },
-      pmJob: { week: week(), dueDate: (M.weekRange(week()) || [])[1] || '', lineId: '', equipment: '', task: '', responsible: '' },
+      pmJob: { week: week(), dueDate: (M.weekRange(week()) || [])[1] || '', lineId: '', equipment: '', task: '', responsible: '', taskId: '' },
       pmUpdate: { jobUid: ref, status: '', progressPct: '', newDue: '', doneBy: '', note: '' },
       rollCheck: { passageId: ref, week: M.weekOf(today()), condition: '', note: '' },
       brushCheck: { passageId: ref, state: '', note: '' },
@@ -528,6 +562,8 @@ window.MaintUI = function (C) {
     if (a === 'rchk') { newForm('rollCheck', uid); keep(); return; }
     if (a === 'rline') { st.rollLine = v; st.form = null; keep(); return; }
     if (a === 'rbrush') { newForm('brushCheck', uid); keep(); return; }
+    if (a === 'pmfilter') { st.pmFilter = v; keep(); return; }
+    if (a === 'pmplan') { newForm('pmJob'); pickTask(uid); keep(); return; }
     if (a === 'rmeas') { newForm('rollMeasure', uid); keep(); return; }
     if (a === 'rfilter') { st.rollFilter = v; keep(); return; }
     if (a === 'rsethours') { newForm('rollHours'); keep(); return; }
@@ -549,6 +585,12 @@ window.MaintUI = function (C) {
     }
     if (SAVE[a] && st.form) { el.disabled = true; try { await SAVE[a](); } finally { el.disabled = false; } }
   });
+  // Tarefa escolhida da lista: preenche o equipamento e o trabalho (podem ser ajustados)
+  function pickTask(id) {
+    const tk = (C.pmTasks ? C.pmTasks() : []).find(x => x.id === id);
+    st.form.taskId = tk ? tk.id : '';
+    if (tk) { st.form.equipment = tk.code + ' ' + tk.asset; st.form.task = tk.task + ' — ' + t('fq_' + tk.freq); }
+  }
   function onField(el, isChange) {
     if (el.dataset.mf === 'vreason' && st.act) { st.act.reason = el.value; return; }
     if (el.dataset.mf === 'vby' && st.act) { st.act.by = el.value; return; }
@@ -557,6 +599,7 @@ window.MaintUI = function (C) {
       st.form[k] = el.type === 'checkbox' ? el.checked : el.value;
       if (isChange && el.tagName === 'SELECT') {
         if (k === 'category') st.form.code = '';
+        if (k === 'taskId' && st.form.kind === 'pmJob') pickTask(el.value);
         keep();
       }
       return;

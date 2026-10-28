@@ -1573,6 +1573,7 @@
   const MAINT_LINES = [{ id: 'INTAKE', name: 'Recepção / Intake' }, { id: 'SILOS', name: 'Silos' }, { id: 'C', name: 'Linha C' }, { id: 'D', name: 'Linha D' }];
   const MU = window.MaintUI({ lang: function () { return I18n.lang; }, esc: esc, toast: toast, render: render,
     load: function () { return DB.all('maint'); }, add: function (rec) { return DB.add('maint', rec); },
+    pmTasks: function () { return (window.PmList && window.PmList.TASKS) || []; },   // lista de preventiva da secção de silos (Silos Section - Prevention.xlsx)
     codes: function () { return window.MaintCodes.CODES; }, codesSource: function () { return window.MaintCodes.SOURCE; }, lines: function () { return MAINT_LINES; }, passages: function () { return []; }, rolls: false,
     shiftNow: function () { const sh = L.shiftOf(L.today(), L.nowTime()); return { day: sh.date, period: sh.window }; },
     crewOf: function (day, period) { return L.crewOf(day, period === 'N' ? '20:00' : '08:00'); },

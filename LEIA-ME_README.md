@@ -6,6 +6,8 @@
 > - **Paragens:** categoria Processo / Avaria / Outra, com a mesma lista de códigos FMO da Prodn-Mgt, e duração.
 > - **Intervenções:** o que foi feito, material e quem fez.
 > - **Preventiva semanal:** progresso e aviso de atraso, também no topo dos outros separadores.
+>   - Lista de preventiva da secção de silos: 41 tarefas.
+>   - Ao planear escolhe-se da lista. A tarefa fica bloqueada até voltar a vencer, e as tarefas em atraso dão aviso.
 > - **Consumíveis por turno.**
 > - **Notas:** observações, requisitos e outra informação.
 > - **Sensores de temperatura:** os relatórios do sistema de monitorização (Dropbox /Temperature Readings/) chegam pelo ficheiro silo-temps.json, lido com a ligação de leitura do Dropbox.

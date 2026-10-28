@@ -95,6 +95,26 @@ t('preventiva: atraso só depois da data-limite; adiar muda a data; feito/cancel
   assert.deepStrictEqual([w45.planned, w45.carried, w45.overdue, w45.compliancePct], [0, 2, 2, null]);
 });
 
+t('lista de preventiva: devida, em atraso, planeada, bloqueada até voltar a vencer', () => {
+  const TK = [{ id: 'FMO0124-M', code: 'FMO0124', asset: 'Moinho de Martelos - P0', task: 'Moinho Martelo', freq: 'mensal', months: 1 },
+    { id: 'FMO0096-T', code: 'FMO0096', asset: 'Moinho de Rolos - P1', task: 'Moinho Rolos', freq: 'trimestral', months: 3 }];
+  let c = M.pmCatalog(TK, [], '2026-10-28', '2026-W44');
+  assert.deepStrictEqual(c.map(x => [x.status, x.pickable, x.overdue]), [['never', true, false], ['never', true, false]], 'sem registo: devida, mas não em atraso');
+  const j = rec('pmJob', { week: '2026-W44', dueDate: '2026-11-01', taskId: 'FMO0124-M', equipment: 'FMO0124', task: 'Moinho Martelo', responsible: 'Rui', prodDay: '2026-10-28' });
+  c = M.pmCatalog(TK, [j], '2026-10-28', '2026-W44');
+  assert.deepStrictEqual([c[0].status, c[0].pickable], ['planned', false], 'já planeada: não se escolhe outra vez');
+  const done = rec('pmUpdate', { jobUid: j.uid, status: 'done', doneBy: 'Rui', prodDay: '2026-10-29' });
+  c = M.pmCatalog(TK, [j, done], '2026-10-30', '2026-W45');
+  assert.deepStrictEqual([c[0].status, c[0].lastDone, c[0].nextDue, c[0].pickable], ['ok', '2026-10-29', '2026-11-29', false], 'feita: bloqueada até vencer');
+  assert.deepStrictEqual([M.pmCatalog(TK, [j, done], '2026-11-25', '2026-W48')[0].status, M.pmCatalog(TK, [j, done], '2026-11-25', '2026-W48')[0].pickable], ['due', true], 'vence na semana planeada');
+  c = M.pmCatalog(TK, [j, done], '2026-12-02', '2026-W49');
+  assert.deepStrictEqual([c[0].status, c[0].overdue, c[0].daysLate, c[0].pickable], ['overdue', true, 3, true]);
+  assert.deepStrictEqual(M.warnings([j, done], [], '2026-12-02', { pmTasks: TK }).map(w => [w.type, w.n]), [['pm_tasks_overdue', 1]]);
+  assert.strictEqual(M.addMonthsDate('2026-01-31', 1), '2026-02-28');
+  assert.deepStrictEqual(M.validatePmJob({ week: '2026-W49', dueDate: '2026-12-06', taskId: 'FMO0124-M', equipment: 'a', task: 'b', responsible: 'c', by: 'd' }, c), []);
+  assert.deepStrictEqual(M.validatePmJob({ week: '2026-W49', dueDate: '2026-12-06', taskId: 'FMO0096-T', equipment: 'a', task: 'b', responsible: 'c', by: 'd' }, M.pmCatalog(TK, [j, done, rec('pmJob', { week: '2026-W49', taskId: 'FMO0096-T', dueDate: '2026-12-06', equipment: 'x', task: 'y', responsible: 'z' })], '2026-12-02', '2026-W49')), ['taskId']);
+});
+
 t('preventiva: validação do progresso', () => {
   const job = { uid: 'j' };
   assert.deepStrictEqual(M.validatePmUpdate({ status: 'in_progress', progressPct: '40', by: 'X' }, job), []);

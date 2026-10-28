@@ -3,7 +3,7 @@
  *   shift       — turno de manutenção: técnicos de serviço e notas de passagem de turno
  *   stop        — paragem/avaria: categoria (Process | Breakdown | Other), código FMO, duração (min)
  *   work        — intervenção: o que se fez, material usado, quem fez, início/fim
- *   pmJob       — trabalho de manutenção preventiva planeado para uma semana ISO
+ *   pmJob       — trabalho de manutenção preventiva planeado para uma semana ISO (taskId = tarefa da lista de preventiva da app, se escolhida da lista)
  *   pmUpdate    — progresso de um trabalho preventivo (em curso, feito, adiado, cancelado)
  *   rollCheck   — inspecção semanal de um par de rolos depois das horas ideais (bom | para reestriar | crítico) (só Prodn-Mgt)
  *   rollChange  — troca/reestriagem de um par de rolos, com IDs e diâmetros novos (só Prodn-Mgt)
@@ -119,8 +119,9 @@
     if (!txt(o.by)) e.push('by');
     return e.concat(partsErrors(o.parts));
   }
-  function validatePmJob(o) {
+  function validatePmJob(o, catalog) {
     const e = [];
+    if (o.taskId) { const c = (catalog || []).find(x => x.id === o.taskId); if (!c || !c.pickable) e.push('taskId'); }
     if (!validWeek(o.week)) e.push('week');
     if (!DAY_RE.test(o.dueDate || '')) e.push('dueDate');
     if (!txt(o.equipment)) e.push('equipment');
@@ -235,6 +236,36 @@
         daysLate: overdue ? daysBetween(due, today) : 0 };
     });
   }
+  // ---------- lista de preventiva (js/pm-list.js de cada app: Linha C / secção de silos, Zhax 28-10-2026) ----------
+  // Data + n meses (dia limitado ao fim do mês)
+  function addMonthsDate(d, n) {
+    const y = +d.slice(0, 4), m = +d.slice(5, 7) - 1 + n, day = +d.slice(8, 10);
+    const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, m, Math.min(day, last))).toISOString().slice(0, 10);
+  }
+  // Estado de cada tarefa da lista para a semana 'week' (planeamento) em 'today':
+  //   lastDone = último 'feito' de um trabalho com esta tarefa; nextDue = lastDone + frequência.
+  //   status: 'planned' (há trabalho em aberto) | 'never' (sem registo de execução) | 'overdue' (nextDue < hoje) | 'due' (vence até ao fim da semana) | 'ok'
+  //   pickable: só se não houver trabalho em aberto e a tarefa estiver devida (nunca feita, em atraso ou vence nessa semana) —
+  //   "se já foi feita não pode ser escolhida até voltar a vencer" (Zhax, 28-10-2026).
+  //   overdue: nextDue já passou e não foi feita desde então (mesmo que esteja planeada). Sem registo não conta como atraso (sem data de referência).
+  function pmCatalog(tasks, entries, today, week) {
+    const S = pmState(entries, today);
+    const r = weekRange(week || weekOf(today));
+    const weekEnd = r ? r[1] : today;
+    return (tasks || []).map(tk => {
+      const mine = S.filter(s => s.job.taskId === tk.id);
+      const done = mine.filter(s => s.status === 'done' && s.doneAt).map(s => s.doneAt).sort();
+      const lastDone = done[done.length - 1] || null;
+      const nextDue = lastDone ? addMonthsDate(lastDone, tk.months) : null;
+      const openJob = mine.find(s => s.open) || null;
+      const overdue = !!(nextDue && today > nextDue);
+      let status = openJob ? 'planned' : !lastDone ? 'never' : overdue ? 'overdue' : nextDue <= weekEnd ? 'due' : 'ok';
+      return { task: tk, id: tk.id, lastDone, nextDue, openJob, overdue, status, pickable: !openJob && status !== 'ok',
+        daysLate: overdue ? daysBetween(nextDue, today) : 0 };
+    });
+  }
+
   // Resumo de uma semana: trabalhos planeados nessa semana + os de semanas anteriores ainda em aberto
   function pmWeek(entries, week, today) {
     const all = pmState(entries, today);
@@ -352,6 +383,9 @@
   // semanal depois das horas ideais; escovas em estado crítico ou em falta. level: 'bad' (vermelho) | 'warn' (âmbar)
   function warnings(entries, passages, today, ctx) {
     const w = [];
+    // tarefas da lista de preventiva em atraso: um aviso com o total (o detalhe fica no separador Preventiva)
+    const late = ctx && ctx.pmTasks ? pmCatalog(ctx.pmTasks, entries, today).filter(c => c.overdue) : [];
+    if (late.length) w.push({ type: 'pm_tasks_overdue', level: 'bad', n: late.length, items: late.map(c => ({ id: c.id, code: c.task.code, asset: c.task.asset, freq: c.task.freq, nextDue: c.nextDue, daysLate: c.daysLate })) });
     pmState(entries, today).filter(s => s.overdue).forEach(s => w.push({ type: 'pm_overdue', level: 'bad', uid: s.uid, equipment: s.job.equipment, task: s.job.task,
       due: s.due, daysLate: s.daysLate, responsible: s.job.responsible, week: s.week }));
     rollState(passages, entries, today, ctx).forEach(r => {
@@ -368,7 +402,7 @@
     num, addDays, daysBetween, weekOf, weekRange, validWeek, catOfCode, codesFor, findCode, effective, cleanParts,
     validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
     validateBrushCheck, validateRollConfig, validateNote, validateConsumable,
-    pmState, pmWeek, lineHours, effectiveLimits, rollIdsOf, rollState, consumableTotals, shiftSummary, warnings, passageOf };
+    pmState, pmWeek, addMonthsDate, pmCatalog, lineHours, effectiveLimits, rollIdsOf, rollState, consumableTotals, shiftSummary, warnings, passageOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Maint = api;
 })(typeof window !== 'undefined' ? window : this);
