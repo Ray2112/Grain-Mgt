@@ -4,7 +4,7 @@
   const T = {
     pt: {
       app_name: 'Grain-Mgt — Registos de grão', offline_badge: 'Funciona sem rede', footer: 'Dados guardados apenas neste dispositivo.',
-      tab_intake: 'Recepção', tab_silos: 'Silos', tab_insp: 'Monitorização', tab_export: 'Exportar', tab_settings: 'Definições',
+      tab_intake: 'Recepção', tab_silos: 'Silos', tab_insp: 'Monitorização', tab_export: 'Exportar', tab_settings: 'Definições', tab_maint: 'Manut.', maint_title: 'Manutenção',
       intake_title: 'Recepção de cereal', silos_title: 'Silos e lotes', insp_title: 'Monitorização da armazenagem', export_title: 'Exportar e cópia de segurança', settings_title: 'Definições',
       new_lot: 'Novo lote', lots_today: 'Lotes de hoje', lots_older: 'Lotes anteriores', lots_held: 'Lotes retidos (aguardam CQ)', no_lots: 'Ainda não há lotes registados.',
       search: 'Procurar lote', search_ph: 'Código, fornecedor, matrícula ou guia', no_results: 'Nenhum lote encontrado.', more_results: 'Mostram-se os primeiros 100 resultados.', use_search: 'Para lotes mais antigos, use a pesquisa.',
@@ -120,7 +120,7 @@
     },
     en: {
       app_name: 'Grain-Mgt — Grain records', offline_badge: 'Works offline', footer: 'Data stored on this device only.',
-      tab_intake: 'Intake', tab_silos: 'Silos', tab_insp: 'Monitoring', tab_export: 'Export', tab_settings: 'Settings',
+      tab_intake: 'Intake', tab_silos: 'Silos', tab_insp: 'Monitoring', tab_export: 'Export', tab_settings: 'Settings', tab_maint: 'Maint.', maint_title: 'Maintenance',
       intake_title: 'Grain intake', silos_title: 'Silos and lots', insp_title: 'Storage monitoring', export_title: 'Export and backup', settings_title: 'Settings',
       new_lot: 'New lot', lots_today: "Today's lots", lots_older: 'Earlier lots', lots_held: 'Lots on hold (awaiting QC)', no_lots: 'No lots recorded yet.',
       search: 'Find lot', search_ph: 'Code, supplier, plate or delivery note', no_results: 'No lots found.', more_results: 'Showing the first 100 results.', use_search: 'For older lots, use search.',

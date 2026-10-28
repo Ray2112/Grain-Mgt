@@ -150,7 +150,7 @@
   // ---------------- casca / shell ----------------
   // Linhas de moagem e bins de milho sujo (B01–B04, mestre na app de Registos de QC) / mill lines and dirty-maize bins
   const LINES = ['C', 'D'], DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'];
-  const TITLES = { intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', export: 'export_title', settings: 'settings_title' };
+  const TITLES = { intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', maint: 'maint_title', export: 'export_title', settings: 'settings_title' };
   function renderShell() {
     document.title = t('app_name');
     $('#title').textContent = t(TITLES[S.tab]);
@@ -168,7 +168,10 @@
     if (S.tab === 'intake') main.innerHTML = S.form ? intakeForm() : intakeList();
     if (S.tab === 'silos') main.innerHTML = silosView();
     if (S.tab === 'insp') main.innerHTML = inspView();
+    if (S.tab === 'maint') main.innerHTML = MU.view();
     if (S.tab === 'export') main.innerHTML = exportView();
+    // Avisos de manutenção (preventiva em atraso) nos outros separadores; no separador Manutenção já aparecem no topo
+    if (S.tab !== 'maint') MU.warnings().forEach(function (w) { main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint">🔧 ' + esc(MU.warnText(w)) + '</div>'); });
     if (S.tab === 'settings') main.innerHTML = settingsView();
     if (S.tab === 'intake' && S.form) updateDyn();
     // Aviso permanente enquanto o modo de teste estiver ligado (os registos novos ficam marcados test:true)
@@ -1411,9 +1414,20 @@
     if (id === 'protform') protSubmit(e.target);
   });
 
+  // ---------------- manutenção / maintenance (js/maint-ui.js, igual na Prodn-Mgt) ----------------
+  // Mesma lista de códigos FMO que a Prodn-Mgt (js/maint-codes.js). Sem rolos (só na Prodn-Mgt).
+  const MAINT_LINES = [{ id: 'INTAKE', name: 'Recepção / Intake' }, { id: 'SILOS', name: 'Silos' }, { id: 'C', name: 'Linha C' }, { id: 'D', name: 'Linha D' }];
+  const MU = window.MaintUI({ lang: function () { return I18n.lang; }, esc: esc, toast: toast, render: render,
+    load: function () { return DB.all('maint'); }, add: function (rec) { return DB.add('maint', rec); },
+    codes: function () { return window.MaintCodes.CODES; }, codesSource: function () { return window.MaintCodes.SOURCE; }, lines: function () { return MAINT_LINES; }, passages: function () { return []; }, rolls: false,
+    shiftNow: function () { const sh = L.shiftOf(L.today(), L.nowTime()); return { day: sh.date, period: sh.window }; },
+    crewOf: function (day, period) { return L.crewOf(day, period === 'N' ? '20:00' : '08:00'); },
+    operator: function () { return (S.settings && S.settings.operator) || ''; },
+    setOperator: function (n) { if (S.settings && S.settings.operator !== n) { S.settings.operator = n; saveSettings(); } } });
+
   // ---------------- arranque / start ----------------
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
-  load().then(function () {
+  load().then(MU.reload).then(function () {
     render(); DB.persist();
     const R = window.RecSync;
     if (R) { R.setContext({ deviceId: S.settings.deviceId, site: S.settings.site || '' }); DB.onWrite(R.schedule); }

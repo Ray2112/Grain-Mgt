@@ -391,6 +391,9 @@
     if (!Array.isArray(d.lots) || !Array.isArray(d.events) || !Array.isArray(d.settings)) return false;
     if (d.monitor !== undefined && !Array.isArray(d.monitor)) return false;
     if (d.sevents !== undefined && !Array.isArray(d.sevents)) return false;
+    if (d.maint !== undefined && !Array.isArray(d.maint)) return false;
+    const MAINT_KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'consumable', 'void'];   // = Maint.KINDS (js/maint.js)
+    if (!(d.maint || []).every(function (m) { return m && typeof m.uid === 'string' && MAINT_KINDS.indexOf(m.kind) >= 0; })) return false;
     const okMon = (d.monitor || []).every(function (r) { return r && ['ROUND', 'WEEKLY', 'TREAT', 'DISP'].indexOf(r.kind) >= 0 && typeof r.silo === 'string'; });
     const okSev = (d.sevents || []).every(function (e) { return e && typeof e.id === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(e.id) && ['OPEN', 'CLOSED'].indexOf(e.status) >= 0; });
     if (!okMon || !okSev) return false;
@@ -449,8 +452,8 @@
 
   // ---------- identificadores de registo (sincronização futura) ----------
   // Cada registo tem um uid global (UUID v4) e o deviceId de origem. A chave local (IndexedDB) não é partilhada.
-  const UID_STORES = ['lots', 'events', 'monitor', 'sevents'];
-  const APP_VERSION = '0.7.0';
+  const UID_STORES = ['lots', 'events', 'monitor', 'sevents', 'maint'];
+  const APP_VERSION = '0.8.0';
   // Versão do mestre partilhado (silos e capacidades). Muda sempre que SILO_IDS ou as capacidades mudarem.
   const MASTER_VERSION = '2026-10-14.1';   // não muda: silos e capacidades iguais (só unidades internas)
   // Compara a versão do mestre gravada num registo/cópia com a desta app: 'same' | 'older' | 'newer' | 'missing'.

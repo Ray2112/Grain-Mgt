@@ -5,7 +5,7 @@ body{background:var(--ground);color:var(--ink);font:16px/1.4 system-ui,-apple-sy
 header{background:var(--ink);color:#F3F1EB;padding:16px 16px 12px;position:sticky;top:0;z-index:2}
 header h1{margin:4px 0 0;font-size:22px;font-weight:600}
 main{flex:1;padding:14px 14px 96px;display:flex;flex-direction:column;gap:12px}
-nav{position:fixed;bottom:0;left:0;right:0;max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(8px + env(safe-area-inset-bottom))}
+nav{position:fixed;bottom:0;left:0;right:0;max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(8px + env(safe-area-inset-bottom))}
 nav button{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:54px;justify-content:center;border:0;border-radius:10px;background:transparent;color:#45494D;font:600 11px system-ui,sans-serif;cursor:pointer;padding:0 2px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 nav button[aria-current=page]{background:var(--ink);color:#fff}
 nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

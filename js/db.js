@@ -4,8 +4,8 @@
 (function (root) {
   'use strict';
   const DB_NAME = 'moagem-app';
-  const DB_VERSION = 3;
-  const STORES = ['lots', 'events', 'settings', 'monitor', 'sevents'];
+  const DB_VERSION = 4;   // v4 (app 0.8.0): + maint (manutenção, chave uid)
+  const STORES = ['lots', 'events', 'settings', 'monitor', 'sevents', 'maint'];
   let dbp = null;
 
   function open() {
@@ -20,6 +20,7 @@
         if (db.objectStoreNames.contains('inspections')) db.deleteObjectStore('inspections'); // só existiu em testes da v0.2.0
         if (!db.objectStoreNames.contains('monitor')) db.createObjectStore('monitor', { keyPath: 'seq', autoIncrement: true });
         if (!db.objectStoreNames.contains('sevents')) db.createObjectStore('sevents', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('maint')) db.createObjectStore('maint', { keyPath: 'uid' });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
@@ -77,7 +78,7 @@
     setSetting: function (key, value) { return DB.put('settings', { key: key, value: value }); },
     exportAll: function () {
       return Promise.all(STORES.map(DB.all)).then(function (r) {
-        return { app: 'moagem-app', format: 4, exportedAt: new Date().toISOString(), lots: r[0], events: r[1], settings: r[2], monitor: r[3], sevents: r[4] };
+        return { app: 'moagem-app', format: 4, exportedAt: new Date().toISOString(), lots: r[0], events: r[1], settings: r[2], monitor: r[3], sevents: r[4], maint: r[5] };
       });
     },
     // Restaurar cópia de segurança: substitui tudo / Restore backup: replaces everything
