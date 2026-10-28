@@ -16,7 +16,9 @@
   'use strict';
   const KINDS = ['doc', 'grade', 'actionDone', 'close', 'reopen', 'complaint', 'complaintUpd', 'void'];
   // Motivos de reclamação (lista FMIP para farinha de milho; 'other' com descrição)
-  const COMPLAINT_REASONS = ['foreign', 'infestation', 'quality', 'moisture', 'weight', 'packaging', 'labelling', 'allergen', 'taste', 'other'];
+  const COMPLAINT_REASONS = ['foreign', 'infestation', 'quality', 'moisture', 'mixed', 'weight', 'packaging', 'labelling', 'allergen', 'taste', 'other'];
+  // Cliente interno (Grain-Mgt: FMO moagem, FRA fábrica de rações) ou externo (outras moagens) — Zhax, 28-10-2026
+  const CUSTOMER_TYPES = ['internal', 'external'];
   const GRADES = ['C', 'MI', 'MA', 'CR', 'NA'];
   const POINTS = { C: 1, MI: 0.7, MA: 0.3, CR: 0 };
   const CAP = { CR: 49, MA: 89 };
@@ -151,6 +153,7 @@
     const e = [];
     if (!DAY_RE.test(o.received || '')) e.push('received');
     if (!txt(o.customer)) e.push('customer');
+    if (o.customerType !== undefined && o.customerType !== null && CUSTOMER_TYPES.indexOf(o.customerType) < 0) e.push('customerType');
     if (!txt(o.product)) e.push('product');
     if (!txt(o.lot)) e.push('lot');
     if (COMPLAINT_REASONS.indexOf(o.reason) < 0) e.push('reason');
@@ -203,11 +206,11 @@
     const S = monthState(entries, prev);
     if (S.closed && S.close.counts && S.close.counts.CR) w.push({ type: 'month_critical', level: 'bad', month: prev, n: S.close.counts.CR });
     complaints(entries, today).filter(c => c.open && (c.overdue || c.complaint.foodSafety)).forEach(c => w.push({ type: c.complaint.foodSafety ? 'complaint_fs' : 'complaint_overdue',
-      level: c.complaint.foodSafety || c.overdue ? 'bad' : 'warn', id: c.id, customer: c.complaint.customer, due: c.complaint.due, overdue: c.overdue }));
+      level: c.complaint.foodSafety || c.overdue ? 'bad' : 'warn', id: c.id, customer: c.complaint.customer, customerType: c.complaint.customerType || null, due: c.complaint.due, overdue: c.overdue }));
     return w;
   }
 
-  const api = { KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, COMPLAINT_REASONS, monthOf, addMonths, addMonthsDay, effective, applicable,
+  const api = { KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, COMPLAINT_REASONS, CUSTOMER_TYPES, monthOf, addMonths, addMonthsDay, effective, applicable,
     validateGrade, validateDoc, docs, docCoverage, grades, score, bandOf, monthState, actions, complaintId, validateComplaint, validateComplaintUpd, complaints, warnings };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Fssc = api;
 })(typeof window !== 'undefined' ? window : this);

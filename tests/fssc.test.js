@@ -117,4 +117,13 @@ t('reclamações: registo, ID, seguimento, fecho com prevenção e verificação
   assert.deepStrictEqual(F.warnings([c, u1, u2, u3], [], 'mill', '2026-11-05').filter(w => /complaint/.test(w.type)), []);
 });
 
+t('reclamações: cliente interno (FMO, FRA) ou externo; motivo de cereal/cor/grau errado', () => {
+  const base = { received: '2026-10-20', product: 'Milho Amarelo', lot: 'REC-261020-01', reason: 'mixed', description: 'milho branco na bin', owner: 'QC', due: '2026-10-27', by: 'X' };
+  assert.deepStrictEqual(F.validateComplaint(Object.assign({ customer: 'FMO — Moagem', customerType: 'internal' }, base)), []);
+  assert.deepStrictEqual(F.validateComplaint(Object.assign({ customer: 'Moagem Y', customerType: 'external' }, base)), []);
+  assert.deepStrictEqual(F.validateComplaint(Object.assign({ customer: 'X', customerType: 'other' }, base)), ['customerType']);
+  assert.deepStrictEqual(F.validateComplaint(Object.assign({ customer: '' }, base)), ['customer']);
+  assert.ok(F.CUSTOMER_TYPES.indexOf('internal') >= 0 && F.COMPLAINT_REASONS.indexOf('mixed') >= 0);
+});
+
 console.log('fssc: ' + n + ' testes OK');

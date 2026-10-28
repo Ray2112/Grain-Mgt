@@ -2,7 +2,8 @@
  * Criada pela app com FsscUI(C):
  *   C.lang() · C.esc(v) · C.toast(msg) · C.render() · C.load() -> Promise<[registos 'fssc']> · C.add(rec) -> Promise
  *   C.area 'mill' (Prodn-Mgt) | 'grain' (Grain-Mgt) · C.operator() · C.pin(pin) -> Promise<{ok, msg}> (PIN de supervisor da app)
- *   C.complaints (true só na Prodn-Mgt: reclamações de clientes) · C.products() nomes dos produtos (sugestões)
+ *   C.complaints (reclamações de clientes) · C.products() nomes dos produtos (sugestões) · C.lots() lotes da app (sugestões)
+ *   C.customers [{id, label}] clientes internos (Grain-Mgt: FMO, FRA); sem lista = cliente escrito à mão (externo)
  * Eventos próprios (data-fact, data-ff); não usa os atributos das apps. */
 window.FsscUI = function (C) {
   'use strict';
@@ -33,6 +34,7 @@ window.FsscUI = function (C) {
       prevention: 'Prevenção da repetição', verification: 'Verificação da eficácia', followUp: 'Seguimento', closeIt: 'Fechar a reclamação', c_open: 'Aberta', c_closed: 'Fechada',
       daysOpen: '{n} dia(s)', fOpen: 'Abertas', fAll: 'Todas', fsChip: 'Segurança alimentar', voidIt: 'Anular registo', voidReason: 'Motivo da anulação', closedOn: 'Fechada em', recBy: 'Registada por',
       cr_foreign: 'Corpo estranho', cr_infestation: 'Infestação / insectos', cr_quality: 'Qualidade (cor, granulometria)', cr_moisture: 'Humidade / bolor', cr_weight: 'Peso / quantidade',
+      cr_mixed: 'Cereal, cor ou grau errado', custType: 'Cliente', ct_internal: 'Interno', ct_external: 'Externo', extName: 'Nome do cliente externo (outra moagem)', extOpt: 'Externo — outra moagem',
       cr_packaging: 'Embalagem', cr_labelling: 'Rotulagem', cr_allergen: 'Alergénio', cr_taste: 'Sabor / cheiro', cr_other: 'Outro',
       w_complaint_fs: 'Reclamação {id} ({c}) afecta a segurança alimentar — em aberto', w_complaint_overdue: 'Reclamação {id} ({c}) em atraso (prazo {d})'
     },
@@ -58,6 +60,7 @@ window.FsscUI = function (C) {
       prevention: 'Prevention of recurrence', verification: 'Verification of effectiveness', followUp: 'Follow-up', closeIt: 'Close the complaint', c_open: 'Open', c_closed: 'Closed',
       daysOpen: '{n} day(s)', fOpen: 'Open', fAll: 'All', fsChip: 'Food safety', voidIt: 'Void record', voidReason: 'Reason for voiding', closedOn: 'Closed on', recBy: 'Recorded by',
       cr_foreign: 'Foreign body', cr_infestation: 'Infestation / insects', cr_quality: 'Quality (colour, particle size)', cr_moisture: 'Moisture / mould', cr_weight: 'Weight / quantity',
+      cr_mixed: 'Wrong cereal, colour or grade', custType: 'Customer', ct_internal: 'Internal', ct_external: 'External', extName: 'External customer name (other mill)', extOpt: 'External — other mill',
       cr_packaging: 'Packaging', cr_labelling: 'Labelling', cr_allergen: 'Allergen', cr_taste: 'Taste / smell', cr_other: 'Other',
       w_complaint_fs: 'Complaint {id} ({c}) affects food safety — open', w_complaint_overdue: 'Complaint {id} ({c}) overdue (due {d})'
     }
@@ -212,10 +215,11 @@ window.FsscUI = function (C) {
   // ----- reclamações de clientes (só Prodn-Mgt) -----
   function vComplaints() {
     const L = F.complaints(st.entries, today()), f = st.form;
-    const lots = Array.from(new Set(L.map(x => x.complaint.lot).filter(Boolean))).sort();
+    const lots = Array.from(new Set((C.lots ? C.lots() : []).concat(L.map(x => x.complaint.lot)).filter(Boolean))).sort();
     const prods = Array.from(new Set((C.products ? C.products() : []).concat(L.map(x => x.complaint.product)).filter(Boolean)));
     const nf_ = f && f.kind === 'complaint' ? f : null;
-    const form = nf_ ? `<div class="fs-box"><div class="grid2">${fld(t('received'), inp('received', nf_.received, 'type="date"'), 1)}${fld(t('customer'), inp('customer', nf_.customer), 1)}
+    const form = nf_ ? `<div class="fs-box"><div class="grid2">${fld(t('received'), inp('received', nf_.received, 'type="date"'), 1)}${C.customers ? fld(t('custType'), `<select data-ff="custSel"><option value="">—</option>${C.customers.map(x => opt(x.id, nf_.custSel, x.label)).join('')}${opt('EXT', nf_.custSel, t('extOpt'))}</select>`, 1) : fld(t('customer'), inp('customer', nf_.customer), 1)}
+        ${C.customers && nf_.custSel === 'EXT' ? fld(t('extName'), inp('customer', nf_.customer), 1) : ''}
         ${fld(t('product'), inp('product', nf_.product, 'list="fsProds"'), 1)}${fld(t('lot'), inp('lot', nf_.lot, 'list="fsLots"'), 1)}
         ${fld(t('reason'), `<select data-ff="reason"><option value="">—</option>${F.COMPLAINT_REASONS.map(r => opt(r, nf_.reason, t('cr_' + r))).join('')}</select>`, 1)}${fld(t('ref'), inp('ref', nf_.ref))}</div>
         ${fld(t('description'), area('description', nf_.description), 1)}
@@ -227,7 +231,7 @@ window.FsscUI = function (C) {
     const show = st.ccFilter === 'all' ? L : L.filter(x => x.open);
     const item = x => {
       const c = x.complaint, up = f && f.kind === 'complaintUpd' && f.complaintUid === x.uid, vd = f && f.kind === 'ccvoid' && f.uid === x.uid;
-      return `<div class="fs-item ${x.open && (x.overdue || c.foodSafety) ? 'fs-late' : ''}"><div><b>${esc(x.id)}</b> · ${esc(c.customer)} <span class="fs-c ${x.open ? 'fs-warn' : 'fs-ok'}">${esc(t(x.open ? 'c_open' : 'c_closed'))}</span>
+      return `<div class="fs-item ${x.open && (x.overdue || c.foodSafety) ? 'fs-late' : ''}"><div><b>${esc(x.id)}</b> · ${esc(c.customer)}${c.customerType ? ` <span class="fs-c">${esc(t('ct_' + c.customerType))}</span>` : ''} <span class="fs-c ${x.open ? 'fs-warn' : 'fs-ok'}">${esc(t(x.open ? 'c_open' : 'c_closed'))}</span>
           ${c.foodSafety ? `<span class="fs-c fs-bad">${esc(t('fsChip'))}</span>` : ''}${x.overdue ? `<span class="fs-c fs-bad">${esc(t('overdue'))}</span>` : ''}</div>
         <div class="fs-sub">${esc(t('received'))} ${esc(ddmm(c.received))} · ${esc(c.product)} · ${esc(t('lot'))} <b>${esc(c.lot)}</b> · ${esc(t('cr_' + (F.COMPLAINT_REASONS.indexOf(c.reason) >= 0 ? c.reason : 'other')))}${c.ref ? ' · ' + esc(c.ref) : ''} · ${esc(t('daysOpen', { n: x.daysOpen }))}</div>
         <div>${esc(c.description)}</div>
@@ -247,8 +251,15 @@ window.FsscUI = function (C) {
   }
   async function ccSave() {
     const f = st.form;
-    if (errs(F.validateComplaint(f))) return;
-    await save({ kind: 'complaint', received: f.received, customer: f.customer.trim(), ref: f.ref.trim(), product: f.product.trim(), lot: f.lot.trim().toUpperCase(),
+    // Cliente: lista interna (FMO, FRA) ou externo com nome; sem lista, o nome escrito
+    let customer = String(f.customer || '').trim(), customerType = null;
+    if (C.customers) {
+      const ic = C.customers.find(x => x.id === f.custSel);
+      if (ic) { customer = ic.label; customerType = 'internal'; } else if (f.custSel === 'EXT') customerType = 'external'; else customer = '';
+    }
+    const o = Object.assign({}, f, { customer, customerType });
+    if (errs(F.validateComplaint(o))) return;
+    await save({ kind: 'complaint', received: f.received, customer, customerType, customerId: C.customers && f.custSel !== 'EXT' ? f.custSel : null, ref: f.ref.trim(), product: f.product.trim(), lot: f.lot.trim().toUpperCase(),
       reason: f.reason, description: f.description.trim(), foodSafety: !!f.foodSafety, owner: f.owner.trim(), due: f.due, by: f.by.trim() });
   }
   async function ccUpSave() {
@@ -292,7 +303,7 @@ window.FsscUI = function (C) {
     if (a === 'docver') { const d = F.docs(st.entries, today()).find(x => x.code === v); if (d) { const o = d.doc; st.form = { kind: 'doc', code: d.code, title: o.title, version: '', status: 'approved', owner: o.owner || '', approvedOn: today(), reviewMonths: String(o.reviewMonths || 12), location: o.location || '', reqIds: (o.reqIds || []).slice(), by: op() }; keep(); } return; }
     if (a === 'docsave') return docSave();
     if (a === 'done') { st.form = { kind: 'actionDone', gradeUid: v, note: '', by: op() }; keep(); return; }
-    if (a === 'ccnew') { const d = today(); st.form = { kind: 'complaint', received: d, customer: '', ref: '', product: '', lot: '', reason: '', description: '', foodSafety: false, owner: op(), due: new Date(Date.parse(d) + 7 * 86400000).toISOString().slice(0, 10), by: op() }; keep(); return; }   // prazo por defeito: 7 dias (proposta FMIP)
+    if (a === 'ccnew') { const d = today(); st.form = { kind: 'complaint', received: d, custSel: '', customer: '', ref: '', product: '', lot: '', reason: '', description: '', foodSafety: false, owner: op(), due: new Date(Date.parse(d) + 7 * 86400000).toISOString().slice(0, 10), by: op() }; keep(); return; }   // prazo por defeito: 7 dias (proposta FMIP)
     if (a === 'ccsave') return ccSave();
     if (a === 'ccup') { st.form = { kind: 'complaintUpd', complaintUid: v, remedy: '', further: '', prevention: '', close: false, verification: '', by: op() }; keep(); return; }
     if (a === 'ccupsave') return ccUpSave();

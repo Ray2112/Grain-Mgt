@@ -14,6 +14,7 @@
 >   - Em Manutenção → Sensores ficam as avarias e as leituras suspeitas dos sensores, que se podem reconhecer.
 >   - Em Silos, uma escala de temperatura do topo à base, ao lado da quantidade.
 > - **Separador FSSC:** a mesma avaliação mensal FSSC 22000 da Prodn-Mgt, para a área de recepção e silos (70 requisitos). A pontuação fica separada da moagem.
+> - **Reclamações de clientes:** o cliente é interno (FMO — moagem; FRA — fábrica de rações) ou externo (outra moagem). Regista-se o lote de grão, o motivo, a correcção, a acção adicional e a prevenção.
 >
 > Os registos vão no ficheiro diário (schema 2). Os rolos ficam só na Prodn-Mgt.
 >

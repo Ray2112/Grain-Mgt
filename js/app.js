@@ -1585,7 +1585,12 @@
   const FU = window.FsscUI({ lang: function () { return I18n.lang; }, esc: esc, toast: toast, render: render, area: 'grain',
     load: function () { return DB.all('fssc'); }, add: function (rec) { return DB.add('fssc', rec); },
     operator: function () { return (S.settings && S.settings.operator) || ''; },
-    pin: function (pin) { return checkPin(pin).then(function (r) { return { ok: r === 'ok', msg: r === 'ok' ? '' : pinMsg(r) }; }); } });
+    pin: function (pin) { return checkPin(pin).then(function (r) { return { ok: r === 'ok', msg: r === 'ok' ? '' : pinMsg(r) }; }); },
+    // Reclamações (Zhax, 28-10-2026): cliente interno — FMO (moagem) ou FRA (fábrica de rações) — ou externo (outras moagens)
+    complaints: true,
+    customers: [{ id: 'FMO', label: 'FMO — Moagem' }, { id: 'FRA', label: 'FRA — Fábrica de rações' }],
+    products: function () { const out = []; CEREALS.forEach(function (c) { if (c === 'Milho') COLOURS.forEach(function (k) { out.push(c + ' ' + k); }); else out.push(c); }); return out; },
+    lots: function () { return S.lots.map(function (l) { return l.code || l.id; }).filter(Boolean); } });
 
   // ---------------- arranque / start ----------------
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
