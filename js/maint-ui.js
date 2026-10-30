@@ -158,7 +158,8 @@ window.MaintUI = function (C) {
   function warnText(w) {
     if (w.type === 'pm_overdue') return t('wPm', { eq: w.equipment, task: w.task, d: ddmm(w.due), n: w.daysLate });
     if (w.type === 'pm_tasks_overdue') return t('wPmTasks', { n: w.n }) + ': ' + w.items.slice(0, 3).map(x => x.code).join(', ') + (w.n > 3 ? '…' : '');
-    return t(WT[w.type] || 'wRollDue', { p: w.name || w.passageId, l: w.lineId, h: nf(w.hours), lim: nf(w.limit) }) + (w.note ? ' — ' + w.note : '');
+    const s = t(WT[w.type] || 'wRollDue', { p: w.name || w.passageId, l: w.lineId, h: nf(w.hours), lim: nf(w.limit) });
+    return (w.hours === null || w.hours === undefined ? s.replace(/, [^,]*— de [^)]*\)/, ')').replace(/, [^,]*— of [^)]*\)/, ')') : s) + (w.note ? ' — ' + w.note : '');
   }
   function banners() {
     return warnings().map(w => `<div class="mt-bn ${w.level === 'warn' ? 'mt-amb' : 'mt-bad'}" data-mact="tab" data-v="${w.type === 'pm_overdue' ? 'pm' : 'rolls'}">${w.type === 'pm_overdue' ? '⏰' : '⚙'} ${esc(warnText(w))}</div>`).join('');
