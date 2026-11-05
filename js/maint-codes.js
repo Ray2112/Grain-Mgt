@@ -2,7 +2,7 @@
  * Fonte: 2026-09-30_FMO_Downtime_Codes_v2.xlsx (Folha1) + P18 conforme v3 (26-10-2026). Ao mudar a lista na Prodn-Mgt, actualizar também aqui. [código, nome, Tier 3, tratamento OEE] */
 (function (root) {
   'use strict';
-  const SOURCE = "2026-09-30_FMO_Downtime_Codes_v2.xlsx (Folha1) + P18 conforme v3 (26-10-2026)";
+  const SOURCE = "/Parameters/Downtime Codes v3.xlsx (Dropbox) — decisões do dono 2026-11-05";
   const CODES = [
     ["P01","PRODUCTION START-UP","Process","Counted as loss"],
     ["A01","SCALES","Breakdown","Counted as loss"],
@@ -15,11 +15,11 @@
     ["O03","SCHEDULED MAINTENANCE","Other","Excluded - Planned"],
     ["P04","LOOSE BELTS","Process","Counted as loss"],
     ["A04","FLOUR CIRCUIT","Breakdown","Counted as loss"],
-    ["O04","POWER FAILURE - ENDE GRID","Power Failure","Excluded - External"],
+    ["O04","POWER FAILURE","Other","Excluded - External"],
     ["P05","LEVEL PROBE TRIP","Process","Counted as loss"],
     ["A05","SASSORES","Breakdown","Counted as loss"],
     ["O05","SPECIAL PROJECTS","Other","Excluded - Planned"],
-    ["P06","ROLLER CHANGE (SCHEDULED)","Process","Excluded - Planned"],
+    ["P06","ROLLER CHANGE","Process","Excluded - Planned"],
     ["A06","AIRLOCK LINE","Breakdown","Counted as loss"],
     ["O06","SCHEDULED REPAIRS","Other","Excluded - Planned"],
     ["P07","BRAN BIN FILLING","Process","Counted as loss"],
@@ -46,13 +46,13 @@
     ["A14","PLANSIFTER","Breakdown","Counted as loss"],
     ["P15","BROKEN SIEVES/SCREENS","Process","Counted as loss"],
     ["A15","BRAN SCREW CONVEYOR","Breakdown","Counted as loss"],
-    ["P16","NO GRAIN AVAILABLE FOR MILLING","Other","Excluded - External"],
+    ["P16","NO GRAIN AVAILABLE FOR MILLING","Process","Excluded - External"],
     ["A16","VIBRATORS","Breakdown","Counted as loss"],
     ["P17","FUBA BIN FULL","Other","Excluded - External"],
     ["A17","BROKEN BELTS","Breakdown","Counted as loss"],
     ["P18","INSPECTION/CLEANING PLAN COMPLIANCE","Process","Excluded - Planned"],
     ["A18","FLOUR COLLECTOR SCREW CONVEYOR","Breakdown","Counted as loss"],
-    ["P19","EXCESS FINISHED PRODUCT","Other","Excluded - External"],
+    ["P19","EXCESS FINISHED PRODUCT","Process","Excluded - External"],
     ["A19","BURNT MOTOR/GEAR MOTOR","Breakdown","Counted as loss"],
     ["P20","THERMAL TRIP","Process","Counted as loss"],
     ["A20","DRAG CONVEYOR SCRAPER","Breakdown","Counted as loss"],
@@ -63,7 +63,6 @@
     ["P23","POLISHER FILLING","Process","Counted as loss"],
     ["A50","OTHER BREAKDOWNS","Breakdown","Counted as loss"],
     ["P24","EMERGENCY STOP","Process","Counted as loss"],
-    ["P25","ROLL DAMAGE IN PRODUCTION","Process","Counted as loss"],
     ["P50","OTHER PROCESS STOP","Process","Counted as loss"]
   ].map(([code, name, tier3, oee]) => ({ code, name, tier3, oee, active: true }));
   const api = { SOURCE, CODES };
