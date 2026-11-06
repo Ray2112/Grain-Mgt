@@ -36,7 +36,7 @@
     ["O10","NO PRODUCTION","Other","Excluded - Planned"],
     ["P11","PNEUMATIC SYSTEM FILLING","Process","Counted as loss"],
     ["A11","BRAN BRUSHERS","Breakdown","Counted as loss"],
-    ["O11","FEED MILL","Feed Mill","Excluded - External"],
+    ["O11","FEED MILL","Other","Excluded - External"],
     ["P12","OTHER FILLING","Process","Counted as loss"],
     ["A12","FILTERS","Breakdown","Counted as loss"],
     ["O50","OTHER STOP","Other","Excluded - Planned"],
