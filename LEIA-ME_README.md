@@ -1,5 +1,12 @@
-# Moagem — Registos (v0.6.0, Fase A)
+# Moagem — Registos (v0.9.0, Fase A)
 
+> **v0.9.0 — Códigos de paragem v3 (Downtime Codes v3).** Lista de 60 códigos segundo as decisões de 5 e 6 de novembro de 2026, igual à Prodn-Mgt.
+> - P25 (ROLL DAMAGE IN PRODUCTION) removido; os registos antigos mantêm o código guardado.
+> - P16, P19 e P24 = Processo. O04 = Outra («POWER FAILURE»). O11 = Outra («FEED MILL», excluída, externa). P06 = «ROLLER CHANGE».
+> - P17 mantém «FUBA BIN FULL» até o ficheiro Downtime Codes v3 ser atualizado.
+>
+> *EN:* Downtime Codes v3, 60 codes per the 5–6 Nov 2026 owner decisions, matching Prodn-Mgt. P25 removed; P16/P19/P24 Process; O04 and O11 Other; P06 "ROLLER CHANGE"; P17 name kept until the v3 workbook is updated.
+>
 > **v0.8.0 (28-10-2026) — Manutenção.** Novo separador «Manut.» com:
 >
 > - **Turno.**
