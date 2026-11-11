@@ -1,4 +1,4 @@
-// node tests/downtime-v3.test.js — códigos de paragem v3 (decisões D-16 a D-18, D-21; 5-6 Nov 2026)
+// node tests/downtime-v3.test.js — códigos de paragem v3 (decisões D-16 a D-18, D-21; 5-6 Nov 2026; P16/P19 9 Nov)
 const assert = require('assert');
 const { CODES: C } = require('../js/maint-codes.js');
 const by = Object.fromEntries(C.map(c => [c.code, c]));
@@ -10,8 +10,9 @@ t('60 códigos activos (v3 com P25 removido)', () => {
   assert.strictEqual(new Set(C.map(c => c.code)).size, 60, 'códigos duplicados');
 });
 t('P25 removido (D-16)', () => { assert.strictEqual(by.P25, undefined); });
-t('tier Processo: P16, P19, P24 (D-17)', () => {
-  for (const k of ['P16', 'P19', 'P24']) assert.strictEqual(by[k].tier3, 'Process', k);
+t('tier Processo: P24 (D-17)', () => { assert.strictEqual(by.P24.tier3, 'Process'); });
+t('P16 e P19 = Outra, excluídas externas (decisão 9 Nov, altera D-17)', () => {
+  for (const k of ['P16', 'P19']) { assert.strictEqual(by[k].tier3, 'Other', k); assert.strictEqual(by[k].oee, 'Excluded - External', k); }
 });
 t('O04 = Outra, nome POWER FAILURE (D-17, D-18)', () => {
   assert.strictEqual(by.O04.tier3, 'Other');
