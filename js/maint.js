@@ -248,7 +248,8 @@
   //   status: 'planned' (há trabalho em aberto) | 'never' (sem registo de execução) | 'overdue' (nextDue < hoje) | 'due' (vence até ao fim da semana) | 'ok'
   //   pickable: só se não houver trabalho em aberto e a tarefa estiver devida (nunca feita, em atraso ou vence nessa semana) —
   //   "se já foi feita não pode ser escolhida até voltar a vencer" (Zhax, 28-10-2026).
-  //   overdue: nextDue já passou e não foi feita desde então (mesmo que esteja planeada). Sem registo não conta como atraso (sem data de referência).
+  //   overdue: nextDue já passou e não foi feita desde então (mesmo que esteja planeada). v2.6.0 / v0.10.0: sem registo conta como atraso
+  //   (Zhax, 12-11-2026); daysLate fica 0 porque não há data de referência.
   function pmCatalog(tasks, entries, today, week) {
     const S = pmState(entries, today);
     const r = weekRange(week || weekOf(today));
@@ -259,10 +260,10 @@
       const lastDone = done[done.length - 1] || null;
       const nextDue = lastDone ? addMonthsDate(lastDone, tk.months) : null;
       const openJob = mine.find(s => s.open) || null;
-      const overdue = !!(nextDue && today > nextDue);
+      const overdue = !lastDone || !!(nextDue && today > nextDue);
       let status = openJob ? 'planned' : !lastDone ? 'never' : overdue ? 'overdue' : nextDue <= weekEnd ? 'due' : 'ok';
       return { task: tk, id: tk.id, lastDone, nextDue, openJob, overdue, status, pickable: !openJob && status !== 'ok',
-        daysLate: overdue ? daysBetween(nextDue, today) : 0 };
+        daysLate: overdue && nextDue ? daysBetween(nextDue, today) : 0 };
     });
   }
 

@@ -1,4 +1,8 @@
-# Moagem — Registos (v0.9.0, Fase A)
+# Moagem — Registos (v0.10.0, Fase A)
+
+> **v0.10.0 — 12-11-2026.** Preventiva: tarefa sem registo conta como em atraso. Envio diário: aviso no topo quando o telemóvel não está ligado ao envio para o Dropbox, o envio falhou ou o dia de ontem não foi enviado.
+>
+> *EN:* preventive tasks with no record count as overdue; a top banner warns when this phone is not connected to Dropbox sending, sending failed, or yesterday was not sent.
 
 > **v0.9.0 — Códigos de paragem v3 (Downtime Codes v3).** Lista de 60 códigos segundo as decisões de 5, 6 e 9 de novembro de 2026, igual à Prodn-Mgt.
 > - P25 (ROLL DAMAGE IN PRODUCTION) removido; os registos antigos mantêm o código guardado.

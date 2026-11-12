@@ -106,10 +106,21 @@
     return { ok, failed, lastErr };
   }
   function status() { return ls.get(STATUS, {}); }
+  // 0.10.0: estado para o aviso no topo — 'off' (sem ligação), 'failed', 'unsent' (dia de ontem por enviar) ou null
+  function issue() {
+    if (!configured()) return null;
+    if (!signedIn()) return { kind: 'off' };
+    const st = status();
+    if (st.failed) return { kind: 'failed', error: st.lastError || '' };
+    const yd = new Date(Date.now() - 24 * 3600000);
+    const day = L().shiftOf(L().today(yd), L().nowTime(yd)).date;
+    if (!ls.get(SENT, {})[R().dayPath(cfg().recordsDir, day)]) return { kind: 'unsent', day };
+    return null;
+  }
   function setContext(c) { ctx = Object.assign({}, ctx, c || {}); }
   if (root.document) {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') schedule(); });
     setInterval(schedule, 15 * 60000);
   }
-  root.RecSync = { configured, signedIn, signIn, signOut, handleReturn, schedule, sync, status, setContext };
+  root.RecSync = { configured, signedIn, signIn, signOut, handleReturn, schedule, sync, status, issue, setContext };
 })(typeof window !== 'undefined' ? window : this);
