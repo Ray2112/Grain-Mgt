@@ -180,6 +180,9 @@
     if (S.tab === 'settings') main.innerHTML = settingsView();
     if (S.tab === 'intake' && S.form) updateDyn();
     // Aviso permanente enquanto o modo de teste estiver ligado (os registos novos ficam marcados test:true)
+    // 0.10.0: aviso de envio dos registos diários (sem ligação, falha, ou ontem por enviar) em todos os separadores menos Definições
+    const up = S.tab !== 'settings' && window.RecSync && window.RecSync.issue ? window.RecSync.issue() : null;
+    if (up) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="settings">☁ ' + esc(t('up_' + up.kind).replace('{e}', up.error || '').replace('{d}', up.day || '')) + '</div>');
     if (S.settings && S.settings.testMode) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status"><b>' + esc(t('test_banner')) + '</b></div>');
     renderSheet();
   }

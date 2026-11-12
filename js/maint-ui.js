@@ -58,7 +58,7 @@ window.MaintUI = function (C) {
       newCons: 'Novo consumível', purpose: 'Para quê / onde', totShift: 'Total do turno', totDay: 'Total do dia',
       wPm: 'Preventiva em atraso: {eq} — {task} (limite {d}, {n} dia(s))', wPmTasks: 'Lista de preventiva: {n} tarefa(s) em atraso',
       pmList: 'Lista de preventiva', pmPick: 'Da lista de preventiva', pmFree: '— trabalho fora da lista', plan: 'Planear', lastDone: 'feita', nextDue: 'próxima',
-      ps_overdue: 'Em atraso', ps_due: 'Vence esta semana', ps_never: 'Sem registo', ps_planned: 'Planeada', ps_ok: 'Em dia', f_late: 'Em atraso', f_due: 'Para planear', f_all: 'Todas',
+      ps_overdue: 'Em atraso', ps_due: 'Vence esta semana', ps_never: 'Sem registo (em atraso)', ps_planned: 'Planeada', ps_ok: 'Em dia', f_late: 'Em atraso', f_due: 'Para planear', f_all: 'Todas',
       fq_mensal: 'mensal', fq_trimestral: 'trimestral', fq_semestral: 'semestral', fq_anual: 'anual', pmListNote: 'Só se escolhem tarefas devidas: nunca feitas, em atraso ou que vencem na semana. Depois de feita, a tarefa fica bloqueada até voltar a vencer.',
       u_un: 'un', u_kg: 'kg', u_l: 'l', u_m: 'm', u_par: 'par', u_cx: 'cx'
     },
@@ -102,7 +102,7 @@ window.MaintUI = function (C) {
       newCons: 'New consumable', purpose: 'Purpose / where', totShift: 'Shift total', totDay: 'Day total',
       wPm: 'Preventive job overdue: {eq} — {task} (due {d}, {n} day(s))', wPmTasks: 'Preventive list: {n} task(s) overdue',
       pmList: 'Preventive list', pmPick: 'From the preventive list', pmFree: '— job not on the list', plan: 'Plan', lastDone: 'done', nextDue: 'next',
-      ps_overdue: 'Overdue', ps_due: 'Due this week', ps_never: 'No record', ps_planned: 'Planned', ps_ok: 'Up to date', f_late: 'Overdue', f_due: 'To plan', f_all: 'All',
+      ps_overdue: 'Overdue', ps_due: 'Due this week', ps_never: 'No record (overdue)', ps_planned: 'Planned', ps_ok: 'Up to date', f_late: 'Overdue', f_due: 'To plan', f_all: 'All',
       fq_mensal: 'monthly', fq_trimestral: 'quarterly', fq_semestral: 'half-yearly', fq_anual: 'annual', pmListNote: 'Only due tasks can be picked: never done, overdue or due in the week. Once done, a task is locked until it is due again.',
       u_un: 'pcs', u_kg: 'kg', u_l: 'l', u_m: 'm', u_par: 'pair', u_cx: 'box'
     }
@@ -323,7 +323,7 @@ window.MaintUI = function (C) {
       <section class="card">${W.list.map(job).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>${pmListCard(CAT, w)}`;
   }
   // Lista de preventiva da app para a semana escolhida: em atraso, para planear, ou todas; "Planear" abre o formulário já preenchido
-  const PS_CLS = { overdue: 'mt-bad', due: 'mt-warn', never: '', planned: 'mt-ok', ok: 'mt-ok' };
+  const PS_CLS = { overdue: 'mt-bad', due: 'mt-warn', never: 'mt-bad', planned: 'mt-ok', ok: 'mt-ok' };   // v2.6.0: sem registo = em atraso
   function pmListCard(CAT, w) {
     if (!CAT.length) return '';
     const fl = st.pmFilter || 'due';
