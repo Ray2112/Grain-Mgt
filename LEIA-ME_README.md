@@ -1,4 +1,12 @@
-# Moagem — Registos (v0.11.0, Fase A)
+# Moagem — Registos (v0.12.0, Fase A)
+
+> **v0.12.0 — Turno, avisos em vez de retenções, paragens (Zhax, 13-11-2026).**
+> - **Separador Turno (novo, primeiro):** login do chefe de turno da secção de silos (operadores, trabalhos a fazer — sugeridos pela app e lista editável —, camiões esperados, estado das recepções e da alimentação, leituras iniciais das balanças BA01–BA04, comentários; o stock dos silos fica registado sozinho) e logout (estado, actividades feitas, leituras finais, quantidade por balança, balanças × registos como aviso, % do plano de envio para a moagem e dos camiões esperados, stock no fim). Relatório do turno em Excel. Aviso em todos os separadores quando o turno não tem login.
+> - **Sem retenções:** uma leitura Vermelha ou a disposição «Rejeitar» são avisos; nada fica bloqueado.
+> - **Descarga com stock insuficiente:** só com o silo seguinte na fila; o que faltar sai do último silo da fila e fica como aviso. Capacidade e verificação da bin passam a avisos gravados na descarga (sem «parar e perguntar»).
+> - **Paragens (Manut.):** tipo (mecânica, eléctrica, processo, outra) → código Downtime Codes v3 → hora de início e de fim (duração calculada) → falha → acção, como na Prodn-Mgt.
+>
+> *EN:* Shift tab (silo-section login / logout, BA01–BA04 scales, editable jobs list, targets: tonnes to the mill vs plan and trucks vs expected, Excel report); no silo holds, only warnings; short-stock discharge only with the next silo queued; Prodn-Mgt-style stoppages in Maint.
 
 > **v0.11.0 — 13-11-2026.** Depois de cada gravação (com o envio para o Dropbox ligado) a app envia também o estado dos silos para /Apps/Mill-App-Sync/silos-status.json. A Prodn-Mgt lê-o: o stock dos silos e as descargas para as bins chegam lá sem cópia à mão. Desde 14/11/2026 07:00 a descarga silo → bin regista-se só aqui («Discharge to line»).
 >

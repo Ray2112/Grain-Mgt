@@ -227,3 +227,13 @@ t('resumo do turno e totais de consumíveis', () => {
 });
 
 console.log('maint: ' + n + ' testes OK');
+
+// v2.8.3 / v0.12.0: paragem como na Prodn-Mgt — tipo → código v3 → início e fim → falha (Zhax, 13-11-2026)
+{
+  const codes = [{ code: 'A01', name: 'SCALES', active: true }, { code: 'P01', name: 'START-UP', active: true }];
+  assert.deepStrictEqual(M.validateStop({ stopKind: 'electrical', code: 'A01', startTime: '23:30', endTime: '00:15', description: 'Disjuntor', by: 'Rui' }, codes), []);
+  assert.strictEqual(M.minsBetween('23:30', '00:15'), 45, 'passa a meia-noite');
+  assert.deepStrictEqual(M.validateStop({ stopKind: 'process', code: 'A01', startTime: '', endTime: '10:00', description: '', by: '' }, codes), ['code', 'startTime', 'endTime', 'description', 'by']);
+  assert.deepStrictEqual(M.validateStop({ category: 'Breakdown', code: 'A01', durationMin: '30', description: 'x', by: 'y' }, codes), [], 'registos antigos (categoria + duração) continuam válidos');
+  console.log('paragem v3: OK');
+}

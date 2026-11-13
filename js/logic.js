@@ -385,7 +385,9 @@
     const ageDays = dates.length ? daysBetween(dates[0], o.now.date) : null;
     const wDays = num(st.weeklyDays) || 7;
     const weeklyDue = (o.kg > 0) && (lastW ? daysBetween(lastW.date, o.now.date) >= wDays : (ageDays === null || ageDays >= wDays));
-    return { level: level, drivers: drivers, noData: noData, held: held, rejected: rejected, lastDisp: lastD, lastTemp: lastTmp, lastEval: ev, lastWeekly: lastW, prevWeekly: prevW,
+    // 0.12.0 (Zhax, 13-11-2026): "Do not hold any silos, just have warnings". A retenção e a rejeição passam a avisos
+    // (holdWarn / rejectWarn); held e rejected ficam sempre false, por isso nada é bloqueado por elas.
+    return { level: level, drivers: drivers, noData: noData, held: false, rejected: false, holdWarn: held, rejectWarn: rejected, lastDisp: lastD, lastTemp: lastTmp, lastEval: ev, lastWeekly: lastW, prevWeekly: prevW,
       ageDays: ageDays, unknownAge: (o.kg > 0 && !dates.length), weeklyDue: weeklyDue };
   }
 
@@ -461,7 +463,7 @@
   // ---------- identificadores de registo (sincronização futura) ----------
   // Cada registo tem um uid global (UUID v4) e o deviceId de origem. A chave local (IndexedDB) não é partilhada.
   const UID_STORES = ['lots', 'events', 'monitor', 'sevents', 'maint', 'fssc'];
-  const APP_VERSION = '0.11.0';
+  const APP_VERSION = '0.12.0';
   // Versão do mestre partilhado (silos e capacidades). Muda sempre que SILO_IDS ou as capacidades mudarem.
   const MASTER_VERSION = '2026-10-14.1';   // não muda: silos e capacidades iguais (só unidades internas)
   // Compara a versão do mestre gravada num registo/cópia com a desta app: 'same' | 'older' | 'newer' | 'missing'.

@@ -27,6 +27,8 @@ window.MaintUI = function (C) {
       sumStops: 'Paragens', sumMin: 'min de paragem', sumWork: 'Intervenções', sumCons: 'Consumíveis',
       notInKpi: 'Registos de manutenção separados do diário de turno: estes minutos não entram no indicador de 72 min/dia.',
       newStop: 'Nova paragem', category: 'Categoria', c_Process: 'Processo', c_Breakdown: 'Avaria', c_Other: 'Outra', code: 'Código de paragem',
+      stopKind: 'Tipo de paragem', k_mechanical: 'Mecânica', k_electrical: 'Eléctrica', k_process: 'Processo', k_other: 'Outra', stopAction: 'Acção tomada',
+      durCalc: 'Duração: {m} min', durHint: 'A duração é calculada da hora de início e de fim.',
       line: 'Linha / área', equipment: 'Equipamento', startTime: 'Hora de início', durationMin: 'Duração (min)', description: 'Descrição da falha',
       newWork: 'Nova intervenção', stopLink: 'Paragem associada', noLink: '— nenhuma', workType: 'Tipo', w_corrective: 'Correctiva', w_preventive: 'Preventiva',
       w_inspection: 'Inspecção', w_other: 'Outra', workDesc: 'O que foi feito', parts: 'Material usado', item: 'Artigo', qty: 'Qtd.', unit: 'Unid.',
@@ -71,6 +73,8 @@ window.MaintUI = function (C) {
       sumStops: 'Stoppages', sumMin: 'stop min', sumWork: 'Interventions', sumCons: 'Consumables',
       notInKpi: 'Maintenance records are separate from the shift log: these minutes do not count towards the 72 min/day KPI.',
       newStop: 'New stoppage', category: 'Category', c_Process: 'Process', c_Breakdown: 'Breakdown', c_Other: 'Other', code: 'Downtime code',
+      stopKind: 'Stoppage type', k_mechanical: 'Mechanical', k_electrical: 'Electrical', k_process: 'Process', k_other: 'Other', stopAction: 'Action taken',
+      durCalc: 'Duration: {m} min', durHint: 'The duration is calculated from the start and end times.',
       line: 'Line / area', equipment: 'Equipment', startTime: 'Start time', durationMin: 'Duration (min)', description: 'Fault description',
       newWork: 'New intervention', stopLink: 'Linked stoppage', noLink: '— none', workType: 'Type', w_corrective: 'Corrective', w_preventive: 'Preventive',
       w_inspection: 'Inspection', w_other: 'Other', workDesc: 'Work done', parts: 'Material used', item: 'Item', qty: 'Qty', unit: 'Unit',
@@ -213,19 +217,23 @@ window.MaintUI = function (C) {
     const sm = shiftSum(), f = st.form && st.form.kind === 'stop' ? st.form : null;
     let form = '';
     if (f) {
-      const codes = f.category ? M.codesFor(f.category, C.codes()) : [];
+      // v2.8.3 / v0.12.0: tipo → código v3 → início e fim (duração calculada) → falha → acção (como na Prodn-Mgt)
+      const cat = M.KIND_CAT[f.stopKind] || '';
+      const codes = cat ? M.codesFor(cat, C.codes()) : [];
+      const dur = M.minsBetween(f.startTime, f.endTime);
       form = `<div class="mt-box"><div class="grid2">
-        ${fld(t('category'), `<select data-mf="category"><option value="">—</option>${M.CATEGORIES.map(c => opt(c, f.category, t('c_' + c))).join('')}</select>`, 1)}
-        ${fld(t('code'), `<select data-mf="code" ${f.category ? '' : 'disabled'}><option value="">—</option>${codes.map(c => opt(c.code, f.code, c.code + ' ' + c.name)).join('')}</select>`, 1)}
+        ${fld(t('stopKind'), `<select data-mf="stopKind"><option value="">—</option>${M.STOP_KINDS.map(k => opt(k, f.stopKind, t('k_' + k))).join('')}</select>`, 1)}
+        ${fld(t('code'), `<select data-mf="code" ${cat ? '' : 'disabled'}><option value="">—</option>${codes.map(c => opt(c.code, f.code, c.code + ' ' + c.name)).join('')}</select>`, 1)}
         ${fld(t('line'), lineSel(f.lineId))}${fld(t('equipment'), inp('equipment', f.equipment))}
-        ${fld(t('startTime'), inp('startTime', f.startTime, 'type="time"'))}${fld(t('durationMin'), inp('durationMin', f.durationMin, 'inputmode="decimal"'), 1)}</div>
-        ${fld(t('description'), area('description', f.description), 1)}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savestop')}</div>`;
+        ${fld(t('startTime'), inp('startTime', f.startTime, 'type="time"'), 1)}${fld(t('endTime'), inp('endTime', f.endTime, 'type="time"'), 1)}</div>
+        <p class="mt-sub">${esc(dur !== null ? t('durCalc', { m: dur }) : t('durHint'))}</p>
+        ${fld(t('description'), area('description', f.description), 1)}${fld(t('stopAction'), area('action', f.action))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savestop')}</div>`;
     }
     return `<section class="card">${C.kpiNote ? `<p class="mt-sub">${esc(t('notInKpi'))}</p>` : ''}${f ? form : newBtn('stop', t('newStop'))}</section>
       <section class="card"><h3>${esc(t('t_stops'))} · ${sm.stopMin} min</h3>${sm.stops.map(r => `<div class="mt-item">
         <div><b>${esc(r.code || '')} ${esc((r.codeInfo && r.codeInfo.name) || '')}</b> <span class="mt-c">${esc(t('c_' + (M.CATEGORIES.indexOf(r.category) >= 0 ? r.category : 'Other')))}</span>
         · <b>${esc(nf(r.durationMin))} min</b>${r.startT ? ' · ' + esc(hhmm(r.startT)) : ''}${r.lineId ? ' · ' + esc(lineName(r.lineId)) : ''}${r.equipment ? ' · ' + esc(r.equipment) : ''}</div>
-        <div>${esc(r.description)}</div>${meta(r)}<div>${voidBox(r.uid)}</div></div>`).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
+        <div>${r.stopKind ? '<b>' + esc(t('k_' + r.stopKind)) + ':</b> ' : ''}${esc(r.description)}</div>${r.action ? `<div class="mt-sub">${esc(t('stopAction'))}: ${esc(r.action)}</div>` : ''}${meta(r)}<div>${voidBox(r.uid)}</div></div>`).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
   }
   async function saveStop() {
     const f = st.form;
@@ -233,9 +241,10 @@ window.MaintUI = function (C) {
     const startT = f.startTime ? shiftMs(sh().day, sh().period, f.startTime) : null;
     if (f.startTime && startT === null) e.push('startTime');
     if (errs(e)) return;
-    const c = M.findCode(f.code, C.codes());
-    await save({ kind: 'stop', category: f.category, code: f.code, codeInfo: { code: c.code, name: c.name, tier3: c.tier3 || null, oee: c.oee || null, source: C.codesSource ? C.codesSource() : null },
-      lineId: f.lineId || null, equipment: f.equipment.trim(), startT, durationMin: M.num(f.durationMin), description: f.description.trim(), by: f.by.trim() });
+    const c = M.findCode(f.code, C.codes()), dur = M.minsBetween(f.startTime, f.endTime);
+    await save({ kind: 'stop', stopKind: f.stopKind, category: M.KIND_CAT[f.stopKind], code: f.code, codeInfo: { code: c.code, name: c.name, tier3: c.tier3 || null, oee: c.oee || null, source: C.codesSource ? C.codesSource() : null },
+      lineId: f.lineId || null, equipment: f.equipment.trim(), startT, endT: isNum(startT) ? startT + dur * 60000 : null, durationMin: dur,
+      description: f.description.trim(), action: (f.action || '').trim(), by: f.by.trim() });
   }
 
   // ----- intervenções -----
@@ -532,7 +541,7 @@ window.MaintUI = function (C) {
     const by = C.operator() || '';
     const F = {
       shift: { technicians: '', notes: '' },
-      stop: { category: '', code: '', lineId: '', equipment: '', startTime: '', durationMin: '', description: '' },
+      stop: { stopKind: '', code: '', lineId: '', equipment: '', startTime: '', endTime: '', description: '', action: '' },
       work: { workType: '', stopUid: '', pmJobUid: '', lineId: '', equipment: '', startTime: '', endTime: '', description: '', parts: [{ item: '', qty: '', unit: 'un' }], doneBy: '' },
       pmJob: { week: week(), dueDate: (M.weekRange(week()) || [])[1] || '', lineId: '', equipment: '', task: '', responsible: '', taskId: '' },
       pmUpdate: { jobUid: ref, status: '', progressPct: '', newDue: '', doneBy: '', note: '' },
@@ -598,8 +607,9 @@ window.MaintUI = function (C) {
     if (el.dataset.mf && st.form) {
       const k = el.dataset.mf;
       st.form[k] = el.type === 'checkbox' ? el.checked : el.value;
+      if (st.form.kind === 'stop' && (k === 'startTime' || k === 'endTime')) { const d = M.minsBetween(st.form.startTime, st.form.endTime); const o = el.closest('.mt-box') && el.closest('.mt-box').querySelector('p.mt-sub'); if (o) o.textContent = d !== null ? t('durCalc', { m: d }) : t('durHint'); }
       if (isChange && el.tagName === 'SELECT') {
-        if (k === 'category') st.form.code = '';
+        if (k === 'category' || k === 'stopKind') st.form.code = '';
         if (k === 'taskId' && st.form.kind === 'pmJob') pickTask(el.value);
         keep();
       }

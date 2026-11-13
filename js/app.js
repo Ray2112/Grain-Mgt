@@ -150,7 +150,7 @@
   // ---------------- casca / shell ----------------
   // Linhas de moagem e bins de milho sujo (B01–B04, mestre na app de Registos de QC) / mill lines and dirty-maize bins
   const LINES = ['C', 'D'], DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'];
-  const TITLES = { intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', maint: 'maint_title', fssc: 'fssc_title', export: 'export_title', settings: 'settings_title' };
+  const TITLES = { shift: 'shift_title', intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', maint: 'maint_title', fssc: 'fssc_title', export: 'export_title', settings: 'settings_title' };
   function renderShell() {
     document.title = t('app_name');
     $('#title').textContent = t(TITLES[S.tab]);
@@ -165,6 +165,7 @@
   function render() {
     renderShell();
     const main = $('#main');
+    if (S.tab === 'shift') main.innerHTML = SU.view();
     if (S.tab === 'intake') main.innerHTML = S.form ? intakeForm() : intakeList();
     if (S.tab === 'silos') main.innerHTML = silosView();
     if (S.tab === 'insp') main.innerHTML = inspView();
@@ -180,7 +181,10 @@
     if (S.tab === 'settings') main.innerHTML = settingsView();
     if (S.tab === 'intake' && S.form) updateDyn();
     // Aviso permanente enquanto o modo de teste estiver ligado (os registos novos ficam marcados test:true)
-    // 0.10.0: aviso de envio dos registos diários (sem ligação, falha, ou ontem por enviar) em todos os separadores menos Definições
+    // 0.12.0: turno actual sem login (depois da primeira meia hora)
+    const sl = S.tab !== 'shift' && window.__shiftUI ? window.__shiftUI.issue() : null;
+    if (sl) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="shift">👷 ' + esc(sl) + '</div>');
+    // 0.11.0: aviso de envio dos registos diários (sem ligação, falha, ou ontem por enviar) em todos os separadores menos Definições
     const up = S.tab !== 'settings' && window.RecSync && window.RecSync.issue ? window.RecSync.issue() : null;
     if (up) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="settings">☁ ' + esc(t('up_' + up.kind).replace('{e}', up.error || '').replace('{d}', up.day || '')) + '</div>');
     if (S.settings && S.settings.testMode) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status"><b>' + esc(t('test_banner')) + '</b></div>');
@@ -333,7 +337,7 @@
     return S.settings.silos.filter(function (s) { return s.id !== excludeId; }).map(function (s) {
       let fit = L.siloFit(item, s);
       const ss = siloSt(s);
-      if (fit.ok && (ss.held || ss.rejected || ss.level >= 4)) fit = { ok: false, why: 'held' };
+      // 0.12.0: silo em Vermelho / retido é aviso, não exclusão
       const free = L.freeSpace(s, S.events);
       return { s: s, fit: fit, free: free, ss: ss };
     });
@@ -468,7 +472,7 @@
     if (!f.dest.length) { toast(t('need_silo')); return; }
     const plan = destPlan(item, lot.kg, f.dest);
     if (plan.short > 0) { toast(t('short_space') + ' ' + fmtKg(plan.short)); return; }
-    const bad = f.dest.filter(function (id) { const s = siloById(id); if (!s || !L.siloFit(item, s).ok) return true; const ss = siloSt(s); return ss.held || ss.rejected || ss.level >= 4; });
+    const bad = f.dest.filter(function (id) { const s = siloById(id); return !s || !L.siloFit(item, s).ok; });   // 0.12.0: Vermelho / retido não bloqueia
     if (bad.length) { toast(t('silo_not_allowed') + ' ' + bad.join(', ')); return; }
     const needs = authNeeds(d.grade, plan);
     const badIn = L.binCheck(plan.parts.map(function (p) { return { silo: p.silo, type: 'IN', kg: p.kg }; }), S.events);
@@ -581,8 +585,8 @@
       if (bs.state === 'EMPTY') h += '<div class="badge b-HELD fit">' + esc(t('silo_empty')) + '</div>';
       if (bs.state === 'NEG') h += '<p class="warn small">' + esc(t('negative_stock')) + '</p>';
       if (!S.events.some(function (e) { return e.type === 'OPENING' && e.silo === s.id; })) h += '<button type="button" class="btn small" data-action="silo-opening" data-silo="' + esc(s.id) + '">' + esc(t('act_opening')) + '</button>';
-      if (ss.held) h += '<p class="holdbar">⛔ ' + esc(t('held_banner')) + '</p><button type="button" class="btn small" data-action="corr-status" data-silo="' + esc(s.id) + '">' + esc(t('corr_status')) + '</button>';
-      if (ss.rejected) h += '<p class="holdbar">⛔ ' + esc(t('rejected_banner')) + '</p>';
+      if (ss.holdWarn) h += '<p class="warn">⚠ ' + esc(t('warn_red_banner')) + '</p><button type="button" class="btn small" data-action="corr-status" data-silo="' + esc(s.id) + '">' + esc(t('corr_status')) + '</button>';
+      if (ss.rejectWarn) h += '<p class="warn">⚠ ' + esc(t('warn_reject_banner')) + '</p>';
       h += drvList(ss, 1);
       h += '<details><summary class="small muted">' + esc(t('lots_in_silo')) + ' (' + c.lots.length + ')</summary>' +
         (c.lots.length ? c.lots.map(function (id) { const l = lotsById[id]; return '<div class="row small"><span class="mono grow">' + esc(l ? (l.code || l.id) : id) + '</span><span class="muted">' + (l ? esc(l.date) + ' · ' + esc(cerName(l.cereal)) + (l.colour ? ' ' + esc(l.colour) : '') + ' · ' + esc(gradeName(l.grade)) + ' · ' + esc(l.supplier) : '') + '</span></div>'; }).join('') : '<div class="muted small">' + esc(t('empty_silo')) + '</div>') + '</details>';
@@ -648,10 +652,10 @@
       const openEv = S.sev.find(function (e) { return e.silo === s.id && e.status === 'OPEN'; });
       h += '<div class="card stack"><div class="row"><div class="grow"><div class="big2">' + esc(s.id) + ' ' + lvChip(ss) + '</div><div class="small muted">' + esc(siloDesig(s)) + ' · ' + fmtKg(ss.kg) + (ageText(ss) ? ' · ' + esc(ageText(ss)) : '') + '</div></div></div>';
       if (ss.level === 5) h += '<p class="holdbar">🚨 ' + esc(t('emerg_banner')) + '</p>';
-      if (ss.held) h += '<p class="holdbar">⛔ ' + esc(t('held_banner')) + '</p>';
-      if (ss.rejected) h += '<p class="holdbar">⛔ ' + esc(t('rejected_banner')) + '</p>';
+      if (ss.holdWarn) h += '<p class="warn">⚠ ' + esc(t('warn_red_banner')) + '</p>';
+      if (ss.rejectWarn) h += '<p class="warn">⚠ ' + esc(t('warn_reject_banner')) + '</p>';
       if (ss.level === 3) h += '<p class="warn small">' + esc(t('orange_banner')) + '</p>';
-      if (ss.lastDisp && !ss.held) h += '<p class="small">' + esc(t('disp_last')) + ': <b>' + esc(t('disp_' + ss.lastDisp.decision)) + '</b> — ' + esc(ss.lastDisp.by) + ', ' + esc(ss.lastDisp.date) + '</p>';
+      if (ss.lastDisp && !ss.holdWarn) h += '<p class="small">' + esc(t('disp_last')) + ': <b>' + esc(t('disp_' + ss.lastDisp.decision)) + '</b> — ' + esc(ss.lastDisp.by) + ', ' + esc(ss.lastDisp.date) + '</p>';
       h += drvList(ss, 0);
       if (ss.weeklyDue) h += '<div class="small flag">⏰ ' + esc(t('weekly_due')) + (ss.lastWeekly ? ' (' + esc(t('last')) + ': ' + esc(ss.lastWeekly.date) + ')' : '') + '</div>';
       else if (ss.lastWeekly) h += '<div class="small muted">' + esc(t('weekly_last')) + ': ' + esc(ss.lastWeekly.date) + '</div>';
@@ -659,7 +663,7 @@
       h += '<div class="grid2">' +
         '<button class="btn small" data-action="mon-weekly" data-silo="' + esc(s.id) + '">' + esc(t('act_weekly')) + '</button>' +
         '<button class="btn small" data-action="mon-treat" data-silo="' + esc(s.id) + '">' + esc(t('act_treat')) + '</button></div>';
-      if (ss.held) h += '<button class="btn small primary" data-action="mon-disp" data-silo="' + esc(s.id) + '">' + esc(t('act_disp')) + '</button>';
+      if (ss.holdWarn) h += '<button class="btn small primary" data-action="mon-disp" data-silo="' + esc(s.id) + '">' + esc(t('act_disp')) + '</button>';
       h += '</div>';
     });
     // Revisão semanal de idade (passo 8)
@@ -754,8 +758,7 @@
     if (!c) return '';
     const msgs = c.reasons.map(function (r) { return FEED_MSG[r.code] || (r.code.indexOf('FEED_') === 0 ? 'ficheiro das bins indisponível (' + r.code.slice(5) + ')' : r.code); });
     if (c.ok) return '<p class="small">Bin ' + esc(sh_bin()) + ': ' + fmtKg(c.bin.kg) + ' kg · ' + esc('ficheiro há ' + c.freshness.ageMin + ' min') + '</p>';
-    return '<p class="warn small">Parar e perguntar ao chefe de turno: ' + esc(msgs.join('; ')) + '</p>' +
-      '<label class="check"><input type="checkbox" name="feed_ok"' + (sv('feed_ok') ? ' checked' : '') + '> Confirmado pelo chefe de turno</label>';
+    return '<p class="warn small">⚠ ' + esc(t('feed_warn') + ': ' + msgs.join('; ')) + '</p>';   // 0.12.0: aviso, não paragem
   }
   function sh_bin() { return S.sheet && S.sheet.v.bin ? S.sheet.v.bin : ''; }
   const PERSON = { round: ['operator', 'operator'], weekly: ['operator', 'qc_name'], treat: ['operator', 'recorded_by'], disp: ['operator', 'qc_name'], event: ['operator', 'decided_by'], adjust: ['operator', 'corr_by'], override: ['operator', 'corr_by'] };
@@ -866,7 +869,7 @@
     const bal = L.siloContents(sh.silo, S.events).kg;
     const res = { kg: kg, errors: [], needs: [] };
     const sss = siloSt(src);
-    if (sss.held || sss.rejected) res.errors.push(sh.silo + ': ' + t('silo_held_short'));
+    if (sss.holdWarn || sss.rejectWarn) res.warns = [sh.silo + ': ' + t('warn_red_short')];
     if (kg === null) res.errors.push(t('need_kg'));
     else if (isNaN(kg) || kg <= 0) res.errors.push(t('check_values') + ': ' + t('kg'));
     else if (kg > bal) res.errors.push(t('more_than_stock') + ' ' + fmtKg(bal));
@@ -879,7 +882,7 @@
       const fit = L.siloFit({ cereal: src.cereal, colour: src.colour, grade: src.grade }, to);
       const tss = siloSt(to);
       if (!fit.ok) res.errors.push(t('silo_not_allowed') + ' ' + to.id);
-      else if (tss.held || tss.rejected || tss.level >= 4) res.errors.push(to.id + ': ' + t('silo_held_short'));
+      else if (tss.holdWarn || tss.rejectWarn || tss.level >= 4) res.warns = (res.warns || []).concat([to.id + ': ' + t('warn_red_short')]);
       else if (fit.mismatch) res.needs.push(t('auth_mismatch') + ' ' + to.id + ' (' + gradeName(to.grade) + ' ≠ ' + gradeName(src.grade) + ')');
     }
     return res;
@@ -899,13 +902,15 @@
       }).join('');
       h += '<div class="lbl">' + esc(t('silos_with_grain')) + '</div>';
       if (st.length) h += '<div class="chips">' + st.map(function (x) {
-        const blocked = x.ss.held || x.ss.rejected, on = sh.order.indexOf(x.s.id) >= 0;
+        const blocked = false, red = x.ss.holdWarn || x.ss.rejectWarn, on = sh.order.indexOf(x.s.id) >= 0;   // 0.12.0: aviso, não bloqueio
         return '<button type="button" class="chip' + (on ? ' on' : '') + (blocked ? ' warnchip' : '') + '" data-action="out-add" data-silo="' + esc(x.s.id) + '"' + (blocked ? ' disabled' : '') + '>' + (on ? '✓ ' : (blocked ? '⛔ ' : '+ ')) + esc(x.s.id) + ' <span class="muted">' + esc(blocked ? t('silo_held_short') : gradeName(x.s.grade) + ' · ' + fmtKg(x.kg)) + '</span></button>';
       }).join('') + '</div>';
       else h += '<p class="small muted">' + esc(t('no_grain_silos')) + '</p>';
       if (p.kg !== null && !isNaN(p.kg) && p.kg > 0) {
         h += '<p class="small">' + esc(t('kg_read_as')) + ' ' + fmtKg(p.kg) + '</p>';
-        if (p.a.short > 0) h += '<p class="warn small">' + esc(t('short_stock')) + ' ' + fmtKg(p.a.short) + '</p>';
+        if (p.a.short > 0) h += '<p class="warn small">' + esc(t('short_stock')) + ' ' + fmtKg(p.a.short) + ' — ' + esc(sh.order.length < 2 ? t('short_need_queue') : t('short_last_silo').replace('{s}', sh.order[sh.order.length - 1])) + '</p>';
+        const reds = sh.order.filter(function (id) { const q = siloSt(siloById(id)); return q.holdWarn || q.rejectWarn; });
+        if (reds.length) h += '<p class="warn small">⚠ ' + esc(reds.join(', ') + ': ' + t('warn_red_short')) + '</p>';
       }
       const grades = Array.from(new Set(sh.order.map(function (id) { const s = siloById(id); return s ? s.cereal + s.colour + s.grade : ''; })));
       if (grades.length > 1) h += '<p class="warn small">' + esc(t('mixed_discharge')) + '</p>';
@@ -915,6 +920,7 @@
       const c = transferCheck();
       if (c.kg !== null && !isNaN(c.kg) && c.kg > 0) h += '<p class="small">' + esc(t('kg_read_as')) + ' ' + fmtKg(c.kg) + '</p>';
       if (sv('kg') !== '' || sv('toSilo') !== '') h += c.errors.map(function (e) { return '<p class="warn small">' + esc(e) + '</p>'; }).join('');
+      if (c.warns) h += c.warns.map(function (e) { return '<p class="warn small">⚠ ' + esc(e) + '</p>'; }).join('');   // 0.12.0: avisos, não bloqueiam
       if (c.needs.length) h += authBlock(c.needs, sh.v);
     }
     if (sh.kind === 'weekly') {
@@ -954,17 +960,26 @@
       const pl = outPlan();
       if (pl.kg === null || isNaN(pl.kg) || pl.kg <= 0) { toast(t('need_kg')); return; }
       if (!sh.order.length) { toast(t('need_silo')); return; }
-      const heldIn = sh.order.filter(function (id) { const ss = siloSt(siloById(id)); return ss.held || ss.rejected; });
-      if (heldIn.length) { toast(heldIn.join(', ') + ': ' + t('silo_held_short')); return; }
-      if (pl.a.short > 0) { toast(t('short_stock') + ' ' + fmtKg(pl.a.short)); return; }
-      const badOut = L.binCheck(pl.a.parts.map(function (part) { return { silo: part.silo, type: 'OUT', kg: part.kg }; }), S.events);
-      if (badOut.length) { toast(binMsg(badOut[0])); return; }
+      // 0.12.0 (Zhax, 13-11-2026): nada bloqueia a descarga. Stock insuficiente só com fila (o silo seguinte); o que faltar
+      // fica no último silo da fila (saldo negativo = aviso, corrigido depois pela contagem). Silo Vermelho / retido, capacidade e
+      // verificação da bin ficam como avisos gravados na descarga.
+      if (pl.a.short > 0 && sh.order.length < 2) { toast(t('short_stock') + ' ' + fmtKg(pl.a.short) + ' — ' + t('short_need_queue')); return; }
+      const parts = pl.a.parts.map(function (x) { return { silo: x.silo, kg: x.kg }; });
+      if (pl.a.short > 0) {
+        const last = sh.order[sh.order.length - 1], lp = parts.find(function (x) { return x.silo === last; });
+        if (lp) lp.kg = Math.round((lp.kg + pl.a.short) * 1000) / 1000; else parts.push({ silo: last, kg: pl.a.short });
+      }
+      const warns = [];
+      if (pl.a.short > 0) warns.push(t('short_stock') + ' ' + fmtKg(pl.a.short) + ' → ' + sh.order[sh.order.length - 1]);
+      sh.order.forEach(function (id) { const q = siloSt(siloById(id)); if (q.holdWarn || q.rejectWarn) warns.push(id + ': ' + t('warn_red_short')); });
+      L.binCheck(parts.map(function (x) { return { silo: x.silo, type: 'OUT', kg: x.kg }; }), S.events).forEach(function (b) { warns.push(binMsg(b)); });
       const fc = feedCheckNow(sh);
-      if (fc && !fc.ok && !sv('feed_ok')) { toast('Parar e perguntar ao chefe de turno antes de passar grão para a bin.'); return; }
-      const feedNote = fc && !fc.ok ? 'Alimentação confirmada pelo chefe de turno: ' + fc.reasons.map(function (r) { return r.code; }).join(', ') : '';
-      p = DB.addMany(pl.a.parts.map(function (part) {
-        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('line'), bin: sv('bin'), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots, notes: feedNote }) };
+      if (fc && !fc.ok) warns.push(t('feed_warn') + ': ' + fc.reasons.map(function (r) { return FEED_MSG[r.code] || r.code; }).join('; '));
+      const feedNote = warns.length ? t('warn_prefix') + ' ' + warns.join(' · ') : '';
+      p = DB.addMany(parts.map(function (part) {
+        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('line'), bin: sv('bin'), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots, notes: feedNote, warnings: warns }) };
       }));
+      if (warns.length) toast(t('saved_with_warn'));
     }
     if (sh.kind === 'transfer') {
       const c = transferCheck();
@@ -1111,7 +1126,7 @@
     });
     const HR = [t('silo'), t('x_product'), t('kg'), t('status'), t('age'), t('x_oldest'), t('x_held'), t('x_drivers')];
     const rowsR = S.settings.silos.map(function (x) { const ss = siloSt(x); const ls = S.lots.filter(function (l) { return ss.lots.indexOf(l.id) >= 0; }).map(function (l) { return l.date; }).sort();
-      return [x.id, siloDesig(x), ss.kg, ss.noData ? t('lv_nodata') : t('lv_' + ss.level), ss.ageDays, ls[0] || '', ss.held ? t('yes') : t('no'), ss.drivers.map(function (d) { return drvText(d, ss) + ' (' + t('lv_' + d.level) + ')'; }).join('; ')]; });
+      return [x.id, siloDesig(x), ss.kg, ss.noData ? t('lv_nodata') : t('lv_' + ss.level), ss.ageDays, ls[0] || '', ss.holdWarn ? t('yes') : t('no'), ss.drivers.map(function (d) { return drvText(d, ss) + ' (' + t('lv_' + d.level) + ')'; }).join('; ')]; });
     const wb = XLSX.utils.book_new();
     const title = (S.settings.millName || (pt ? '[NOME DA EMPRESA]' : '[COMPANY NAME]')) + ' — ';
     const sub = t('x_exported') + ' ' + L.today() + ' ' + L.nowTime() + ' · ' + from + ' → ' + to;
@@ -1596,10 +1611,18 @@
     products: function () { const out = []; CEREALS.forEach(function (c) { if (c === 'Milho') COLOURS.forEach(function (k) { out.push(c + ' ' + k); }); else out.push(c); }); return out; },
     lots: function () { return S.lots.map(function (l) { return l.code || l.id; }).filter(Boolean); } });
 
+  // ---------------- turno: login e logout da secção de silos (js/shift-ui.js, 0.12.0) ----------------
+  const SU = window.ShiftUI({ S: S, L: L, DB: DB, esc: esc, fmtKg: function (n) { return fmtNum(n, 0); }, toast: toast, render: render, saveSettings: saveSettings, siloSt: siloSt,
+    lang: function () { return I18n.lang; },
+    pmDue: function () { const w = MU.warnings().find(function (x) { return x.type === 'pm_tasks_overdue'; }); return w ? w.n : 0; } });
+  window.__shiftUI = SU;
+
   // ---------------- arranque / start ----------------
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
-  load().then(MU.reload).then(FU.reload).then(function () {
+  load().then(MU.reload).then(FU.reload).then(SU.reload).then(function () {
     render(); DB.persist();
+    DB.onWrite(function () { SU.reload().then(function () { if (S.tab === 'shift') render(); }); });
+    SU.refreshPlan().then(function () { if (S.tab === 'shift') render(); }); setInterval(function () { SU.refreshPlan(); }, 3600000);
     refreshTemps(false); setInterval(function () { refreshTemps(false); }, 3600000);
     const R = window.RecSync;
     if (R) { R.setContext({ deviceId: S.settings.deviceId, site: S.settings.site || '' }); DB.onWrite(R.schedule); }
