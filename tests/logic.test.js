@@ -127,16 +127,16 @@ ok('silo status, hold and disposition', () => {
   assert.ok(L.siloStatus({ siloId: 'S1', recs: [], lots, st: ST, now, kg: 100 }).weeklyDue);       // sem inspecção: vencida
   const r2 = { kind: 'WEEKLY', silo: 'S1', seq: 2, date: '2026-10-05', time: '09:00', points: [{ t: '27.5' }, { t: '24' }, { t: '24' }], odour: 'N' };
   s1 = L.siloStatus({ siloId: 'S1', recs: [r1, r2], lots, st: ST, now, kg: 100 });
-  assert.strictEqual(s1.level, 4); assert.ok(s1.held);
-  assert.strictEqual(L.siloStatus({ siloId: 'S1', recs: [r1, r2], lots, st: ST, now, kg: 0 }).held, true);   // held independent of kg
+  assert.strictEqual(s1.level, 4); assert.ok(s1.holdWarn);
+  assert.strictEqual(L.siloStatus({ siloId: 'S1', recs: [r1, r2], lots, st: ST, now, kg: 0 }).holdWarn, true);   // held independent of kg
   const ov = { kind: 'OVERRIDE', silo: 'S1', seq: 7, date: '2026-10-05', time: '09:40', status: 'CLEAR', reason: 'Recolha confirmada pelo CQ' };
   s1 = L.siloStatus({ siloId: 'S1', recs: [r1, r2, ov], lots, st: ST, now, kg: 100 });
-  assert.ok(!s1.held);   // correção com motivo, mais recente que a leitura vermelha
+  assert.ok(!s1.holdWarn);   // correção com motivo, mais recente que a leitura vermelha
   const ov2 = { kind: 'OVERRIDE', silo: 'S1', seq: 8, date: '2026-10-05', time: '09:45', status: 'HELD', reason: 'Cheiro suspeito' };
-  assert.ok(L.siloStatus({ siloId: 'S1', recs: [ov2], lots, st: ST, now, kg: 100 }).held);
+  assert.ok(L.siloStatus({ siloId: 'S1', recs: [ov2], lots, st: ST, now, kg: 100 }).holdWarn);
   const d = { kind: 'DISP', silo: 'S1', seq: 3, date: '2026-10-05', time: '09:30', decision: 'RELEASE_PRIORITY' };
   s1 = L.siloStatus({ siloId: 'S1', recs: [r1, r2, d], lots, st: ST, now, kg: 100 });
-  assert.ok(!s1.held); assert.ok(!s1.rejected);
+  assert.ok(!s1.holdWarn); assert.ok(!s1.rejectWarn);
   const w1 = { kind: 'WEEKLY', silo: 'S1', seq: 4, date: '2026-09-28', time: '10:00', moist: '13.1', insects: '0' };
   const w2 = { kind: 'WEEKLY', silo: 'S1', seq: 5, date: '2026-10-05', time: '09:45', moist: '13.3', insects: '2' };
   s1 = L.siloStatus({ siloId: 'S1', recs: [w1, w2], lots, st: ST, now, kg: 100 });
@@ -405,3 +405,10 @@ ok('turma pela rotação de 12 h: os turnos indicados por Zhax + o ciclo que se 
 });
 
 console.log('OK — ' + n + ' tests');
+
+// 0.12.0: sem retenções — held / rejected nunca bloqueiam (Zhax, 13-11-2026)
+{
+  const s = L.siloStatus({ siloId: 'S1', recs: [], lots: [], st: {}, now: { date: '2026-11-13', time: '10:00' }, kg: 0 });
+  assert.deepStrictEqual([s.held, s.rejected], [false, false]);
+  console.log('sem retenções: OK');
+}

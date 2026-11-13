@@ -13,7 +13,7 @@ const status = recs => L.siloStatus({ siloId: 'S03', recs, sevents: [], lots: []
 t('sensor no grão a 45 °C: nível máximo, silo retido; fora do grão não conta', () => {
   const s = status([sensor('2026-10-17', '07:57', '2026-10-17T07:57', [[o(60), g(24), g(45)]])]);
   const temp = s.drivers.find(d => d.p === 'temp');
-  assert.deepStrictEqual([temp.v, temp.level, s.held, s.lastEval.maxPoint], [45, 5, true, 3]);
+  assert.deepStrictEqual([temp.v, temp.level, s.holdWarn, s.lastEval.maxPoint], [45, 5, true, 3]);
 });
 
 t('ΔT entre relatórios dos sensores no mesmo ponto; inspecção manual não se mistura', () => {
@@ -30,16 +30,16 @@ t('ΔT entre relatórios dos sensores no mesmo ponto; inspecção manual não se
 t('mesmo relatório importado por dois telemóveis conta uma vez', () => {
   const a = sensor('2026-10-17', '07:57', '2026-10-17T07:57', [[g(24)]]), b = Object.assign({}, a, { seq: ++seq });
   const s = status([a, b]);
-  assert.deepStrictEqual([s.level, s.held], [0, false]);
+  assert.deepStrictEqual([s.level, s.holdWarn], [0, false]);
 });
 
 t('correcção de estado (supervisor de CQ / Director de Produção) liberta o silo retido pelos sensores', () => {
   const red = sensor('2026-10-17', '07:57', '2026-10-17T07:57', [[g(44)]]);
   const ov = { kind: 'OVERRIDE', silo: 'S03', date: '2026-10-17', time: '09:00', seq: ++seq, status: 'CLEAR', reason: 'sensor S3-1 avariado', role: 'QC_SUP' };
-  assert.strictEqual(status([red]).held, true);
-  assert.strictEqual(status([red, ov]).held, false);
+  assert.strictEqual(status([red]).holdWarn, true);
+  assert.strictEqual(status([red, ov]).holdWarn, false);
   // nova leitura Vermelha depois da correcção volta a reter
-  assert.strictEqual(status([red, ov, sensor('2026-10-17', '19:57', '2026-10-17T19:57', [[g(44.5)]])]).held, true);
+  assert.strictEqual(status([red, ov, sensor('2026-10-17', '19:57', '2026-10-17T19:57', [[g(44.5)]])]).holdWarn, true);
 });
 
 t('cópia de segurança aceita SENSOR e OVERRIDE no monitor', () => {

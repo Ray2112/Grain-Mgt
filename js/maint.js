@@ -22,6 +22,9 @@
   // Categorias pedidas por Zhax; os códigos vêm da lista FMO pela primeira letra (P = Process, A = Breakdown, O = Other),
   // como no diário de turno. Códigos sem P/A/O ficam em Other.
   const CATEGORIES = ['Process', 'Breakdown', 'Other'];
+  // v2.8.3 / v0.12.0 (Zhax, 13-11-2026): paragem como na Prodn-Mgt — tipo (mecânica e eléctrica são avarias), código v3, início e fim
+  const STOP_KINDS = ['mechanical', 'electrical', 'process', 'other'];
+  const KIND_CAT = { mechanical: 'Breakdown', electrical: 'Breakdown', process: 'Process', other: 'Other' };
   const PREFIX_CAT = { P: 'Process', A: 'Breakdown', O: 'Other' };
   const WORK_TYPES = ['corrective', 'preventive', 'inspection', 'other'];
   const PM_STATUS = ['planned', 'in_progress', 'done', 'postponed', 'cancelled'];
@@ -92,13 +95,23 @@
     if (!txt(o.by)) e.push('by');
     return e;
   }
+  // Duração em minutos entre duas horas HH:MM do mesmo turno (passa a meia-noite se o fim for antes do início)
+  function minsBetween(a, b) {
+    if (!/^\d{2}:\d{2}$/.test(a || '') || !/^\d{2}:\d{2}$/.test(b || '')) return null;
+    const m = s => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
+    const d = m(b) - m(a);
+    return d >= 0 ? d : d + 24 * 60;
+  }
   function validateStop(o, codes) {
     const e = [];
-    if (CATEGORIES.indexOf(o.category) < 0) e.push('category');
+    if (o.stopKind !== undefined && STOP_KINDS.indexOf(o.stopKind) < 0) e.push('stopKind');
+    const cat = o.stopKind !== undefined ? KIND_CAT[o.stopKind] : o.category;
+    if (o.stopKind === undefined && CATEGORIES.indexOf(o.category) < 0) e.push('category');
     const c = o.code ? findCode(o.code, codes) : null;
-    if (!c || c.active === false || catOfCode(c.code) !== o.category) e.push('code');
-    const d = num(o.durationMin);
-    if (d === null || isNaN(d) || d <= 0 || d > 24 * 60) e.push('durationMin');
+    if (!c || c.active === false || catOfCode(c.code) !== cat) e.push('code');
+    const d = o.endTime !== undefined ? minsBetween(o.startTime, o.endTime) : num(o.durationMin);
+    if (o.endTime !== undefined && !o.startTime) e.push('startTime');
+    if (d === null || isNaN(d) || d <= 0 || d > 24 * 60) e.push(o.endTime !== undefined ? 'endTime' : 'durationMin');
     if (!txt(o.description)) e.push('description');
     if (!txt(o.by)) e.push('by');
     return e;
@@ -401,7 +414,7 @@
 
   const api = { KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
     num, addDays, daysBetween, weekOf, weekRange, validWeek, catOfCode, codesFor, findCode, effective, cleanParts,
-    validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
+    STOP_KINDS, KIND_CAT, minsBetween, validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
     validateBrushCheck, validateRollConfig, validateNote, validateConsumable,
     pmState, pmWeek, addMonthsDate, pmCatalog, lineHours, effectiveLimits, rollIdsOf, rollState, consumableTotals, shiftSummary, warnings, passageOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
