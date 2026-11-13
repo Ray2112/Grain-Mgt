@@ -97,6 +97,19 @@
           } catch (e) { failed++; lastErr = day + ': ' + (e && e.message || e); }
         }
       }
+      // estado dos silos (só quando muda; o exportedAt não entra na comparação)
+      if (cfg().silosStatusPath) {
+        const body = silosStatus(data, new Date(now).toISOString());
+        const h = hashText(JSON.stringify(Object.assign({}, body, { exportedAt: '' })));
+        if (ls.get(SILOS_SENT, null) !== h) {
+          try {
+            const req = U().buildUploadRequest({ accessToken: tok, path: cfg().silosStatusPath, content: JSON.stringify(body) });
+            const r = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            ls.set(SILOS_SENT, h); ok++;
+          } catch (e) { failed++; lastErr = 'silos-status: ' + (e && e.message || e); }
+        }
+      }
     } catch (e) { failed++; lastErr = String(e && e.message || e); }
     ls.set(SENT, sent); ls.set(GEN, sentGen);
     const t0 = new Date().toISOString();
@@ -106,6 +119,17 @@
     return { ok, failed, lastErr };
   }
   function status() { return ls.get(STATUS, {}); }
+  // 0.11.0 (Zhax, 13-11-2026): a Grain-Mgt é o único registo das descargas silo → bin. Depois de cada gravação envia o
+  // estado dos silos (formato da cópia de segurança: silos, eventos e eventos de armazenagem, sem registos de teste)
+  // para /Apps/Mill-App-Sync/silos-status.json; a Prodn-Mgt lê-o (Mill-App-Read) e recebe as descargas automaticamente.
+  const SILOS_SENT = 'grain-mgt.silosSent.v1';
+  function silosStatus(data, nowIso) {
+    const real = x => x && !x.test;
+    const main = (data.settings || []).filter(s => s && s.key === 'main');
+    return { kind: 'silos-status', schema: 1, writer: 'grain-mgt', writerVersion: L().APP_VERSION, app: 'moagem-app', format: data.format,
+      exportedAt: nowIso, settings: main, events: (data.events || []).filter(real), sevents: (data.sevents || []).filter(real) };
+  }
+  const hashText = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h); };
   // 0.10.0: estado para o aviso no topo — 'off' (sem ligação), 'failed', 'unsent' (dia de ontem por enviar) ou null
   function issue() {
     if (!configured()) return null;
@@ -122,5 +146,5 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') schedule(); });
     setInterval(schedule, 15 * 60000);
   }
-  root.RecSync = { configured, signedIn, signIn, signOut, handleReturn, schedule, sync, status, issue, setContext };
+  root.RecSync = { configured, signedIn, signIn, signOut, handleReturn, schedule, sync, status, issue, setContext, silosStatus };
 })(typeof window !== 'undefined' ? window : this);

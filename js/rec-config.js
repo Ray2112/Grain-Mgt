@@ -6,7 +6,8 @@
     appKey: 'y51t060yro251f4',
     recordsDir: '/records',          // registos reais
     recordsTestDir: '/records-test', // registos em modo de teste
-    debounceMs: 5000
+    debounceMs: 5000,
+    silosStatusPath: '/silos-status.json'   // 0.11.0: stock dos silos e descargas para a Prodn-Mgt (/Apps/Mill-App-Sync/silos-status.json)
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = REC;
   else root.RecConfig = REC;

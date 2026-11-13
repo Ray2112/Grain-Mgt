@@ -1,4 +1,8 @@
-# Moagem — Registos (v0.10.0, Fase A)
+# Moagem — Registos (v0.11.0, Fase A)
+
+> **v0.11.0 — 13-11-2026.** Depois de cada gravação (com o envio para o Dropbox ligado) a app envia também o estado dos silos para /Apps/Mill-App-Sync/silos-status.json. A Prodn-Mgt lê-o: o stock dos silos e as descargas para as bins chegam lá sem cópia à mão. Desde 14/11/2026 07:00 a descarga silo → bin regista-se só aqui («Discharge to line»).
+>
+> *EN:* after each save (Dropbox sending on) the app also sends the silo status to /Apps/Mill-App-Sync/silos-status.json, read by Prodn-Mgt; from 14/11/2026 07:00 silo → bin discharges are recorded only here.
 
 > **v0.10.0 — 12-11-2026.** Preventiva: tarefa sem registo conta como em atraso. Envio diário: aviso no topo quando o telemóvel não está ligado ao envio para o Dropbox, o envio falhou ou o dia de ontem não foi enviado.
 >
