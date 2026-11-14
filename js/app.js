@@ -165,6 +165,43 @@
       b.setAttribute('aria-current', b.dataset.tab === S.tab ? 'page' : 'false');
     });
   }
+  // ---------------- avisos (0.14.1) ----------------
+  // Cada aviso tem chave; «Limpar todos os avisos» (Definições, parte protegida por PIN) grava em 'maint' um registo kind 'warnAck'
+  // com as chaves, o nome e o motivo. Um aviso volta se o texto mudar; os do dia (login, envio) voltam no dia seguinte.
+  function warnAcks() {
+    const recs = window.__shiftUI && window.__shiftUI.recs ? window.__shiftUI.recs() : [];
+    return new Set([].concat.apply([], recs.filter(function (r) { return r.kind === 'warnAck'; }).map(function (r) { return r.keys || []; })));
+  }
+  function warnList(all) {
+    const out = [], day = L.shiftOf(L.today(), L.nowTime()).date;
+    const add = function (tab, icon, text, attrs, daily) { out.push({ key: (daily ? day + ':' : '') + text, tab: tab, text: text, html: '<div class="banner b-warn" role="status" data-action="tab" ' + attrs + '>' + icon + ' ' + esc(text) + '</div>' }); };
+    MU.warnings().forEach(function (w) { add('maint', '🔧', MU.warnText(w), 'data-tab="maint"'); });
+    FU.warnings().forEach(function (w) { add('fssc', '✔', FU.warnText(w), 'data-tab="fssc"'); });
+    const sw = sensorWarnings().filter(function (w) { return !w.ack; });
+    if (sw.length) add('maint', '🌡', t('sn_banner').replace('{n}', sw.filter(function (w) { return !w.suspect; }).length).replace('{m}', sw.filter(function (w) { return w.suspect; }).length), 'data-tab="maint" data-mact="tab" data-v="sensors"');
+    const sl = window.__shiftUI ? window.__shiftUI.issue() : null;
+    if (sl) add('shift', '👷', sl, 'data-tab="shift"', true);
+    const up = window.RecSync && window.RecSync.issue ? window.RecSync.issue() : null;
+    if (up) add('settings', '☁', t('up_' + up.kind).replace('{e}', up.error || '').replace('{d}', up.day || ''), 'data-tab="settings"', true);
+    if (all) return out;
+    const ack = warnAcks();
+    return out.filter(function (w) { return !ack.has(w.key); });
+  }
+  function warnCard() {
+    const list = warnList();
+    return '<div class="card stack"><h2>' + esc(t('wa_title')) + '</h2>' + (list.length ? '<p class="small muted">' + esc(t('wa_note')) + '</p>' +
+      list.map(function (w) { return '<div class="small">• ' + esc(w.text) + '</div>'; }).join('') +
+      '<label>' + esc(t('wa_by')) + '<input id="wa_by" value="' + esc(S.settings.operator || '') + '"></label><label>' + esc(t('wa_reason')) + '<textarea id="wa_reason" rows="2"></textarea></label>' +
+      '<button type="button" class="btn primary" data-action="warn-clear">' + esc(t('wa_btn').replace('{n}', list.length)) + '</button>' : '<p class="small muted">' + esc(t('wa_none')) + '</p>') + '</div>';
+  }
+  function clearWarnings() {
+    const list = warnList(), by = ($('#wa_by') || {}).value || '', reason = ($('#wa_reason') || {}).value || '';
+    if (!S.unlocked) { toast(t('pin')); return; }
+    if (!by.trim() || !reason.trim()) { toast(t('wa_need')); return; }
+    const now = new Date();
+    DB.add('maint', { kind: 'warnAck', keys: list.map(function (w) { return w.key; }), texts: list.map(function (w) { return w.text; }), by: by.trim(), reason: reason.trim(),
+      date: L.today(now), time: L.nowTime(now), t: now.getTime() }).then(function () { return window.__shiftUI.reload(); }).then(function () { toast(t('wa_done').replace('{n}', list.length)); render(); });
+  }
   function render() {
     renderShell();
     const main = $('#main');
@@ -175,21 +212,12 @@
     if (S.tab === 'maint') main.innerHTML = MU.view();
     if (S.tab === 'fssc') main.innerHTML = FU.view();
     if (S.tab === 'export') main.innerHTML = recordsView();
-    // Avisos de manutenção (preventiva em atraso) nos outros separadores; no separador Manutenção já aparecem no topo
-    if (S.tab !== 'maint') MU.warnings().forEach(function (w) { main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint">🔧 ' + esc(MU.warnText(w)) + '</div>'); });
-    // Sensores de temperatura: um aviso com o total de avarias/suspeitas por reconhecer (detalhe em Manutenção → Sensores)
-    if (S.tab !== 'fssc') FU.warnings().forEach(function (w) { main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="fssc">✔ ' + esc(FU.warnText(w)) + '</div>'); });
-    const sw = S.tab === 'maint' ? [] : sensorWarnings().filter(function (w) { return !w.ack; });
-    if (sw.length) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint" data-mact="tab" data-v="sensors">🌡 ' + esc(t('sn_banner').replace('{n}', sw.filter(function (w) { return !w.suspect; }).length).replace('{m}', sw.filter(function (w) { return w.suspect; }).length)) + '</div>');
+    // 0.14.1: avisos no topo a partir de uma só lista, com chave, para poderem ser limpos (Definições → Avisos, com PIN)
+    warnList().filter(function (w) { return w.tab !== S.tab; }).reverse().forEach(function (w) { main.insertAdjacentHTML('afterbegin', w.html); });
     if (S.tab === 'settings') main.innerHTML = settingsView();
     if (S.tab === 'intake' && S.form) updateDyn();
     // Aviso permanente enquanto o modo de teste estiver ligado (os registos novos ficam marcados test:true)
-    // 0.12.0: turno actual sem login (depois da primeira meia hora)
-    const sl = S.tab !== 'shift' && window.__shiftUI ? window.__shiftUI.issue() : null;
-    if (sl) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="shift">👷 ' + esc(sl) + '</div>');
-    // 0.11.0: aviso de envio dos registos diários (sem ligação, falha, ou ontem por enviar) em todos os separadores menos Definições
-    const up = S.tab !== 'settings' && window.RecSync && window.RecSync.issue ? window.RecSync.issue() : null;
-    if (up) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="settings">☁ ' + esc(t('up_' + up.kind).replace('{e}', up.error || '').replace('{d}', up.day || '')) + '</div>');
+
     if (S.settings && S.settings.testMode) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status"><b>' + esc(t('test_banner')) + '</b></div>');
     renderSheet();
   }
@@ -1227,7 +1255,7 @@
       if (s.pin) h += '<div class="grid2b"><input name="unlockpin" type="password" inputmode="numeric" autocomplete="off" aria-label="' + esc(t('pin')) + '" placeholder="' + esc(t('pin')) + '"><button class="btn primary" type="submit">' + esc(t('unlock')) + '</button></div>';
       else h += '<p class="warn small">' + esc(t('pin_first')) + '</p>';
       h += '</div>';
-    } else h += protEditor() + SU.jobsEditor();   // 0.12.1: lista de trabalhos do turno só com o PIN de supervisor
+    } else h += protEditor() + SU.jobsEditor() + warnCard();   // 0.14.1: limpar avisos (parte protegida por PIN)   // 0.12.1: lista de trabalhos do turno só com o PIN de supervisor
     h += '</form><p class="small muted" id="storage"></p><p class="small muted">' + esc(t('install_hint')) + '</p>';
     setTimeout(function () {
       const el = $('#storage');
@@ -1395,6 +1423,7 @@
     }
     if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast(t('dx_feed_off_toast')); return; }
     if (a === 'recon-refresh') { refreshRecon(); return; }
+    if (a === 'warn-clear') { clearWarnings(); return; }
     if (a === 'reccat') { S.recCat = b.dataset.cat || ''; render(); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
       const id = b.dataset.silo;

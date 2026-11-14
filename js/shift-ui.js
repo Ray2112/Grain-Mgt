@@ -25,7 +25,7 @@
       trucksRec: 'Camiões recebidos', sentKg: 'Enviado para B01–B04', recKg: 'Recebido', transfers: 'Transferências entre silos', empties: 'Silos esvaziados',
       stops: 'Paragens (Manut.)', monit: 'Registos de monitorização',
       crew: 'Turma', saveFail: 'Erro ao gravar', xDate: 'Data', xTime: 'Hora', xLot: 'Lote', xGuia: 'Guia', xSupplier: 'Fornecedor', xPlate: 'Matrícula', xCereal: 'Cereal', xColour: 'Cor', xBin: 'Bin', xLine: 'Linha', xOperator: 'Operador', xWarnings: 'Avisos', xFrom: 'De', xTo: 'Para', xKind: 'Tipo', xSilo: 'Silo', xBy: 'Por', xType: 'Tipo', xCode: 'Código', xDur: 'Duração (min)', xFault: 'Falha', xAction: 'Acção', xStock: 'Stock dos silos',
-      jobsEdit: 'A lista edita-se em Definições (com PIN de supervisor).'
+      jobsEdit: 'A lista edita-se em Definições (com PIN de supervisor).', jobPick: 'Escolha o trabalho', jobOther: 'Outro', jobOtherText: 'Texto (para «Outro»)', jobPickAdd: 'Juntar trabalho', jobOtherNeed: 'Escreva o trabalho «Outro»'
     },
     en: {
       title: 'Shift — login and logout (silo section)', day: 'Day', shift: 'Shift', sD: 'Day 07–19', sN: 'Night 19–07',
@@ -47,7 +47,7 @@
       trucksRec: 'Trucks received', sentKg: 'Sent to B01–B04', recKg: 'Received', transfers: 'Silo transfers', empties: 'Silos emptied',
       stops: 'Stoppages (Maint.)', monit: 'Monitoring records',
       crew: 'Crew', saveFail: 'Save failed', xDate: 'Date', xTime: 'Time', xLot: 'Lot', xGuia: 'Waybill', xSupplier: 'Supplier', xPlate: 'Plate', xCereal: 'Cereal', xColour: 'Colour', xBin: 'Bin', xLine: 'Line', xOperator: 'Operator', xWarnings: 'Warnings', xFrom: 'From', xTo: 'To', xKind: 'Kind', xSilo: 'Silo', xBy: 'By', xType: 'Type', xCode: 'Code', xDur: 'Duration (min)', xFault: 'Fault', xAction: 'Action', xStock: 'Silo stock',
-      jobsEdit: 'The list is edited in Settings (with the supervisor PIN).'
+      jobsEdit: 'The list is edited in Settings (with the supervisor PIN).', jobPick: 'Pick the job', jobOther: 'Other', jobOtherText: 'Text (for "Other")', jobPickAdd: 'Add job', jobOtherNeed: 'Write the "Other" job'
     }
   };
   root.ShiftUI = function (C) {
@@ -81,6 +81,15 @@
       return out;
     }
     const stock = () => (C.S.settings.silos || []).map(s => ({ silo: s.id, kg: C.L.siloContents(s.id, C.S.events).kg }));
+    const chips = () => (st.picked || []).map((j, i) => '<span class="chip on">' + esc(jt(j)) + ' <button type="button" class="btn small" data-sact="unpick" data-i="' + i + '">✕</button></span>').join(' ');
+    function pickJob() {
+      const v = ($('#sh_jobsel') || {}).value, txt = (($('#sh_extra') || {}).value || '').trim();
+      if (!v) { C.toast(t('jobPick')); return; }
+      const j = v === 'other' ? (txt ? txt : null) : (st.offer || [])[Number(v)];
+      if (!j) { C.toast(t('jobOtherNeed')); return; }
+      st.picked = (st.picked || []).concat([j]);
+      $('#sh_jobs').innerHTML = chips(); $('#sh_jobsel').value = ''; $('#sh_extra').value = '';
+    }
     function scaleInputs(prefix, vals) {
       return '<p class="small muted">' + esc(t('scalesHelp')) + '</p><div class="grid2">' + R().SCALES.map(k =>
         '<label>' + esc(t(k)) + '<input inputmode="numeric" data-scale="1" id="' + prefix + k + '" placeholder="1,234,567" value="' + esc(vals && vals[k] != null ? R().fmtScale(vals[k]) : '') + '"></label>').join('') + '</div>';
@@ -99,9 +108,11 @@
           '<label>' + esc(t('ops')) + '<input id="sh_ops"></label>' +
           '<div class="lbl strong">' + esc(t('jobs')) + '</div>' +
           (auto.length ? '<div class="small muted">' + esc(t('jobsAuto')) + '</div>' + auto.map((j, i) => '<label class="check"><input type="checkbox" class="sh_job" data-i="' + i + '" checked> ' + esc(jt(j)) + '</label>').join('') : '') +
-          '<div class="small muted">' + esc(t('jobsList')) + '</div>' + jobsList().map((j, i) => '<label class="check"><input type="checkbox" class="sh_job" data-i="' + (auto.length + i) + '"> ' + esc(jt(j)) + '</label>').join('') +
+          // 0.14.1: como na Prodn-Mgt — escolher na lista e juntar (fica como etiqueta, retira-se com ✕); «Outro» leva texto
+          '<div class="grid2"><label>' + esc(t('jobPick')) + '<select id="sh_jobsel"><option value="">—</option>' + jobsList().map((j, i) => '<option value="' + (auto.length + i) + '">' + esc(jt(j)) + '</option>').join('') +
+            '<option value="other">' + esc(t('jobOther')) + '</option></select></label><label>' + esc(t('jobOtherText')) + '<input id="sh_extra"></label></div>' +
+          '<button type="button" class="btn small" data-sact="pickjob">＋ ' + esc(t('jobPickAdd')) + '</button><div id="sh_jobs" class="chips">' + chips() + '</div>' +
           '<p class="small muted">' + esc(t('jobsEdit')) + '</p>' +
-          '<label>' + esc(t('jobExtra')) + '<input id="sh_extra"></label>' +
           '<label>' + esc(t('trucks')) + '<input inputmode="numeric" id="sh_trucks"></label>' +
           '<div class="lbl strong">' + esc(t('state')) + '</div><div class="grid2">' + onOff('rec1', 'on') + onOff('rec2', 'on') + onOff('feed', 'on') + '</div>' +
           '<div class="lbl strong">' + esc(t('scalesStart')) + '</div>' + scaleInputs('sh_s_') +
@@ -155,8 +166,8 @@
       const tr = R().num($('#sh_trucks').value);
       if (tr !== null && (isNaN(tr) || tr < 0)) { C.toast(t('bad') + ': ' + t('trucks')); return; }
       const jobs = [...document.querySelectorAll('.sh_job')].filter(x => x.checked).map(x => (st.offer || [])[Number(x.dataset.i)]).filter(Boolean)
-        .concat($('#sh_extra').value.trim() ? [$('#sh_extra').value.trim()] : []);   // trabalho escrito à mão fica como foi escrito
-      const now = new Date();
+        .concat(st.picked || []);   // escolhidos na lista ({pt, en}) e «Outro» escrito à mão (fica como foi escrito)
+      const now = new Date(); st.picked = [];
       await add({ kind: 'shiftIn', shift: sid(s), prodDay: s.day, period: s.win, crew: C.L.crewOf(s.day, s.win === 'N' ? '20:00' : '08:00'), date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(),
         leader: leader.trim(), operators: $('#sh_ops').value.trim(), jobs, trucksExpected: tr, planKg: R().planKg(st.plan, s.day),
         state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, scalesStart: sc, stockStart: stock(), comments: $('#sh_comments').value.trim(), by: leader.trim() });
@@ -208,6 +219,8 @@
       const el = e.target.closest('[data-sact]'); if (!el) return;
       const a = el.dataset.sact;
       if (a === 'login') login(); else if (a === 'logout') logout(); else if (a === 'xlsx') xlsx();
+      else if (a === 'pickjob') pickJob();
+      else if (a === 'unpick') { (st.picked || []).splice(Number(el.dataset.i), 1); const c = $('#sh_jobs'); if (c) c.innerHTML = chips(); }
       else if (a === 'jobadd' && C.unlocked()) {
         const pt = (($('#sj_pt') || {}).value || '').trim(), en = (($('#sj_en') || {}).value || '').trim();
         if (!pt || !en) { C.toast(C.t('sj_need')); return; }
