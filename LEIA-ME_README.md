@@ -1,4 +1,8 @@
-# Moagem — Registos (v0.15.0, Fase A)
+# Moagem — Registos (v0.15.1, Fase A)
+
+> **v0.15.1 — 14-11-2026.** Módulo FSSC igual ao da Prodn-Mgt 2.11.0 (a formação só aparece na Prodn-Mgt). Sem outras mudanças.
+>
+> *EN:* FSSC module synced with Prodn-Mgt 2.11.0 (training shows only in Prodn-Mgt). No other changes.
 
 > **v0.15.0 — Release 4 (Zhax, 14-11-2026).**
 > - **PIN de cada chefe de turno:** em Definições (parte protegida pelo PIN de supervisor), um chefe por turma A–D com o seu PIN. Login e logout do turno pedem o PIN; PIN errado não grava; sem PIN = grava com aviso. Fica só no telemóvel.

@@ -14,7 +14,7 @@
  * Prodn-Mgt e Grain-Mgt avaliam a sua área; as pontuações ficam separadas (Zhax, 28-10-2026). */
 (function (root) {
   'use strict';
-  const KINDS = ['doc', 'grade', 'actionDone', 'close', 'reopen', 'complaint', 'complaintUpd', 'void'];
+  const KINDS = ['doc', 'grade', 'actionDone', 'close', 'reopen', 'complaint', 'complaintUpd', 'void', 'training', 'trainingAtt'];
   // Motivos de reclamação (lista FMIP para farinha de milho; 'other' com descrição)
   const COMPLAINT_REASONS = ['foreign', 'infestation', 'quality', 'moisture', 'mixed', 'weight', 'packaging', 'labelling', 'allergen', 'taste', 'other'];
   // Cliente interno (Grain-Mgt: FMO moagem, FRA fábrica de rações) ou externo (outras moagens) — Zhax, 28-10-2026
@@ -207,10 +207,52 @@
     if (S.closed && S.close.counts && S.close.counts.CR) w.push({ type: 'month_critical', level: 'bad', month: prev, n: S.close.counts.CR });
     complaints(entries, today).filter(c => c.open && (c.overdue || c.complaint.foodSafety)).forEach(c => w.push({ type: c.complaint.foodSafety ? 'complaint_fs' : 'complaint_overdue',
       level: c.complaint.foodSafety || c.overdue ? 'bad' : 'warn', id: c.id, customer: c.complaint.customer, customerType: c.complaint.customerType || null, due: c.complaint.due, overdue: c.overdue }));
+    trainings(entries, today).filter(x => x.state === 'overdue').forEach(x => w.push({ type: 'training_overdue', level: 'warn', topic: x.training.topic, date: x.training.date }));
     return w;
   }
 
-  const api = { KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, COMPLAINT_REASONS, CUSTOMER_TYPES, monthOf, addMonths, addMonthsDay, effective, applicable,
+  // ---------- formação (Zhax, 14-11-2026: «Learning Skills» — formações previstas, presenças e temas, em FSSC) ----------
+  // 'training' = formação planeada {date, time, topic, trainer, audience, expected, notes, by};
+  // 'trainingAtt' = presenças de uma formação feita {trainingUid, heldOn, attendees: [nomes], notes, by}. A última conta.
+  const trimS = v => String(v == null ? '' : v).trim();
+  function validateTraining(f) {
+    const e = [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimS(f.date))) e.push('trDate');
+    if (!trimS(f.topic)) e.push('trTopic');
+    const x = trimS(f.expected);
+    if (x && !(/^\d+$/.test(x) && Number(x) > 0)) e.push('trExpected');
+    if (!trimS(f.by)) e.push('by');
+    return e;
+  }
+  const namesOf = txt => String(txt || '').split(/[\n,;]+/).map(s => s.trim().replace(/\s+/g, ' ')).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
+  function validateAttendance(f) {
+    const e = [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimS(f.heldOn))) e.push('trHeldOn');
+    if (!namesOf(f.attendees).length) e.push('trAttendees');
+    if (!trimS(f.by)) e.push('by');
+    return e;
+  }
+  function trainings(entries, today) {
+    const E = effective(entries), att = {};
+    E.filter(e => e.kind === 'trainingAtt').forEach(a => { att[a.trainingUid] = a; });
+    return E.filter(e => e.kind === 'training').map(tr => {
+      const a = att[tr.uid] || null, exp = Number(tr.expected) || null;
+      const n = a ? (a.attendees || []).length : null;
+      return { training: tr, att: a, state: a ? 'held' : (tr.date < today ? 'overdue' : 'upcoming'), present: n,
+        attendancePct: a && exp ? Math.round(n / exp * 1000) / 10 : null };
+    }).sort((x, y) => (x.training.date + (x.training.time || '')) < (y.training.date + (y.training.time || '')) ? -1 : 1);
+  }
+  // Resumo do mês 'AAAA-MM': planeadas, feitas, presenças (só formações com n.º previsto contam para a %)
+  function trainingMonth(list, month) {
+    const inM = d => String(d || '').slice(0, 7) === month;
+    const planned = list.filter(x => inM(x.training.date)), held = list.filter(x => x.att && inM(x.att.heldOn));
+    const withExp = held.filter(x => Number(x.training.expected) > 0);
+    const exp = withExp.reduce((s, x) => s + Number(x.training.expected), 0), pres = withExp.reduce((s, x) => s + x.present, 0);
+    return { planned: planned.length, held: held.length, people: held.reduce((s, x) => s + x.present, 0), attendancePct: exp ? Math.round(pres / exp * 1000) / 10 : null,
+      topics: held.map(x => x.training.topic) };
+  }
+
+  const api = { validateTraining, validateAttendance, namesOf, trainings, trainingMonth, KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, COMPLAINT_REASONS, CUSTOMER_TYPES, monthOf, addMonths, addMonthsDay, effective, applicable,
     validateGrade, validateDoc, docs, docCoverage, grades, score, bandOf, monthState, actions, complaintId, validateComplaint, validateComplaintUpd, complaints, warnings };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Fssc = api;
 })(typeof window !== 'undefined' ? window : this);
