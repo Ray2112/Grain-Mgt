@@ -1,4 +1,8 @@
-# Moagem — Registos (v0.16.0, Fase A)
+# FMO - Silo Cereais (antes Grain-Mgt) · v0.17.0
+
+> **v0.17.0 — Release 5 (Zhax, 14-11-2026).** Novo nome: FMO - Silo Cereais (em inglês, FMO - Grain Silos); no ícone do telemóvel fica o nome em português. Um turno com login e sem logout abre no separador Turno e fica um alerta em todos os ecrãs até ao logout (não se limpa com «Limpar todos os avisos»).
+>
+> *EN:* new name FMO - Grain Silos (Portuguese name under the phone icon); a shift with a login and no logout stays open in the Shift tab with an alert until logout.
 
 > **v0.16.0 — Preventiva — registar feita (Zhax, 14-11-2026).** Na lista de preventiva, cada tarefa tem «✓ Registar feita»: dia em que foi feita (hoje ou antes), quem fez, nota. «✓ Registar várias como feitas» deixa marcar várias tarefas (ou todas as do filtro) com o mesmo dia e nome. A tarefa deixa de estar em atraso e a próxima data conta a partir do dia em que foi feita. Uma tarefa com trabalho planeado fecha esse trabalho como feito. Tarefa sem registo de execução conta como atraso (também no relatório). Módulo de manutenção igual ao da Prodn-Mgt 2.12.0.
 >
