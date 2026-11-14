@@ -13,6 +13,7 @@ window.FsscUI = function (C) {
   const st = { tab: 'month', month: null, entries: [], loaded: false, form: null, open: {} };
   const T = {
     pt: {
+      t_training: 'Formação', trTitle: 'Formação e competências', trNew: 'Nova formação prevista', trDate: 'Data', trTime: 'Hora', trTopic: 'Tema', trTrainer: 'Formador', trAudience: 'Para quem (função, turma, secção)', trExpected: 'N.º de participantes previsto', trNotes: 'Notas', trUpcoming: 'Próximas formações', trOverdue: 'Previstas e ainda sem presenças', trHeld: 'Formações feitas', trAtt: 'Registar presenças', trHeldOn: 'Feita em', trAttendees: 'Presentes (um nome por linha)', trPresent: '{n} presente(s)', trOf: 'de {n} previstos', trMonth: 'Este mês: {p} prevista(s) · {h} feita(s) · {n} presença(s){a}', trPct: ' · presença {p} %', w_training_overdue: 'Formação sem presenças registadas — {t} ({d})', 
       title: 'Conformidade FSSC 22000', t_month: 'Avaliação mensal', t_docs: 'Documentos', t_actions: 'Acções', t_hist: 'Histórico',
       month: 'Mês', score: 'Pontuação', docs: 'Documentação', graded: 'avaliados', closed: 'Mês fechado', open: 'Mês aberto', closeMonth: 'Fechar mês',
       reopen: 'Reabrir mês', needAll: 'Avalie todos os requisitos aplicáveis antes de fechar o mês.', pin: 'PIN de supervisor', name: 'Nome', reason: 'Motivo',
@@ -39,6 +40,7 @@ window.FsscUI = function (C) {
       w_complaint_fs: 'Reclamação {id} ({c}) afecta a segurança alimentar — em aberto', w_complaint_overdue: 'Reclamação {id} ({c}) em atraso (prazo {d})'
     },
     en: {
+      t_training: 'Training', trTitle: 'Training and skills', trNew: 'New planned training', trDate: 'Date', trTime: 'Time', trTopic: 'Topic', trTrainer: 'Trainer', trAudience: 'For whom (role, crew, section)', trExpected: 'Expected number of participants', trNotes: 'Notes', trUpcoming: 'Upcoming trainings', trOverdue: 'Planned, no attendance yet', trHeld: 'Trainings held', trAtt: 'Record attendance', trHeldOn: 'Held on', trAttendees: 'Present (one name per line)', trPresent: '{n} present', trOf: 'of {n} expected', trMonth: 'This month: {p} planned · {h} held · {n} attendance(s){a}', trPct: ' · attendance {p} %', w_training_overdue: 'Training with no attendance recorded — {t} ({d})', 
       title: 'FSSC 22000 compliance', t_month: 'Monthly check', t_docs: 'Documents', t_actions: 'Actions', t_hist: 'History',
       month: 'Month', score: 'Score', docs: 'Documentation', graded: 'graded', closed: 'Month closed', open: 'Month open', closeMonth: 'Close month',
       reopen: 'Reopen month', needAll: 'Grade every applicable requirement before closing the month.', pin: 'Supervisor PIN', name: 'Name', reason: 'Reason',
@@ -96,17 +98,18 @@ window.FsscUI = function (C) {
     if (w.type === 'action_overdue') return t('w_action_overdue', { r: w.reqId, g: t('g_' + w.grade), d: ddmm(w.due) });
     if (w.type === 'doc_review') return t('w_doc_review', { c: w.code, t: w.title });
     if (w.type === 'complaint_fs' || w.type === 'complaint_overdue') return t('w_' + w.type, { id: w.id, c: w.customer, d: ddmm(w.due) });
+    if (w.type === 'training_overdue') return t('w_training_overdue', { t: w.topic, d: ddmm(w.date) });
     return t('w_month_critical', { n: w.n, m: w.month });
   }
 
   // ---------- vista ----------
   function view() {
     if (!st.loaded) { reload().then(C.render); return `<section class="card"><p>${esc(t('loading'))}</p></section>`; }
-    const tabs = ['month', 'docs', 'actions'].concat(C.complaints ? ['complaints'] : []).concat(['hist']);
+    const tabs = ['month', 'docs', 'actions'].concat(C.complaints ? ['complaints'] : []).concat(C.training ? ['training'] : []).concat(['hist']);   // formação: só com C.training (Prodn-Mgt)
     const head = `<section class="card"><h2>${esc(t('title'))}</h2><p class="fs-sub">${esc(t('area_' + C.area))} · ${esc(Q.SOURCE)}</p>
       <div class="fs-tabs">${tabs.map(k => `<button type="button" class="btn small ${st.tab === k ? 'primary' : ''}" data-fact="tab" data-v="${k}">${esc(t('t_' + k))}</button>`).join('')}</div></section>`;
     const bn = warnings().map(w => `<div class="fs-bn ${w.level === 'bad' ? 'fs-bad' : 'fs-warn'}">✔ ${esc(warnText(w))}</div>`).join('');
-    return bn + head + ({ month: vMonth, docs: vDocs, actions: vActions, complaints: vComplaints, hist: vHist }[st.tab] || vMonth)();
+    return bn + head + ({ month: vMonth, docs: vDocs, actions: vActions, complaints: vComplaints, training: vTraining, hist: vHist }[st.tab] || vMonth)();
   }
 
   // ----- avaliação mensal -----
@@ -281,6 +284,38 @@ window.FsscUI = function (C) {
         <div class="fs-sub">${esc(t('counts', { c: k.C || 0, mi: k.MI || 0, ma: k.MA || 0, cr: k.CR || 0, na: k.NA || 0 }))} · ${esc(t('docs'))} ${esc(nf(c.docPct))} % · ${esc(c.by)}</div>`; }).join('')}</section>`;
   }
 
+  // ----- formação (C.training) -----
+  function vTraining() {
+    const L = F.trainings(st.entries, today()), f = st.form, mo = today().slice(0, 7), M = F.trainingMonth(L, mo);
+    const newForm = f && f.kind === 'training' ? `<div class="fs-box"><div class="grid2">${fld(t('trDate'), inp('date', f.date, 'type="date"'), 1)}${fld(t('trTime'), inp('time', f.time, 'type="time"'))}</div>
+        ${fld(t('trTopic'), inp('topic', f.topic), 1)}${fld(t('trTrainer'), inp('trainer', f.trainer))}${fld(t('trAudience'), inp('audience', f.audience))}
+        ${fld(t('trExpected'), inp('expected', f.expected, 'inputmode="numeric"'))}${fld(t('trNotes'), area('notes', f.notes))}${fld(t('name'), inp('by', f.by), 1)}
+        <div class="row"><button type="button" class="btn primary" data-fact="trsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
+      : (st.form ? '' : `<button type="button" class="btn primary" data-fact="trnew">＋ ${esc(t('trNew'))}</button>`);
+    const head = x => `<b>${esc(ddmm(x.training.date))}${x.training.time ? ' ' + esc(x.training.time) : ''} · ${esc(x.training.topic)}</b>
+      <div class="fs-sub">${[x.training.trainer, x.training.audience].filter(Boolean).map(esc).join(' · ')}${x.training.expected ? ' · ' + esc(t('trExpected')) + ' ' + esc(x.training.expected) : ''}</div>${x.training.notes ? `<div class="fs-sub">${esc(x.training.notes)}</div>` : ''}`;
+    const attForm = x => f && f.kind === 'trainingAtt' && f.trainingUid === x.training.uid ? `<div class="fs-box">${fld(t('trHeldOn'), inp('heldOn', f.heldOn, 'type="date"'), 1)}
+        ${fld(t('trAttendees'), `<textarea rows="4" data-ff="attendees">${esc(f.attendees)}</textarea>`, 1)}${fld(t('trNotes'), area('notes', f.notes))}${fld(t('name'), inp('by', f.by), 1)}
+        <div class="row"><button type="button" class="btn primary" data-fact="trattsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
+      : (st.form ? '' : `<button type="button" class="btn small" data-fact="tratt" data-v="${esc(x.training.uid)}">${esc(t('trAtt'))}</button>`);
+    const sec = (ttl, xs, body) => xs.length ? `<section class="card"><h3>${esc(ttl)}</h3>${xs.map(x => `<div class="fs-item">${head(x)}${body(x)}</div>`).join('')}</section>` : '';
+    const up = L.filter(x => x.state === 'upcoming'), od = L.filter(x => x.state === 'overdue'), held = L.filter(x => x.state === 'held').reverse();
+    return `<section class="card"><h3>${esc(t('trTitle'))}</h3><p class="fs-sub">${esc(t('trMonth', { p: M.planned, h: M.held, n: M.people, a: M.attendancePct == null ? '' : t('trPct', { p: nf(M.attendancePct) }) }))}</p>${newForm}</section>
+      ${sec(t('trOverdue'), od, attForm)}${sec(t('trUpcoming'), up, attForm)}
+      ${sec(t('trHeld'), held, x => `<div class="fs-sub">${esc(t('trHeldOn'))} ${esc(ddmm(x.att.heldOn))} · ${esc(t('trPresent', { n: x.present }))}${x.training.expected ? ' ' + esc(t('trOf', { n: x.training.expected })) : ''}${x.attendancePct == null ? '' : ' (' + esc(nf(x.attendancePct)) + ' %)'} · ${esc(x.att.by)}</div>
+        <div class="fs-sub">${(x.att.attendees || []).map(esc).join(', ')}</div>${x.att.notes ? `<div class="fs-sub">${esc(x.att.notes)}</div>` : ''}`)}
+      ${L.length ? '' : `<section class="card"><p class="fs-sub">${esc(t('none'))}</p></section>`}`;
+  }
+  async function trSave() {
+    const f = st.form; if (errs(F.validateTraining(f))) return;
+    await save({ kind: 'training', date: f.date, time: String(f.time || '').trim(), topic: f.topic.trim(), trainer: String(f.trainer || '').trim(), audience: String(f.audience || '').trim(),
+      expected: String(f.expected || '').trim() ? Number(f.expected) : null, notes: String(f.notes || '').trim(), by: f.by.trim() });
+  }
+  async function trAttSave() {
+    const f = st.form; if (errs(F.validateAttendance(f))) return;
+    await save({ kind: 'trainingAtt', trainingUid: f.trainingUid, heldOn: f.heldOn, attendees: F.namesOf(f.attendees), notes: String(f.notes || '').trim(), by: f.by.trim() });
+  }
+
   // ---------- eventos ----------
   const op = () => C.operator() || '';
   document.addEventListener('click', async e => {
@@ -288,6 +323,10 @@ window.FsscUI = function (C) {
     const a = el.dataset.fact, v = el.dataset.v;
     if (a === 'tab') { st.tab = v; st.form = null; keep(); return; }
     if (a === 'cancel') { st.form = null; keep(); return; }
+    if (a === 'trnew') { st.form = { kind: 'training', date: today(), time: '', topic: '', trainer: '', audience: '', expected: '', notes: '', by: op() }; keep(); return; }
+    if (a === 'trsave') return trSave();
+    if (a === 'tratt') { st.form = { kind: 'trainingAtt', trainingUid: v, heldOn: today(), attendees: '', notes: '', by: op() }; keep(); return; }
+    if (a === 'trattsave') return trAttSave();
     if (a === 'grade') {
       const g = F.grades(st.entries, month())[el.dataset.req];
       if (v === 'C' && !(g && g.grade === 'C')) return save({ kind: 'grade', month: month(), reqId: el.dataset.req, ref: (Q.REQS.find(x => x.id === el.dataset.req) || {}).ref, grade: 'C', evidence: '', action: '', owner: '', due: '', by: op() || '—' });
