@@ -151,7 +151,8 @@
 
   // ---------------- casca / shell ----------------
   // Linhas de moagem e bins de milho sujo (B01–B04, mestre na app de Registos de QC) / mill lines and dirty-maize bins
-  const LINES = ['C', 'D'], DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'];
+  // 0.14.0 (Zhax, 14-11-2026): linha SG01 junto com C e D. Para SG01 a bin B01–B04 é opcional (assumido: não passa pelas bins da moagem)
+  const LINES = ['C', 'D', 'SG01'], DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'], NO_BIN_LINES = ['SG01'];
   const TITLES = { shift: 'shift_title', intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', maint: 'maint_title', fssc: 'fssc_title', export: 'export_title', settings: 'settings_title' };
   function renderShell() {
     document.title = t('app_name');
@@ -173,7 +174,7 @@
     if (S.tab === 'insp') main.innerHTML = inspView();
     if (S.tab === 'maint') main.innerHTML = MU.view();
     if (S.tab === 'fssc') main.innerHTML = FU.view();
-    if (S.tab === 'export') main.innerHTML = exportView();
+    if (S.tab === 'export') main.innerHTML = recordsView();
     // Avisos de manutenção (preventiva em atraso) nos outros separadores; no separador Manutenção já aparecem no topo
     if (S.tab !== 'maint') MU.warnings().forEach(function (w) { main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status" data-action="tab" data-tab="maint">🔧 ' + esc(MU.warnText(w)) + '</div>'); });
     // Sensores de temperatura: um aviso com o total de avarias/suspeitas por reconhecer (detalhe em Manutenção → Sensores)
@@ -959,7 +960,7 @@
     const monBase = { date: sv('date'), time: sv('time'), silo: sh.silo, by: who, notes: sv('notes').trim(), createdAt: new Date().toISOString() };
     let p;
     if (sh.kind === 'out') {
-      if (!sv('line') || !sv('bin')) { toast(t('need_line')); return; }
+      if (!sv('line') || (!sv('bin') && NO_BIN_LINES.indexOf(sv('line')) < 0)) { toast(t('need_line')); return; }
       const pl = outPlan();
       if (pl.kg === null || isNaN(pl.kg) || pl.kg <= 0) { toast(t('need_kg')); return; }
       if (!sh.order.length) { toast(t('need_silo')); return; }
@@ -1069,6 +1070,17 @@
   }
 
   // ---------------- exportar / export ----------------
+  // 0.14.0: Registos do dia (js/grain-book.js), como na Prodn-Mgt; a exportação e a cópia de segurança ficam por baixo
+  function recordsView() {
+    const day = S.recDay || L.shiftOf(L.today(), L.nowTime()).date, cat = S.recCat || '';
+    const all = window.GrainBook.items({ lots: S.lots, events: S.events, mon: S.mon, maint: (window.__shiftUI && window.__shiftUI.recs ? window.__shiftUI.recs() : []) }, day, L.shiftOf);
+    const counts = {}; all.forEach(function (x) { counts[x.cat] = (counts[x.cat] || 0) + 1; });
+    const list = all.filter(function (x) { return !cat || x.cat === cat; }).slice().reverse();
+    return '<div class="card stack"><h2>' + esc(t('rec_title')) + '</h2><label>' + esc(t('rec_day')) + '<input type="date" id="recday" value="' + esc(day) + '"></label><p class="small muted">' + esc(t('rec_note')) + '</p>' +
+      '<div class="chips">' + [''].concat(window.GrainBook.CATS).filter(function (c) { return !c || counts[c]; }).map(function (c) {
+        return '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-action="reccat" data-cat="' + c + '">' + esc(c ? window.GrainBook.catName(c, I18n.lang) : t('rec_all')) + ' ' + (c ? counts[c] : all.length) + '</button>'; }).join('') + '</div></div>' +
+      '<div class="card stack">' + (list.length ? list.map(function (x) { return '<div class="row small"><span class="mono">' + esc(L.nowTime(new Date(x.t))) + '</span><span class="grow">' + esc(window.GrainBook.text(x, I18n.lang, fmtKg)) + '</span><span class="muted">' + esc(window.GrainBook.catName(x.cat, I18n.lang)) + '</span></div>'; }).join('') : '<p class="small muted">' + esc(t('rec_none')) + '</p>') + '</div>' + exportView();
+  }
   function exportView() {
     const d = L.today();
     return '<div class="card stack"><div class="grid2"><label>' + esc(t('export_from')) + '<input id="exfrom" type="date" value="' + d.slice(0, 8) + '01"></label><label>' + esc(t('export_to')) + '<input id="exto" type="date" value="' + d + '"></label></div>' +
@@ -1383,6 +1395,7 @@
     }
     if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast(t('dx_feed_off_toast')); return; }
     if (a === 'recon-refresh') { refreshRecon(); return; }
+    if (a === 'reccat') { S.recCat = b.dataset.cat || ''; render(); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
       const id = b.dataset.silo;
       S.sheet.order = S.sheet.order.indexOf(id) >= 0 ? S.sheet.order.filter(function (x) { return x !== id; }) : S.sheet.order.concat([id]);
@@ -1430,6 +1443,7 @@
       else if (el.name === 'qcGrade') { S.form.dest = []; updateDyn(); }
     }
     if (S.sheet && el.form && el.form.id === 'sheetform' && el.name) S.sheet.v[el.name] = el.type === 'checkbox' ? el.checked : el.value; // sem redesenhar: o 'input' já tratou (evita perder o foco)
+    if (el.id === 'recday' && el.value) { S.recDay = el.value; render(); return; }   // 0.14.0: dia dos Registos
     if (el.id === 'restore') restore(el.files[0], el);
     if (el.name === 'lang' && el.form && el.form.id === 'generalform') {
       readGeneral(el.form); I18n.set(S.settings.lang);
