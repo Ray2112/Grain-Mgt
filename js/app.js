@@ -179,23 +179,25 @@
     FU.warnings().forEach(function (w) { add('fssc', '✔', FU.warnText(w), 'data-tab="fssc"'); });
     const sw = sensorWarnings().filter(function (w) { return !w.ack; });
     if (sw.length) add('maint', '🌡', t('sn_banner').replace('{n}', sw.filter(function (w) { return !w.suspect; }).length).replace('{m}', sw.filter(function (w) { return w.suspect; }).length), 'data-tab="maint" data-mact="tab" data-v="sensors"');
+    const so = window.__shiftUI && window.__shiftUI.issueOut ? window.__shiftUI.issueOut() : null;   // 0.17.0: até ao logout, não se limpa
+    if (so) out.push({ key: null, sticky: true, tab: 'shift', text: so, html: '<div class="banner b-warn" role="status" data-action="tab" data-tab="shift">👷 ' + esc(so) + '</div>' });
     const sl = window.__shiftUI ? window.__shiftUI.issue() : null;
     if (sl) add('shift', '👷', sl, 'data-tab="shift"', true);
     const up = window.RecSync && window.RecSync.issue ? window.RecSync.issue() : null;
     if (up) add('settings', '☁', t('up_' + up.kind).replace('{e}', up.error || '').replace('{d}', up.day || ''), 'data-tab="settings"', true);
     if (all) return out;
     const ack = warnAcks();
-    return out.filter(function (w) { return !ack.has(w.key); });
+    return out.filter(function (w) { return w.sticky || !ack.has(w.key); });
   }
   function warnCard() {
-    const list = warnList();
+    const list = warnList().filter(function (w) { return !w.sticky; });
     return '<div class="card stack"><h2>' + esc(t('wa_title')) + '</h2>' + (list.length ? '<p class="small muted">' + esc(t('wa_note')) + '</p>' +
       list.map(function (w) { return '<div class="small">• ' + esc(w.text) + '</div>'; }).join('') +
       '<label>' + esc(t('wa_by')) + '<input id="wa_by" value="' + esc(S.settings.operator || '') + '"></label><label>' + esc(t('wa_reason')) + '<textarea id="wa_reason" rows="2"></textarea></label>' +
       '<button type="button" class="btn primary" data-action="warn-clear">' + esc(t('wa_btn').replace('{n}', list.length)) + '</button>' : '<p class="small muted">' + esc(t('wa_none')) + '</p>') + '</div>';
   }
   function clearWarnings() {
-    const list = warnList(), by = ($('#wa_by') || {}).value || '', reason = ($('#wa_reason') || {}).value || '';
+    const list = warnList().filter(function (w) { return !w.sticky; }), by = ($('#wa_by') || {}).value || '', reason = ($('#wa_reason') || {}).value || '';
     if (!S.unlocked) { toast(t('pin')); return; }
     if (!by.trim() || !reason.trim()) { toast(t('wa_need')); return; }
     const now = new Date();
@@ -1157,7 +1159,7 @@
     const X = window.XLSX, x = repData(), r = x.r; if (!X) return;
     const wb = X.utils.book_new(), add = function (n, rows) { X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows), n.slice(0, 31)); };
     const per = x.win === 'D' ? t('rp_D') : x.win === 'N' ? t('rp_N') : t('rp_whole');
-    add(t('rp_sum'), [['Grain-Mgt — ' + t('rp_title'), x.day, per], [], ['', 'n', 'kg'], [t('rp_intake'), r.intake.trucks, r.intake.kg], [t('rp_out'), r.discharge.n, r.discharge.kg], [t('rp_tr'), r.transfer.n, r.transfer.kg],
+    add(t('rp_sum'), [[(I18n.lang === 'en' ? 'FMO - Grain Silos — ' : 'FMO - Silo Cereais — ') + t('rp_title'), x.day, per], [], ['', 'n', 'kg'], [t('rp_intake'), r.intake.trucks, r.intake.kg], [t('rp_out'), r.discharge.n, r.discharge.kg], [t('rp_tr'), r.transfer.n, r.transfer.kg],
       [t('rp_stops'), r.stops.n, r.stops.min + ' min'], [t('rp_monit'), r.monit.n, ''], [],
       [t('rp_intake')]].concat(Object.keys(r.intake.byCereal).map(function (k) { return [k, r.intake.byCereal[k].trucks, r.intake.byCereal[k].kg]; }))
       .concat([[], [t('rp_out')]]).concat(Object.keys(r.discharge.byLine).map(function (k) { return [k, '', r.discharge.byLine[k]]; }))

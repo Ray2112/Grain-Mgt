@@ -9,6 +9,7 @@
       title: 'Turno — login e logout (secção de silos)', day: 'Dia', shift: 'Turno', sD: 'Dia 07–19', sN: 'Noite 19–07',
       login: 'Login de turno', loginHelp: 'Início do turno: chefe de turno (com PIN), trabalhos a fazer, estado, leituras iniciais das balanças e comentários. O stock dos silos é registado sozinho.',
       leaderPin: 'PIN do chefe de turno', leaderPinBad: 'PIN do chefe de turno errado', leaderPinNone: 'aviso: este chefe ainda não tem PIN (o supervisor define-o em Definições)', ldTitle: 'Chefes de turno (secção de silos)', ldNote: 'Um por turma. Cada chefe entra e sai do turno com o seu PIN. Escreva um PIN só para o criar ou mudar; vazio = fica como está. Mudar o nome apaga o PIN. Fica só neste telemóvel.', ldPin: 'PIN (4 a 8 algarismos)', ldSet: '(definido)', ldNotSet: '(sem PIN)', ldSave: 'Gravar chefes de turno', ldSaved: 'Chefes de turno gravados', ldFormat: 'O PIN tem 4 a 8 algarismos', 
+      outMissing: 'Turno de {s} de {d} ({l}) com login e sem logout: faça o logout no separador Turno.', outGo: 'Ir para esse turno',
       leader: 'Chefe de turno (secção de silos)', ops: 'Operadores de serviço', jobs: 'Trabalhos a fazer', jobsAuto: 'Da app (hoje)', jobsList: 'Lista (editável)',
       jobAdd: 'Acrescentar à lista', jobRm: 'Retirar', jobExtra: 'Outro trabalho (só neste turno)', trucks: 'Camiões esperados',
       state: 'Estado', rec1: 'Recepção 1', rec2: 'Recepção 2', feed: 'Alimentação da moagem', on: 'Ligada', off: 'Desligada',
@@ -32,6 +33,7 @@
       title: 'Shift — login and logout (silo section)', day: 'Day', shift: 'Shift', sD: 'Day 07–19', sN: 'Night 19–07',
       login: 'Shift login', loginHelp: 'Start of the shift: shift leader (with PIN), jobs to be done, state, initial scale readings and comments. The silo stock is recorded automatically.',
       leaderPin: 'Shift leader PIN', leaderPinBad: 'Wrong shift leader PIN', leaderPinNone: 'warning: this leader has no PIN yet (the supervisor sets it in Settings)', ldTitle: 'Shift leaders (silo section)', ldNote: 'One per crew. Each leader logs in and out of the shift with their own PIN. Type a PIN only to create or change it; blank = unchanged. Changing the name clears the PIN. Stays on this phone only.', ldPin: 'PIN (4 to 8 digits)', ldSet: '(set)', ldNotSet: '(no PIN)', ldSave: 'Save shift leaders', ldSaved: 'Shift leaders saved', ldFormat: 'The PIN has 4 to 8 digits', 
+      outMissing: '{s} shift of {d} ({l}) has a login and no logout: log it out in the Shift tab.', outGo: 'Go to that shift',
       leader: 'Shift leader (silo section)', ops: 'Operators on duty', jobs: 'Jobs to be done', jobsAuto: 'From the app (today)', jobsList: 'List (editable)',
       jobAdd: 'Add to the list', jobRm: 'Remove', jobExtra: 'Other job (this shift only)', trucks: 'Trucks expected',
       state: 'State', rec1: 'Reception 1', rec2: 'Reception 2', feed: 'Feed to the mill', on: 'On', off: 'Off',
@@ -61,7 +63,15 @@
     const esc = C.esc, fmtKg = v => (typeof v === 'number' && isFinite(v)) ? C.fmtKg(v) : '—';
     const $ = s => document.querySelector(s);
     const cur = () => { const sh = C.L.shiftOf(C.L.today(), C.L.nowTime()); return { day: sh.date, win: sh.window }; };
-    const sel = () => st.sel || (st.sel = cur());
+    // 0.17.0 (Zhax, 14-11-2026): turno com login e sem logout não desaparece — o separador abre nele e há um alerta até ao logout
+    function openShift() {
+      const c = cur(), from = Date.now() - 3 * 24 * 3600000;
+      const ins = st.recs.filter(r => r.kind === 'shiftIn' && (r.t || 0) >= from && r.shift !== c.day + '/' + c.win).sort((a, b) => b.t - a.t);
+      return ins.find(r => !st.recs.some(o => o.kind === 'shiftOut' && o.shift === r.shift)) || null;
+    }
+    const sel = () => st.sel || (st.sel = (o => o ? { day: o.prodDay, win: o.period } : cur())(openShift()));
+    const outMsg = o => t('outMissing', { s: o.period === 'N' ? t('sN') : t('sD'), d: String(o.date || '').split('-').reverse().join('/'), l: o.leader || '' });
+    function issueOut() { const o = openShift(); return o ? outMsg(o) : null; }
     const sid = s => s.day + '/' + s.win;
     const rec = (kind, s) => st.recs.filter(r => r.kind === kind && r.shift === sid(s)).sort((a, b) => b.t - a.t)[0] || null;
     async function reload() { try { st.recs = await C.DB.all('maint'); } catch (e) { st.recs = []; } }
@@ -119,8 +129,9 @@
     const scaleVals = p => { const o = {}; R().SCALES.forEach(k => { const e = $('#' + p + k); o[k] = e ? e.value : ''; }); return o; };
     const onOff = (id, v) => '<label>' + esc(t(id)) + '<select id="sh_' + id + '"><option value="on"' + (v === 'on' ? ' selected' : '') + '>' + esc(t('on')) + '</option><option value="off"' + (v === 'off' ? ' selected' : '') + '>' + esc(t('off')) + '</option></select></label>';
     function view() {
-      const s = sel(), li = rec('shiftIn', s), lo = rec('shiftOut', s);
-      let h = '<div class="card stack"><h2>' + esc(t('title')) + '</h2><div class="grid2"><label>' + esc(t('day')) + '<input type="date" id="sh_day" value="' + esc(s.day) + '"></label>' +
+      const s = sel(), li = rec('shiftIn', s), lo = rec('shiftOut', s), op = openShift();
+      let h = (op ? '<div class="banner b-warn" role="status">⚠ ' + esc(outMsg(op)) + (op.shift === sid(s) ? '' : ' <button type="button" class="btn small" data-sact="goopen">' + esc(t('outGo')) + '</button>') + '</div>' : '') +
+        '<div class="card stack"><h2>' + esc(t('title')) + '</h2><div class="grid2"><label>' + esc(t('day')) + '<input type="date" id="sh_day" value="' + esc(s.day) + '"></label>' +
         '<label>' + esc(t('shift')) + '<select id="sh_win"><option value="D"' + (s.win === 'D' ? ' selected' : '') + '>' + esc(t('sD')) + '</option><option value="N"' + (s.win === 'N' ? ' selected' : '') + '>' + esc(t('sN')) + '</option></select></label></div></div>';
       if (!li) {
         const auto = autoJobs(s.day);
@@ -218,7 +229,7 @@
       const X = root.XLSX, s = sel(), li = rec('shiftIn', s), lo = rec('shiftOut', s), r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
       if (!X || !li) return;
       const wb = X.utils.book_new(), add = (n, rows) => X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows), n.slice(0, 31));
-      add('Turno', [['Grain-Mgt — ' + t('title'), sid(s)], [], [t('leader'), li.leader], [t('crew'), li.crew], [t('jobs'), (li.jobs || []).map(jt).join(' | ')],
+      add('Turno', [[(C.lang() === 'en' ? 'FMO - Grain Silos — ' : 'FMO - Silo Cereais — ') + t('title'), sid(s)], [], [t('leader'), li.leader], [t('crew'), li.crew], [t('jobs'), (li.jobs || []).map(jt).join(' | ')],
         [t('state') + ' (' + t('login') + ')', [t('rec1') + ' ' + t(li.state.rec1), t('rec2') + ' ' + t(li.state.rec2), t('feed') + ' ' + t(li.state.feed)].join(', ')], [t('comments'), li.comments], [],
         ['', t('start'), t('end'), t('qty')], ...R().SCALES.map(k => [t(k), li.scalesStart[k], lo ? lo.scalesEnd[k] : '', lo ? lo.scaleKg[k] : '']), [],
         [t('logout'), lo ? lo.date + ' ' + lo.time : t('notDone')], [t('chkRec'), lo ? lo.checks.reception.scaleKg : '', lo ? lo.checks.reception.recordsKg : '', lo ? lo.checks.reception.diffKg : ''],
@@ -245,6 +256,7 @@
       const a = el.dataset.sact;
       if (a === 'login') login(); else if (a === 'logout') logout(); else if (a === 'xlsx') xlsx();
       else if (a === 'pickjob') pickJob();
+      else if (a === 'goopen') { const o = openShift(); if (o) { st.sel = { day: o.prodDay, win: o.period }; C.render(); } }
       else if (a === 'ldsave') leadersSave();
       else if (a === 'unpick') { (st.picked || []).splice(Number(el.dataset.i), 1); const c = $('#sh_jobs'); if (c) c.innerHTML = chips(); }
       else if (a === 'jobadd' && C.unlocked()) {
@@ -286,6 +298,6 @@
       }
       await C.saveSettings(); C.toast(t('ldSaved')); C.render();
     }
-    return { view, issue, reload, refreshPlan, jobsEditor, leadersEditor, recs: () => st.recs };
+    return { view, issue, issueOut, reload, refreshPlan, jobsEditor, leadersEditor, recs: () => st.recs };
   };
 })(typeof window !== 'undefined' ? window : this);

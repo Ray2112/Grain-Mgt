@@ -3,12 +3,12 @@
   'use strict';
   const T = {
     pt: {
-      app_name: 'Grain-Mgt — Registos de grão', offline_badge: 'Funciona sem rede', footer: 'Dados guardados apenas neste dispositivo.',
+      app_name: 'FMO - Silo Cereais', offline_badge: 'Funciona sem rede', footer: 'Dados guardados apenas neste dispositivo.',
       // 0.12.1 — tudo traduzido (Zhax, 13-11-2026): conciliação, Dropbox, bins, lista de trabalhos do turno
-      rc_title: 'Conciliação das bins (Prodn-Mgt)', rc_note: 'Descargas registadas aqui para cada bin, comparadas com a receção na Prodn-Mgt, silo a silo, desde o último vazio da bin. Tolerância 0 kg.',
+      rc_title: 'Conciliação das bins (Moagem de Milho)', rc_note: 'Descargas registadas aqui para cada bin, comparadas com a receção na app Moagem de Milho, silo a silo, desde o último vazio da bin. Tolerância 0 kg.',
       rc_read: 'Ler ficheiro e conciliar', rc_reading: 'A ler…', rc_unavail: 'Ficheiro das bins indisponível: {e}', rc_last_copy: 'A mostrar a última cópia guardada.',
       rc_file: 'Ficheiro de {d}', rc_ago: '(há {m} min)', rc_check: '{r}: confirmar com o chefe de turno antes de dar a conciliação por fechada.',
-      rc_ok: 'Confere', rc_diff: 'Diferença {d}', rc_empty: 'Sem descargas nem receções neste ciclo.', rc_cols: 'Grain-Mgt · Prodn-Mgt · diferença',
+      rc_ok: 'Confere', rc_diff: 'Diferença {d}', rc_empty: 'Sem descargas nem receções neste ciclo.', rc_cols: 'Silo Cereais · Moagem de Milho · diferença',
       rc_pending: '{n} descarga(s) depois do ficheiro ({kg}): ainda não contam.', rc_bad: '{n} descarga(s) sem data/hora válida: verificar os registos.',
       rc_diff_note: 'Diferença: verificar com o chefe de turno (descarga em falta ou quantidade diferente numa das apps).',
       fm_FRESHNESS_STALE: 'ficheiro das bins antigo', fm_FRESHNESS_FUTURE: 'hora do ficheiro no futuro', fm_FRESHNESS_INVALID: 'hora do ficheiro inválida', fm_BIN_MISSING: 'bin não existe no ficheiro',
@@ -151,12 +151,12 @@
       err_points: 'pontos de temperatura: 1 a 50', err_ascending: 'os valores têm de subir', err_shifts: 'use HH:MM separados por vírgula'
     },
     en: {
-      app_name: 'Grain-Mgt — Grain records', offline_badge: 'Works offline', footer: 'Data stored on this device only.',
+      app_name: 'FMO - Grain Silos', offline_badge: 'Works offline', footer: 'Data stored on this device only.',
       // 0.12.1 — everything translated (Zhax, 13 Nov 2026): reconciliation, Dropbox, bins, shift jobs list
-      rc_title: 'Bin reconciliation (Prodn-Mgt)', rc_note: 'Discharges recorded here for each bin, compared with the intake in Prodn-Mgt, silo by silo, since the bin was last emptied. Tolerance 0 kg.',
+      rc_title: 'Bin reconciliation (Maize Mill)', rc_note: 'Discharges recorded here for each bin, compared with the intake in Maize Mill, silo by silo, since the bin was last emptied. Tolerance 0 kg.',
       rc_read: 'Read file and reconcile', rc_reading: 'Reading…', rc_unavail: 'Bin file unavailable: {e}', rc_last_copy: 'Showing the last saved copy.',
       rc_file: 'File of {d}', rc_ago: '({m} min ago)', rc_check: '{r}: check with the shift leader before closing the reconciliation.',
-      rc_ok: 'Matches', rc_diff: 'Difference {d}', rc_empty: 'No discharges or intakes in this cycle.', rc_cols: 'Grain-Mgt · Prodn-Mgt · difference',
+      rc_ok: 'Matches', rc_diff: 'Difference {d}', rc_empty: 'No discharges or intakes in this cycle.', rc_cols: 'Grain Silos · Maize Mill · difference',
       rc_pending: '{n} discharge(s) after the file ({kg}): not counted yet.', rc_bad: '{n} discharge(s) without a valid date/time: check the records.',
       rc_diff_note: 'Difference: check with the shift leader (a discharge missing or a different quantity in one of the apps).',
       fm_FRESHNESS_STALE: 'bin file is old', fm_FRESHNESS_FUTURE: 'file time is in the future', fm_FRESHNESS_INVALID: 'file time is invalid', fm_BIN_MISSING: 'bin not in the file',
