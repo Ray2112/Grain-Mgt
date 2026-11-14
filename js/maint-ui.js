@@ -152,6 +152,21 @@ window.MaintUI = function (C) {
     await reload(); C.toast(msgOk || t('saved')); C.render();
     return true;
   }
+  // v2.9.0 / v0.14.0 (Zhax, 14-11-2026): nomes da lista de preventiva em inglês quando a app está em inglês (as listas vêm das folhas em português)
+  const PM_EN = [
+    ['Moinho de Rolos - Linha C (Milho)', 'Roller mill - Line C (maize)'], ['Moinho de Martelos', 'Hammer mill'], ['Moinho Martelo', 'Hammer mill'],
+    ['Moinho de Rolo', 'Roller mill'], ['Moinho Rolos', 'Roller mill'], ['Controlo Plansifter', 'Plansifter control'], ['Control Plansifter', 'Plansifter control'],
+    ['Extratores de escalas', 'Scale extractors'], ['Extratores escalas', 'Scale extractors'], ['Extrator de Escala', 'Scale extractor'], ['Extrator Escala', 'Scale extractor'],
+    ['Parafuso Sem-fim Tubular', 'Tubular screw conveyor'], ['Parafuso Sem Fim Tubular', 'Tubular screw conveyor'], ['Quadros eletricos', 'Electrical panels'],
+    ['Quadro Elétrico', 'Electrical panel'], ['Quadro Eletrico', 'Electrical panel'], ['Separador Magnético de Metais', 'Magnetic metal separator'],
+    ['Separador magnético de Metais', 'Magnetic metal separator'], ['Separador de Grão', 'Grain separator'], ['Separador Grão', 'Grain separator'],
+    ['Transportador Horizontal', 'Horizontal conveyor'], ['Transportador de Corrente', 'Chain conveyor'], ['Flow balança', 'Flow balancer'],
+    ['Detector Metais', 'Metal detector'], ['Elevador de Alcatruzes', 'Bucket elevator'], ['Silo de Filtragem', 'Filter silo'], ['Valvula Tripla', 'Three-way valve'],
+    ['Ventilador de Extração', 'Extraction fan'], ['Ventilador Extração', 'Extraction fan'], ['Ventilador', 'Fan'], ['Elevador', 'Elevator'], ['Eclusa', 'Rotary valve'],
+    ['Balanças', 'Scales'], ['Balança', 'Scale'], ['Filtro', 'Filter'], ['Eléctrico', 'Electrical'], ['Mecânico', 'Mechanical'],
+    [' · par ', ' · pair '], ['estrias/cm', 'flutes/cm'], ['ângulo', 'angle'], ['Alimentação Moagem', 'Mill feed'], ['Recepcão', 'Reception'], ['Recepção', 'Reception'], ['REVOLTEIO', 'TURNING'], ['Piso ', 'Floor ']
+  ];
+  const pmName = s => C.lang() !== 'en' || !s ? s : PM_EN.reduce((x, [pt, en]) => x.split(pt).join(en), String(s)).replace(/ - P(\d)\b/g, ' - Floor $1');
   function errs(list) { if (list.length) { C.toast(t('fill') + ': ' + list.map(x => t(x)).join(', ')); return true; } return false; }
 
   // ---------- avisos (app e cartão da página inicial) ----------
@@ -160,9 +175,9 @@ window.MaintUI = function (C) {
   function warnings() { return M.warnings(st.entries, C.passages(), today(), rollCtx()); }
   const WT = { roll_critical: 'wRollCritical', roll_due: 'wRollDue', roll_inspect: 'wRollInspect', brush_critical: 'wBrush_critical', brush_missing: 'wBrush_missing' };
   function warnText(w) {
-    if (w.type === 'pm_overdue') return t('wPm', { eq: w.equipment, task: w.task, d: ddmm(w.due), n: w.daysLate });
+    if (w.type === 'pm_overdue') return t('wPm', { eq: pmName(w.equipment), task: pmName(w.task), d: ddmm(w.due), n: w.daysLate });
     if (w.type === 'pm_tasks_overdue') return t('wPmTasks', { n: w.n }) + ': ' + w.items.slice(0, 3).map(x => x.code).join(', ') + (w.n > 3 ? '…' : '');
-    const s = t(WT[w.type] || 'wRollDue', { p: w.name || w.passageId, l: w.lineId, h: nf(w.hours), lim: nf(w.limit) });
+    const s = t(WT[w.type] || 'wRollDue', { p: pmName(w.name || w.passageId), l: w.lineId, h: nf(w.hours), lim: nf(w.limit) });
     return (w.hours === null || w.hours === undefined ? s.replace(/, [^,]*— de [^)]*\)/, ')').replace(/, [^,]*— of [^)]*\)/, ')') : s) + (w.note ? ' — ' + w.note : '');
   }
   function banners() {
@@ -173,7 +188,8 @@ window.MaintUI = function (C) {
   function view() {
     if (!st.loaded) { reload().then(C.render); return `<section class="card"><p>${esc(t('loading'))}</p></section>`; }
     const extra = C.extraTabs || [];   // separadores próprios da app (ex.: Sensores na Grain-Mgt): [{id, label(), view()}]
-    const tabs = ['shift', 'stops', 'work', 'pm'].concat(C.rolls ? ['rolls'] : []).concat(extra.map(x => x.id)).concat(['cons', 'notes']);
+    // v2.9.0 / v0.14.0: intervenções dentro de Paragens
+    const tabs = ['shift', 'stops', 'pm'].concat(C.rolls ? ['rolls'] : []).concat(extra.map(x => x.id)).concat(['cons', 'notes']);
     if (tabs.indexOf(st.tab) < 0 && !(st.tab === 'rollset' && C.rolls)) st.tab = 'shift';
     const s = sh();
     const head = `<section class="card"><h2>${esc(t('title'))}</h2>
@@ -182,7 +198,7 @@ window.MaintUI = function (C) {
         ${fld(t('period'), `<select id="mPeriod">${opt('D', s.period, t('p_D'))}${opt('N', s.period, t('p_N'))}</select>`)}</div>
         <p class="mt-sub">${esc(t('crew'))} ${esc(C.crewOf(s.day, s.period) || '—')}</p>`}</section>`;
     const ex = extra.find(x => x.id === st.tab);
-    const body = ex ? ex.view() : { shift: vShift, stops: vStops, work: vWork, pm: vPm, rolls: vRolls, rollset: vRollSet, cons: vCons, notes: vNotes }[st.tab]();
+    const body = ex ? ex.view() : { shift: vShift, stops: () => vStops() + vWork(), work: () => vStops() + vWork(), pm: vPm, rolls: vRolls, rollset: vRollSet, cons: vCons, notes: vNotes }[st.tab]();
     return banners() + head + body;
   }
   function voidBox(uid) {
@@ -301,14 +317,14 @@ window.MaintUI = function (C) {
     let form = '';
     const CAT = C.pmTasks ? M.pmCatalog(C.pmTasks(), st.entries, today(), f && f.kind === 'pmJob' && M.validWeek(f.week) ? f.week : w) : [];
     const pickSel = () => { if (!CAT.length) return ''; const groups = Array.from(new Set(CAT.map(c => c.task.group)));
-      return fld(t('pmPick'), `<select data-mf="taskId"><option value="">${esc(t('pmFree'))}</option>${groups.map(g => `<optgroup label="${esc(g)}">${CAT.filter(c => c.task.group === g).map(c =>
-        `<option value="${esc(c.id)}" ${f.taskId === c.id ? 'selected' : ''} ${c.pickable ? '' : 'disabled'}>${esc(c.task.code + ' ' + c.task.asset + ' — ' + t('fq_' + c.task.freq) + ' · ' + t('ps_' + c.status) + (c.nextDue ? ' · ' + t('nextDue') + ' ' + ddmm(c.nextDue) : ''))}</option>`).join('')}</optgroup>`).join('')}</select>`); };
+      return fld(t('pmPick'), `<select data-mf="taskId"><option value="">${esc(t('pmFree'))}</option>${groups.map(g => `<optgroup label="${esc(pmName(g))}">${CAT.filter(c => c.task.group === g).map(c =>
+        `<option value="${esc(c.id)}" ${f.taskId === c.id ? 'selected' : ''} ${c.pickable ? '' : 'disabled'}>${esc(c.task.code + ' ' + pmName(c.task.asset) + ' — ' + t('fq_' + c.task.freq) + ' · ' + t('ps_' + c.status) + (c.nextDue ? ' · ' + t('nextDue') + ' ' + ddmm(c.nextDue) : ''))}</option>`).join('')}</optgroup>`).join('')}</select>`); };
     if (f && f.kind === 'pmJob') form = `<div class="mt-box">${pickSel()}<div class="grid2">${fld(t('week'), inp('week', f.week), 1)}${fld(t('dueDate'), inp('dueDate', f.dueDate, 'type="date"'), 1)}
         ${fld(t('line'), lineSel(f.lineId))}${fld(t('equipment'), inp('equipment', f.equipment), 1)}</div>
         ${fld(t('task'), area('task', f.task), 1)}<div class="grid2">${fld(t('responsible'), inp('responsible', f.responsible), 1)}${fld(t('by'), inp('by', f.by), 1)}</div>${saveBtns('savepm')}</div>`;
     const job = s => {
       const up = f && f.kind === 'pmUpdate' && f.jobUid === s.uid;
-      return `<div class="mt-item ${s.overdue ? 'mt-late' : ''}"><div><b>${esc(s.job.equipment)}</b> — ${esc(s.job.task)}
+      return `<div class="mt-item ${s.overdue ? 'mt-late' : ''}"><div><b>${esc(pmName(s.job.equipment))}</b> — ${esc(pmName(s.job.task))}
           <span class="mt-c ${PM_CLS[s.status] || ''}">${esc(t('s_' + s.status))}${s.status === 'in_progress' ? ' ' + s.progress + ' %' : ''}</span>
           ${s.overdue ? `<span class="mt-c mt-bad">${esc(t('overdue'))} · ${esc(t('daysLate', { n: s.daysLate }))}</span>` : ''}</div>
         <div class="mt-sub">${esc(t('week'))} ${esc(s.week)} · ${esc(t('due'))} ${esc(ddmm(s.due))}${s.job.lineId ? ' · ' + esc(lineName(s.job.lineId)) : ''} · ${esc(t('responsible'))}: ${esc(s.job.responsible)}${s.doneBy ? ' · ' + esc(t('doneBy')) + ': ' + esc(s.doneBy) : ''}</div>
@@ -340,9 +356,9 @@ window.MaintUI = function (C) {
     const n = k => k === 'late' ? CAT.filter(c => c.overdue).length : k === 'due' ? CAT.filter(c => c.pickable).length : CAT.length;
     let prev = null;
     const rows = show.map(c => {
-      const g = c.task.group !== prev ? `<h4 class="mt-grp">${esc(c.task.group)}</h4>` : '';
+      const g = c.task.group !== prev ? `<h4 class="mt-grp">${esc(pmName(c.task.group))}</h4>` : '';
       prev = c.task.group;
-      return `${g}<div class="mt-item ${c.overdue ? 'mt-late' : ''}"><div><b>${esc(c.task.code)}</b> ${esc(c.task.asset)} — ${esc(c.task.task)} · ${esc(t('fq_' + c.task.freq))}
+      return `${g}<div class="mt-item ${c.overdue ? 'mt-late' : ''}"><div><b>${esc(c.task.code)}</b> ${esc(pmName(c.task.asset))} — ${esc(pmName(c.task.task))} · ${esc(t('fq_' + c.task.freq))}
           <span class="mt-c ${PS_CLS[c.status] || ''}">${esc(t('ps_' + c.status))}</span>${c.overdue && c.status !== 'overdue' ? `<span class="mt-c mt-bad">${esc(t('ps_overdue'))}</span>` : ''}</div>
         <div class="mt-sub">${c.lastDone ? esc(t('lastDone')) + ' ' + esc(ddmm(c.lastDone)) + ' · ' + esc(t('nextDue')) + ' ' + esc(ddmm(c.nextDue)) + (c.overdue ? ' · ' + esc(t('daysLate', { n: c.daysLate })) : '') : esc(t('ps_never'))}</div>
         ${c.pickable && !st.form ? `<button type="button" class="btn small primary" data-mact="pmplan" data-uid="${esc(c.id)}">${esc(t('plan'))} ${esc(w)}</button>` : ''}</div>`;
@@ -411,7 +427,7 @@ window.MaintUI = function (C) {
       prev = r.passage.passage;
       const pct = r.pct === null ? '' : ` (${esc(nf(r.pct))} %)`;
       return `${grp}<div class="mt-item ${r.status === 'critical' || r.brushAlert ? 'mt-late' : ''}">
-        <div><b>${esc(r.passage.name)}</b>${r.machine ? ' · ' + esc(t('machine')) + ' ' + esc(r.machine) : ''}
+        <div><b>${esc(pmName(r.passage.name))}</b>${r.machine ? ' · ' + esc(t('machine')) + ' ' + esc(r.machine) : ''}
           <span class="mt-c ${r.over ? 'mt-warn' : ''}">${r.hours === null ? '— h' : esc(nf(r.hours)) + ' / ' + esc(nf(r.limit)) + ' h' + pct}</span>
           ${r.condition ? `<span class="mt-c ${COND_CLS[r.condition] || ''}">${esc(t('r_' + r.condition))}</span>` : ''}
           ${r.status === 'inspect' ? `<span class="mt-c mt-warn">${esc(t('inspectNow'))}</span>` : (r.checkedThisWeek ? `<span class="mt-c mt-ok">${esc(t('inspected'))} ${esc(M.weekOf(today()))}</span>` : '')}
@@ -422,7 +438,7 @@ window.MaintUI = function (C) {
           · Ø ${esc(t('fast'))} ${r.diaFast === null ? '—' : esc(nf(r.diaFast))}, ${esc(t('slow'))} ${r.diaSlow === null ? '—' : esc(nf(r.diaSlow))} mm${r.measuredOn ? ' (' + esc(ddmm(r.measuredOn)) + ')' : ''}</div>
         <div class="mt-sub">${esc(t('register'))}: ${r.changes} ${esc(t('trocas'))} · ${esc(t('refluted'))} ${r.refluted}${r.avgHoursBetween === null ? '' : ' · ' + esc(t('avgHours')) + ' ' + esc(nf(r.avgHoursBetween)) + ' h'}
           ${r.register.length ? ' · ' + r.register.map(x => esc(ddmm(x.date)) + (x.hours === null ? '' : ' (' + esc(nf(x.hours)) + ' h' + (x.missingDays ? '+' : '') + ')')).join(', ') : ''}</div>
-        <div class="mt-sub">${esc(t('fluteSpec'))}: ${esc(r.fluteSpec)}</div>
+        <div class="mt-sub">${esc(t('fluteSpec'))}: ${esc(pmName(r.fluteSpec))}</div>
         ${rollForm(r)}
         ${st.form ? '' : `<div class="row">${r.needsInspection ? `<button type="button" class="btn small primary" data-mact="rchk" data-uid="${esc(r.id)}">${esc(t('check'))}</button>` : ''}
           <button type="button" class="btn small" data-mact="rbrush" data-uid="${esc(r.id)}">${esc(t('brushes'))}</button>
@@ -476,7 +492,7 @@ window.MaintUI = function (C) {
     const idRows = P.map(p => {
       const ids = M.rollIdsOf(p.id, st.entries);
       const edit = f && f.scope === 'rollIds' && f.passageId === p.id;
-      return `<div class="mt-item"><b>${esc(p.name)}</b> · ${esc(t('fast'))} ${esc(ids.fast || '—')} · ${esc(t('slow'))} ${esc(ids.slow || '—')}
+      return `<div class="mt-item"><b>${esc(pmName(p.name))}</b> · ${esc(t('fast'))} ${esc(ids.fast || '—')} · ${esc(t('slow'))} ${esc(ids.slow || '—')}
         ${edit ? `<div class="mt-box"><div class="grid2">${fld(t('rollId') + ' — ' + t('fast'), inp('rollFast', f.rollFast))}${fld(t('rollId') + ' — ' + t('slow'), inp('rollSlow', f.rollSlow))}</div>${pinBox()}${saveBtns('saverset')}</div>`
           : (f ? '' : ` <button type="button" class="btn small" data-mact="rsetids" data-uid="${esc(p.id)}">${esc(t('editIds'))}</button>`)}</div>`;
     }).join('');
@@ -599,7 +615,7 @@ window.MaintUI = function (C) {
   function pickTask(id) {
     const tk = (C.pmTasks ? C.pmTasks() : []).find(x => x.id === id);
     st.form.taskId = tk ? tk.id : '';
-    if (tk) { st.form.equipment = tk.code + ' ' + tk.asset; st.form.task = tk.task + ' — ' + t('fq_' + tk.freq); }
+    if (tk) { st.form.equipment = tk.code + ' ' + pmName(tk.asset); st.form.task = pmName(tk.task) + ' — ' + t('fq_' + tk.freq); }
   }
   function onField(el, isChange) {
     if (el.dataset.mf === 'vreason' && st.act) { st.act.reason = el.value; return; }

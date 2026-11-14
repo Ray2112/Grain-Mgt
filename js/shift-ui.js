@@ -83,7 +83,7 @@
     const stock = () => (C.S.settings.silos || []).map(s => ({ silo: s.id, kg: C.L.siloContents(s.id, C.S.events).kg }));
     function scaleInputs(prefix, vals) {
       return '<p class="small muted">' + esc(t('scalesHelp')) + '</p><div class="grid2">' + R().SCALES.map(k =>
-        '<label>' + esc(t(k)) + '<input inputmode="decimal" id="' + prefix + k + '" value="' + esc(vals && vals[k] != null ? String(vals[k]) : '') + '"></label>').join('') + '</div>';
+        '<label>' + esc(t(k)) + '<input inputmode="numeric" data-scale="1" id="' + prefix + k + '" placeholder="1,234,567" value="' + esc(vals && vals[k] != null ? R().fmtScale(vals[k]) : '') + '"></label>').join('') + '</div>';
     }
     const scaleVals = p => { const o = {}; R().SCALES.forEach(k => { const e = $('#' + p + k); o[k] = e ? e.value : ''; }); return o; };
     const onOff = (id, v) => '<label>' + esc(t(id)) + '<select id="sh_' + id + '"><option value="on"' + (v === 'on' ? ' selected' : '') + '>' + esc(t('on')) + '</option><option value="off"' + (v === 'off' ? ' selected' : '') + '>' + esc(t('off')) + '</option></select></label>';
@@ -128,7 +128,8 @@
           '<button type="button" class="btn primary block" data-sact="logout">' + esc(t('saveLogout')) + '</button></div>';
         return h;
       }
-      const row = k => '<tr><td>' + esc(t(k)) + '</td><td>' + fmtKg(li.scalesStart[k]) + '</td><td>' + fmtKg(lo.scalesEnd[k]) + '</td><td' + ((lo.negative || []).indexOf(k) >= 0 ? ' class="warn"' : '') + '>' + fmtKg(lo.scaleKg[k]) + '</td></tr>';
+      const sc = v => R().fmtScale(v) || '—';
+      const row = k => '<tr><td>' + esc(t(k)) + '</td><td>' + sc(li.scalesStart[k]) + '</td><td>' + sc(lo.scalesEnd[k]) + '</td><td' + ((lo.negative || []).indexOf(k) >= 0 ? ' class="warn"' : '') + '>' + sc(lo.scaleKg[k]) + '</td></tr>';
       const ck = c => c.scaleKg === null ? '—' : fmtKg(c.scaleKg) + ' / ' + fmtKg(c.recordsKg) + ' kg · ' + esc(t('diff')) + ' ' + (c.diffKg > 0 ? '+' : '') + fmtKg(c.diffKg);
       const tg = lo.targets;
       h += '<div class="card stack"><h2>' + esc(t('logout')) + ' · ' + esc(lo.date + ' ' + lo.time) + '</h2>' +
@@ -214,6 +215,7 @@
       } else if (a === 'jobrm' && C.unlocked()) { jobsList().splice(Number(el.dataset.i), 1); C.saveSettings(); C.render(); }
     });
     document.addEventListener('change', e => {
+      if (e.target.dataset && e.target.dataset.scale) { const v = R().num(e.target.value); if (typeof v === 'number' && isFinite(v) && v >= 0) e.target.value = R().fmtScale(v); }   // 0.14.0: 1,234,567
       if (e.target.id === 'sh_day' && e.target.value) { sel().day = e.target.value; C.render(); }
       if (e.target.id === 'sh_win') { sel().win = e.target.value === 'N' ? 'N' : 'D'; C.render(); }
     });
@@ -225,6 +227,6 @@
         '<div class="grid2"><label>' + esc(C.t('sj_pt')) + '<input id="sj_pt"></label><label>' + esc(C.t('sj_en')) + '<input id="sj_en"></label></div>' +
         '<button type="button" class="btn small" data-sact="jobadd">' + esc(C.t('sj_add')) + '</button></div>';
     }
-    return { view, issue, reload, refreshPlan, jobsEditor };
+    return { view, issue, reload, refreshPlan, jobsEditor, recs: () => st.recs };
   };
 })(typeof window !== 'undefined' ? window : this);

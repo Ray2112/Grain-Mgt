@@ -26,3 +26,6 @@ assert.deepStrictEqual(R.normJobs(['Limpeza X', { pt: 'A', en: '' }]), [{ pt: 'L
 assert.strictEqual(R.normJobs(undefined).length, 3);
 assert.deepStrictEqual(R.normJobs(['Controlo de pragas'])[0], { pt: 'Controlo de pragas', en: 'Pest control' }, 'trabalho de origem gravado na 0.12.0 ganha o inglês');
 console.log('jobs pt/en: OK');
+// 0.14.0: leituras das balanças com vírgula a cada 3 algarismos
+assert.deepStrictEqual([R.num('1,234,567'), R.readScales({ BA01: '2,190,000' }).values.BA01, R.fmtScale(2190000)], [1234567, 2190000, '2,190,000']);
+console.log('scales 1,234,567: OK');

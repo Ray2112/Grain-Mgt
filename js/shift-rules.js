@@ -20,6 +20,7 @@
     if (v === null || v === undefined) return null;
     let s = String(v).trim().replace(/\s/g, '');
     if (s === '') return null;
+    if (/^\d{1,3}(,\d{3})+$/.test(s)) return Number(s.replace(/,/g, ''));   // 0.14.0: 1,234,567 (vírgula a cada 3 algarismos)
     if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');   // 1.234.567,8
     else s = s.replace(',', '.');
     const n = Number(s);
@@ -58,6 +59,7 @@
     return { lots, outs, toBins, transfers: ev.filter(e => e.type === 'TRANSFER'), empties: ev.filter(e => e.type === 'EMPTY'),
       receivedKg: sum(lots, l => l.kg), sentKg: sum(toBins, e => e.kg), trucks: lots.length };
   }
+  const fmtScale = v => isNum(v) ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
   const pct = (a, b) => isNum(a) && isNum(b) && b > 0 ? Math.round(a / b * 1000) / 10 : null;
   // Comparação balanças × registos (só aviso): diferença em kg, null se faltar a leitura
   function scaleChecks(kg, rec) {
@@ -70,7 +72,7 @@
     const rows = ((plan && plan.days && plan.days[day]) || []).filter(r => isNum(r.targetKg));
     return rows.length ? r3(rows.reduce((s, r) => s + r.targetKg, 0)) : null;
   }
-  const api = { jobText, normJobs, SCALES, RECEPTION, FEED, DIRTY_BINS, DEFAULT_JOBS, num, readScales, scaleKg, groupKg, shiftRecords, scaleChecks, planKg, pct };
+  const api = { fmtScale, jobText, normJobs, SCALES, RECEPTION, FEED, DIRTY_BINS, DEFAULT_JOBS, num, readScales, scaleKg, groupKg, shiftRecords, scaleChecks, planKg, pct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ShiftRules = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -1,4 +1,8 @@
-# Moagem — Registos (v0.13.0, Fase A)
+# Moagem — Registos (v0.14.0, Fase A)
+
+> **v0.14.0 — Registos (release 3; Zhax, 14-11-2026).** Descarga para a linha com **SG01** além de C e D (para SG01 a bin é opcional). O separador Exportar passa a **Registos**: tudo o que foi registado no dia de produção, por categoria e hora (recepções, descargas, transferências, silos, monitorização, turno, paragens, manutenção), com a exportação e a cópia de segurança por baixo. Manutenção: Intervenções dentro de Paragens; preventiva em inglês com a app em inglês. Leituras das balanças BA01–BA04 com vírgula a cada 3 algarismos.
+>
+> *EN:* SG01 added as a discharge line (bin optional); the Export tab becomes Records (everything on the production day by category, export and backup below); Interventions under Stoppages; preventive list in English; BA01–BA04 readings with commas.
 
 > **v0.13.0 — Tendência da temperatura dos silos (Zhax, 13-11-2026).** Em Monitorização, cartão «Tendência da temperatura» do mês: média diária de Topo (sensores 1–2), Meio (3–4) e Base (5–7) por silo ou de todos os silos, temperatura ambiente, silo mais quente do dia e variação desde o início do mês, com cores verde → amarelo → vermelho; Excel do mês. O registo mensal completo fica no Dropbox em /Temperature Readings/AAAA-MM_Silos-Temperature-Log.xlsx (escrito pelo pipeline, final no fim do mês; o mês seguinte começa um ficheiro novo). Inclui as mudanças da 0.12.1.
 >
