@@ -1,4 +1,15 @@
-# Moagem — Registos (v0.12.0, Fase A)
+# Moagem — Registos (v0.13.0, Fase A)
+
+> **v0.13.0 — Tendência da temperatura dos silos (Zhax, 13-11-2026).** Em Monitorização, cartão «Tendência da temperatura» do mês: média diária de Topo (sensores 1–2), Meio (3–4) e Base (5–7) por silo ou de todos os silos, temperatura ambiente, silo mais quente do dia e variação desde o início do mês, com cores verde → amarelo → vermelho; Excel do mês. O registo mensal completo fica no Dropbox em /Temperature Readings/AAAA-MM_Silos-Temperature-Log.xlsx (escrito pelo pipeline, final no fim do mês; o mês seguinte começa um ficheiro novo). Inclui as mudanças da 0.12.1.
+>
+> *EN:* Monitoring gets the month's temperature trend (daily Top / Middle / Base per silo or all silos, ambient, hottest silo, change since the start of the month, Excel); the full monthly record is in Dropbox /Temperature Readings/AAAA-MM_Silos-Temperature-Log.xlsx (written by the pipeline, final at month end). Includes the 0.12.1 changes.
+
+> **v0.12.1 — Tudo na língua escolhida; lista de trabalhos em Definições (Zhax, 13-11-2026).**
+> - Com a app em português tudo aparece em português, e em inglês tudo em inglês: separador Turno, relatório Excel, conciliação das bins, cartões do Dropbox e mensagens da bin.
+> - A lista de trabalhos do turno edita-se em Definições, na parte protegida (PIN de supervisor); cada trabalho em português e em inglês. No separador Turno só se escolhe.
+> - O texto escrito à mão (outro trabalho, actividades, comentários) fica como foi escrito.
+>
+> *EN:* everything in the chosen language (Shift tab, Excel report, bin reconciliation, Dropbox cards, bin messages); the shift jobs list is edited in Settings behind the supervisor PIN, each job in Portuguese and English; hand-typed text stays as written.
 
 > **v0.12.0 — Turno, avisos em vez de retenções, paragens (Zhax, 13-11-2026).**
 > - **Separador Turno (novo, primeiro):** login do chefe de turno da secção de silos (operadores, trabalhos a fazer — sugeridos pela app e lista editável —, camiões esperados, estado das recepções e da alimentação, leituras iniciais das balanças BA01–BA04, comentários; o stock dos silos fica registado sozinho) e logout (estado, actividades feitas, leituras finais, quantidade por balança, balanças × registos como aviso, % do plano de envio para a moagem e dos camiões esperados, stock no fim). Relatório do turno em Excel. Aviso em todos os separadores quando o turno não tem login.

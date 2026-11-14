@@ -7,7 +7,13 @@
   const SCALES = ['BA01', 'BA02', 'BA03', 'BA04'];
   const RECEPTION = ['BA01', 'BA02'], FEED = ['BA03', 'BA04'];
   const DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'];
-  const DEFAULT_JOBS = ['Limpeza das fossas de recepção', 'Recolha de pó (filtros)', 'Controlo de pragas'];
+  // 0.12.1: cada trabalho em português e em inglês (a lista edita-se em Definições, com PIN de supervisor)
+  const DEFAULT_JOBS = [{ pt: 'Limpeza das fossas de recepção', en: 'Cleaning of the reception pits' }, { pt: 'Recolha de pó (filtros)', en: 'Dust collection (filters)' },
+    { pt: 'Controlo de pragas', en: 'Pest control' }];
+  // Trabalho guardado: {pt, en}; listas antigas (texto) valem para as duas línguas
+  const jobText = (j, lang) => typeof j === 'string' ? j : (j && (j[lang] || j.pt || j.en)) || '';
+  // listas da 0.12.0 (texto em português): os trabalhos de origem passam a ter as duas línguas; os outros ficam como foram escritos
+  const normJobs = list => (Array.isArray(list) ? list : DEFAULT_JOBS).map(j => typeof j === 'string' ? (DEFAULT_JOBS.find(d => d.pt === j) || { pt: j, en: j }) : { pt: j.pt || j.en || '', en: j.en || j.pt || '' }).filter(j => j.pt || j.en);
   const r3 = v => Math.round(v * 1000) / 1000;
   const isNum = v => typeof v === 'number' && isFinite(v);
   function num(v) {
@@ -64,7 +70,7 @@
     const rows = ((plan && plan.days && plan.days[day]) || []).filter(r => isNum(r.targetKg));
     return rows.length ? r3(rows.reduce((s, r) => s + r.targetKg, 0)) : null;
   }
-  const api = { SCALES, RECEPTION, FEED, DIRTY_BINS, DEFAULT_JOBS, num, readScales, scaleKg, groupKg, shiftRecords, scaleChecks, planKg, pct };
+  const api = { jobText, normJobs, SCALES, RECEPTION, FEED, DIRTY_BINS, DEFAULT_JOBS, num, readScales, scaleKg, groupKg, shiftRecords, scaleChecks, planKg, pct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ShiftRules = api;
 })(typeof window !== 'undefined' ? window : this);

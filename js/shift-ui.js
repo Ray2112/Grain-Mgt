@@ -23,7 +23,9 @@
       a_red: 'Silos com leitura Vermelha / disposição pendente: {s}', a_weekly: 'Inspecção semanal devida: {s}', a_treat: 'Tratamento pendente de verificação: {s}',
       a_plan: 'Descarga para a moagem: plano do dia {kg}', a_pm: 'Preventiva em atraso ou devida esta semana: {n} tarefa(s)',
       trucksRec: 'Camiões recebidos', sentKg: 'Enviado para B01–B04', recKg: 'Recebido', transfers: 'Transferências entre silos', empties: 'Silos esvaziados',
-      stops: 'Paragens (Manut.)', monit: 'Registos de monitorização'
+      stops: 'Paragens (Manut.)', monit: 'Registos de monitorização',
+      crew: 'Turma', saveFail: 'Erro ao gravar', xDate: 'Data', xTime: 'Hora', xLot: 'Lote', xGuia: 'Guia', xSupplier: 'Fornecedor', xPlate: 'Matrícula', xCereal: 'Cereal', xColour: 'Cor', xBin: 'Bin', xLine: 'Linha', xOperator: 'Operador', xWarnings: 'Avisos', xFrom: 'De', xTo: 'Para', xKind: 'Tipo', xSilo: 'Silo', xBy: 'Por', xType: 'Tipo', xCode: 'Código', xDur: 'Duração (min)', xFault: 'Falha', xAction: 'Acção', xStock: 'Stock dos silos',
+      jobsEdit: 'A lista edita-se em Definições (com PIN de supervisor).'
     },
     en: {
       title: 'Shift — login and logout (silo section)', day: 'Day', shift: 'Shift', sD: 'Day 07–19', sN: 'Night 19–07',
@@ -43,12 +45,17 @@
       a_red: 'Silos with a Red reading / disposition pending: {s}', a_weekly: 'Weekly inspection due: {s}', a_treat: 'Treatment pending verification: {s}',
       a_plan: 'Discharge to the mill: day plan {kg}', a_pm: 'Preventive overdue or due this week: {n} task(s)',
       trucksRec: 'Trucks received', sentKg: 'Sent to B01–B04', recKg: 'Received', transfers: 'Silo transfers', empties: 'Silos emptied',
-      stops: 'Stoppages (Maint.)', monit: 'Monitoring records'
+      stops: 'Stoppages (Maint.)', monit: 'Monitoring records',
+      crew: 'Crew', saveFail: 'Save failed', xDate: 'Date', xTime: 'Time', xLot: 'Lot', xGuia: 'Waybill', xSupplier: 'Supplier', xPlate: 'Plate', xCereal: 'Cereal', xColour: 'Colour', xBin: 'Bin', xLine: 'Line', xOperator: 'Operator', xWarnings: 'Warnings', xFrom: 'From', xTo: 'To', xKind: 'Kind', xSilo: 'Silo', xBy: 'By', xType: 'Type', xCode: 'Code', xDur: 'Duration (min)', xFault: 'Fault', xAction: 'Action', xStock: 'Silo stock',
+      jobsEdit: 'The list is edited in Settings (with the supervisor PIN).'
     }
   };
   root.ShiftUI = function (C) {
     const st = { sel: null, recs: [], plan: null, planErr: null };
-    const t = (k, v) => { let s = (T[C.lang()] || T.pt)[k] || T.pt[k] || k; if (v) Object.keys(v).forEach(x => { s = s.split('{' + x + '}').join(v[x]); }); return s; };
+    const tl = (lang, k, v) => { let s = (T[lang] || T.pt)[k] || T.pt[k] || k; if (v) Object.keys(v).forEach(x => { s = s.split('{' + x + '}').join(v[x]); }); return s; };
+    const t = (k, v) => tl(C.lang(), k, v);
+    const both = (k, v) => ({ pt: tl('pt', k, v), en: tl('en', k, v) });   // 0.12.1: textos gravados nas duas línguas
+    const jt = j => R().jobText(j, C.lang());
     const esc = C.esc, fmtKg = v => (typeof v === 'number' && isFinite(v)) ? C.fmtKg(v) : '—';
     const $ = s => document.querySelector(s);
     const cur = () => { const sh = C.L.shiftOf(C.L.today(), C.L.nowTime()); return { day: sh.date, win: sh.window }; };
@@ -61,16 +68,16 @@
       try { if (root.FeedSync && root.FeedSync.signedIn()) st.plan = await root.FeedSync.fetchJson('/Apps/Mill-CD/production-plan.json'); else st.planErr = 'off'; }
       catch (e) { st.planErr = String(e && e.message || e); }
     }
-    const jobsList = () => (C.S.settings.shiftJobs = Array.isArray(C.S.settings.shiftJobs) ? C.S.settings.shiftJobs : R().DEFAULT_JOBS.slice());
+    const jobsList = () => (C.S.settings.shiftJobs = R().normJobs(C.S.settings.shiftJobs));
     // Trabalhos sugeridos pela própria app (estado dos silos, monitorização, plano, preventiva)
     function autoJobs(day) {
       const out = [], sil = C.S.settings.silos || [];
       const ss = sil.map(s => ({ s, q: C.siloSt(s) }));
-      const red = ss.filter(x => x.q.holdWarn || x.q.rejectWarn).map(x => x.s.id); if (red.length) out.push(t('a_red', { s: red.join(', ') }));
-      const wk = ss.filter(x => x.q.weeklyDue).map(x => x.s.id); if (wk.length) out.push(t('a_weekly', { s: wk.join(', ') }));
-      const tr = ss.filter(x => (x.q.drivers || []).some(d => d.code === 'treat_pending')).map(x => x.s.id); if (tr.length) out.push(t('a_treat', { s: tr.join(', ') }));
-      const pk = R().planKg(st.plan, day); if (pk !== null) out.push(t('a_plan', { kg: fmtKg(pk) + ' kg' }));
-      const pm = C.pmDue ? C.pmDue() : 0; if (pm) out.push(t('a_pm', { n: pm }));
+      const red = ss.filter(x => x.q.holdWarn || x.q.rejectWarn).map(x => x.s.id); if (red.length) out.push(both('a_red', { s: red.join(', ') }));
+      const wk = ss.filter(x => x.q.weeklyDue).map(x => x.s.id); if (wk.length) out.push(both('a_weekly', { s: wk.join(', ') }));
+      const tr = ss.filter(x => (x.q.drivers || []).some(d => d.code === 'treat_pending')).map(x => x.s.id); if (tr.length) out.push(both('a_treat', { s: tr.join(', ') }));
+      const pk = R().planKg(st.plan, day); if (pk !== null) out.push(both('a_plan', { kg: fmtKg(pk) + ' kg' }));
+      const pm = C.pmDue ? C.pmDue() : 0; if (pm) out.push(both('a_pm', { n: pm }));
       return out;
     }
     const stock = () => (C.S.settings.silos || []).map(s => ({ silo: s.id, kg: C.L.siloContents(s.id, C.S.events).kg }));
@@ -86,14 +93,14 @@
         '<label>' + esc(t('shift')) + '<select id="sh_win"><option value="D"' + (s.win === 'D' ? ' selected' : '') + '>' + esc(t('sD')) + '</option><option value="N"' + (s.win === 'N' ? ' selected' : '') + '>' + esc(t('sN')) + '</option></select></label></div></div>';
       if (!li) {
         const auto = autoJobs(s.day);
+        st.offer = auto.concat(jobsList());
         h += '<div class="card stack"><h2>' + esc(t('login')) + '</h2><p class="small muted">' + esc(t('loginHelp')) + '</p>' +
           '<label>' + esc(t('leader')) + ' *<input id="sh_leader" value="' + esc(C.S.settings.operator || '') + '"></label>' +
           '<label>' + esc(t('ops')) + '<input id="sh_ops"></label>' +
           '<div class="lbl strong">' + esc(t('jobs')) + '</div>' +
-          (auto.length ? '<div class="small muted">' + esc(t('jobsAuto')) + '</div>' + auto.map((j, i) => '<label class="check"><input type="checkbox" class="sh_job" data-j="' + esc(j) + '" checked> ' + esc(j) + '</label>').join('') : '') +
-          '<div class="small muted">' + esc(t('jobsList')) + '</div>' + jobsList().map((j, i) => '<div class="row"><label class="check grow"><input type="checkbox" class="sh_job" data-j="' + esc(j) + '"> ' + esc(j) + '</label>' +
-            '<button type="button" class="btn small" data-sact="jobrm" data-i="' + i + '">' + esc(t('jobRm')) + '</button></div>').join('') +
-          '<div class="row"><input id="sh_newjob" class="grow" placeholder="' + esc(t('jobAdd')) + '"><button type="button" class="btn small" data-sact="jobadd">' + esc(t('jobAdd')) + '</button></div>' +
+          (auto.length ? '<div class="small muted">' + esc(t('jobsAuto')) + '</div>' + auto.map((j, i) => '<label class="check"><input type="checkbox" class="sh_job" data-i="' + i + '" checked> ' + esc(jt(j)) + '</label>').join('') : '') +
+          '<div class="small muted">' + esc(t('jobsList')) + '</div>' + jobsList().map((j, i) => '<label class="check"><input type="checkbox" class="sh_job" data-i="' + (auto.length + i) + '"> ' + esc(jt(j)) + '</label>').join('') +
+          '<p class="small muted">' + esc(t('jobsEdit')) + '</p>' +
           '<label>' + esc(t('jobExtra')) + '<input id="sh_extra"></label>' +
           '<label>' + esc(t('trucks')) + '<input inputmode="numeric" id="sh_trucks"></label>' +
           '<div class="lbl strong">' + esc(t('state')) + '</div><div class="grid2">' + onOff('rec1', 'on') + onOff('rec2', 'on') + onOff('feed', 'on') + '</div>' +
@@ -103,8 +110,8 @@
         return h;
       }
       h += '<div class="card stack"><h2>' + esc(t('login')) + ' · ' + esc(li.date + ' ' + li.time) + '</h2>' +
-        '<p><b>' + esc(t('leader')) + ':</b> ' + esc(li.leader) + ' · ' + esc(li.crew ? 'Turma ' + li.crew : '') + (li.operators ? '<br><b>' + esc(t('ops')) + ':</b> ' + esc(li.operators) : '') + '</p>' +
-        '<p><b>' + esc(t('jobs')) + ':</b> ' + esc((li.jobs || []).join(' | ') || '—') + '</p>' +
+        '<p><b>' + esc(t('leader')) + ':</b> ' + esc(li.leader) + ' · ' + esc(li.crew ? t('crew') + ' ' + li.crew : '') + (li.operators ? '<br><b>' + esc(t('ops')) + ':</b> ' + esc(li.operators) : '') + '</p>' +
+        '<p><b>' + esc(t('jobs')) + ':</b> ' + esc((li.jobs || []).map(jt).join(' | ') || '—') + '</p>' +
         '<p class="small">' + esc(t('rec1')) + ' ' + esc(t(li.state.rec1)) + ' · ' + esc(t('rec2')) + ' ' + esc(t(li.state.rec2)) + ' · ' + esc(t('feed')) + ' ' + esc(t(li.state.feed)) + '</p>' +
         (li.comments ? '<p class="small">' + esc(li.comments) + '</p>' : '') + '</div>';
       const r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
@@ -128,7 +135,7 @@
         '<table class="tbl"><tr><th></th><th>' + esc(t('start')) + '</th><th>' + esc(t('end')) + '</th><th>' + esc(t('qty')) + '</th></tr>' + R().SCALES.map(row).join('') + '</table>' +
         '<div class="lbl strong">' + esc(t('checks')) + '</div><p class="small' + (lo.checks.reception.diffKg ? ' warn' : '') + '">' + esc(t('chkRec')) + ': ' + ck(lo.checks.reception) + '</p>' +
         '<p class="small' + (lo.checks.feed.diffKg ? ' warn' : '') + '">' + esc(t('chkFeed')) + ': ' + ck(lo.checks.feed) + '</p>' +
-        '<div class="lbl strong">' + esc(t('targets')) + '</div><p class="small">' + esc(t('tFeed')) + ': ' + (tg.feed.planKg === null ? esc(tg.feed.note) : fmtKg(tg.feed.daySentKg) + ' / ' + fmtKg(tg.feed.planKg) + ' kg = ' + (tg.feed.pct === null ? '—' : String(tg.feed.pct).replace('.', ',') + ' %')) + '</p>' +
+        '<div class="lbl strong">' + esc(t('targets')) + '</div><p class="small">' + esc(t('tFeed')) + ': ' + (tg.feed.planKg === null ? esc(tg.feed.note === 'off' ? t('planOff') : tg.feed.note === 'none' ? t('planNone') : tg.feed.note) : fmtKg(tg.feed.daySentKg) + ' / ' + fmtKg(tg.feed.planKg) + ' kg = ' + (tg.feed.pct === null ? '—' : String(tg.feed.pct).replace('.', ',') + ' %')) + '</p>' +
         '<p class="small">' + esc(t('tTrucks')) + ': ' + tg.trucks.received + ' / ' + (tg.trucks.expected === null ? '—' : tg.trucks.expected) + (tg.trucks.pct === null ? '' : ' = ' + String(tg.trucks.pct).replace('.', ',') + ' %') + '</p>' +
         '<p class="small"><b>' + esc(t('acts')) + ':</b><br>' + esc(lo.activities).replace(/\n/g, '<br>') + '</p>' + (lo.comments ? '<p class="small">' + esc(lo.comments) + '</p>' : '') +
         '<button type="button" class="btn block" data-sact="xlsx">' + esc(t('report')) + '</button></div>';
@@ -139,14 +146,15 @@
       if (r.bad.length) { C.toast(t('bad') + ': ' + r.bad.join(', ')); return null; }
       return r.values;
     }
-    async function add(rec) { try { await C.DB.add('maint', rec); } catch (e) { C.toast('Erro ao gravar'); return false; } await reload(); C.toast(t('saved')); C.render(); return true; }
+    async function add(rec) { try { await C.DB.add('maint', rec); } catch (e) { C.toast(t('saveFail')); return false; } await reload(); C.toast(t('saved')); C.render(); return true; }
     async function login() {
       const s = sel(), leader = ($('#sh_leader') || {}).value || '';
       if (!leader.trim()) { C.toast(t('need') + ': ' + t('leader')); return; }
       const sc = scalesOrToast('sh_s_'); if (!sc) return;
       const tr = R().num($('#sh_trucks').value);
       if (tr !== null && (isNaN(tr) || tr < 0)) { C.toast(t('bad') + ': ' + t('trucks')); return; }
-      const jobs = [...document.querySelectorAll('.sh_job')].filter(x => x.checked).map(x => x.dataset.j).concat($('#sh_extra').value.trim() ? [$('#sh_extra').value.trim()] : []);
+      const jobs = [...document.querySelectorAll('.sh_job')].filter(x => x.checked).map(x => (st.offer || [])[Number(x.dataset.i)]).filter(Boolean)
+        .concat($('#sh_extra').value.trim() ? [$('#sh_extra').value.trim()] : []);   // trabalho escrito à mão fica como foi escrito
       const now = new Date();
       await add({ kind: 'shiftIn', shift: sid(s), prodDay: s.day, period: s.win, crew: C.L.crewOf(s.day, s.win === 'N' ? '20:00' : '08:00'), date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(),
         leader: leader.trim(), operators: $('#sh_ops').value.trim(), jobs, trucksExpected: tr, planKg: R().planKg(st.plan, s.day),
@@ -165,7 +173,7 @@
       await add({ kind: 'shiftOut', shift: sid(s), prodDay: s.day, period: s.win, crew: li.crew, date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(), inUid: li.uid,
         state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, activities: acts, scalesEnd: sc, scaleKg: q.kg, negative: q.negative,
         receivedKg: r.receivedKg, sentKg: r.sentKg, trucks: r.trucks, checks: R().scaleChecks(q.kg, r),
-        targets: { feed: { planKg: plan, daySentKg: daySent, pct: R().pct(daySent, plan), note: plan === null ? (st.planErr === 'off' ? t('planOff') : t('planNone')) : '' },
+        targets: { feed: { planKg: plan, daySentKg: daySent, pct: R().pct(daySent, plan), note: plan === null ? (st.planErr === 'off' ? 'off' : 'none') : '' },   // código; o texto sai na língua de quem lê
           trucks: { expected: li.trucksExpected, received: r.trucks, pct: R().pct(r.trucks, li.trucksExpected) } },
         stockEnd: stock(), comments: $('#sh_comments').value.trim(), by });
     }
@@ -173,21 +181,21 @@
       const X = root.XLSX, s = sel(), li = rec('shiftIn', s), lo = rec('shiftOut', s), r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
       if (!X || !li) return;
       const wb = X.utils.book_new(), add = (n, rows) => X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows), n.slice(0, 31));
-      add('Turno', [['Grain-Mgt — ' + t('title'), sid(s)], [], [t('leader'), li.leader], [t('ops'), li.operators], ['Turma', li.crew], [t('jobs'), (li.jobs || []).join(' | ')],
+      add('Turno', [['Grain-Mgt — ' + t('title'), sid(s)], [], [t('leader'), li.leader], [t('ops'), li.operators], [t('crew'), li.crew], [t('jobs'), (li.jobs || []).map(jt).join(' | ')],
         [t('state') + ' (' + t('login') + ')', [t('rec1') + ' ' + t(li.state.rec1), t('rec2') + ' ' + t(li.state.rec2), t('feed') + ' ' + t(li.state.feed)].join(', ')], [t('comments'), li.comments], [],
         ['', t('start'), t('end'), t('qty')], ...R().SCALES.map(k => [t(k), li.scalesStart[k], lo ? lo.scalesEnd[k] : '', lo ? lo.scaleKg[k] : '']), [],
         [t('logout'), lo ? lo.date + ' ' + lo.time : t('notDone')], [t('chkRec'), lo ? lo.checks.reception.scaleKg : '', lo ? lo.checks.reception.recordsKg : '', lo ? lo.checks.reception.diffKg : ''],
         [t('chkFeed'), lo ? lo.checks.feed.scaleKg : '', lo ? lo.checks.feed.recordsKg : '', lo ? lo.checks.feed.diffKg : ''],
         [t('tFeed'), lo ? lo.targets.feed.daySentKg : '', lo ? lo.targets.feed.planKg : '', lo ? lo.targets.feed.pct : ''], [t('tTrucks'), lo ? lo.targets.trucks.received : '', lo ? lo.targets.trucks.expected : '', lo ? lo.targets.trucks.pct : ''],
         [t('acts'), lo ? lo.activities : ''], [t('comments'), lo ? lo.comments : '']]);
-      add(t('recKg'), [['Data', 'Hora', 'Lote', 'Guia', 'Fornecedor', 'Matrícula', 'Cereal', 'Cor', 'kg'], ...r.lots.map(l => [l.date, l.time, l.code || l.id, l.guia, l.supplier, l.plate, l.cereal, l.colour, l.kg])]);
-      add(t('sentKg'), [['Data', 'Hora', 'Silo', 'Bin', 'Linha', 'kg', 'Operador', 'Avisos'], ...r.outs.map(e => [e.date, e.time, e.silo, e.bin, e.place, e.kg, e.operator, (e.warnings || []).join(' · ')])]);
-      add(t('transfers'), [['Data', 'Hora', 'De', 'Para', 'kg', 'Operador'], ...r.transfers.map(e => [e.date, e.time, e.silo, e.toSilo, e.kg, e.operator])]);
-      add(t('monit'), [['Data', 'Hora', 'Tipo', 'Silo', 'Por'], ...C.S.mon.filter(m => m.date && C.L.shiftOf(m.date, m.time).id === sid(s)).map(m => [m.date, m.time, m.kind, m.silo, m.by])]);
-      add(t('stops'), [['Hora', 'Tipo', 'Código', 'Duração (min)', 'Falha', 'Acção', 'Por'], ...st.recs.filter(x => x.kind === 'stop' && x.shift === sid(s)).map(x => [x.time, x.stopKind || x.category, x.code, x.durationMin, x.description, x.action || '', x.by])]);
+      add(t('recKg'), [[t('xDate'), t('xTime'), t('xLot'), t('xGuia'), t('xSupplier'), t('xPlate'), t('xCereal'), t('xColour'), 'kg'], ...r.lots.map(l => [l.date, l.time, l.code || l.id, l.guia, l.supplier, l.plate, l.cereal, l.colour, l.kg])]);
+      add(t('sentKg'), [[t('xDate'), t('xTime'), t('xSilo'), t('xBin'), t('xLine'), 'kg', t('xOperator'), t('xWarnings')], ...r.outs.map(e => [e.date, e.time, e.silo, e.bin, e.place, e.kg, e.operator, (e.warnings || []).join(' · ')])]);
+      add(t('transfers'), [[t('xDate'), t('xTime'), t('xFrom'), t('xTo'), 'kg', t('xOperator')], ...r.transfers.map(e => [e.date, e.time, e.silo, e.toSilo, e.kg, e.operator])]);
+      add(t('monit'), [[t('xDate'), t('xTime'), t('xKind'), t('xSilo'), t('xBy')], ...C.S.mon.filter(m => m.date && C.L.shiftOf(m.date, m.time).id === sid(s)).map(m => [m.date, m.time, m.kind, m.silo, m.by])]);
+      add(t('stops'), [[t('xTime'), t('xType'), t('xCode'), t('xDur'), t('xFault'), t('xAction'), t('xBy')], ...st.recs.filter(x => x.kind === 'stop' && x.shift === sid(s)).map(x => [x.time, x.stopKind || x.category, x.code, x.durationMin, x.description, x.action || '', x.by])]);
       const end = lo ? lo.stockEnd : [];
-      add('Stock silos', [['Silo', t('stockStart') + ' (kg)', t('stockEnd') + ' (kg)'], ...(li.stockStart || []).map(x => [x.silo, x.kg, (end.find(y => y.silo === x.silo) || {}).kg])]);
-      X.writeFile(wb, s.day + '_' + (s.win === 'D' ? 'Dia' : 'Noite') + '_Silos_Relatorio-Turno.xlsx');
+      add(t('xStock'), [[t('xSilo'), t('stockStart') + ' (kg)', t('stockEnd') + ' (kg)'], ...(li.stockStart || []).map(x => [x.silo, x.kg, (end.find(y => y.silo === x.silo) || {}).kg])]);
+      X.writeFile(wb, s.day + '_' + (C.lang() === 'en' ? (s.win === 'D' ? 'Day' : 'Night') + '_Silos_Shift-Report' : (s.win === 'D' ? 'Dia' : 'Noite') + '_Silos_Relatorio-Turno') + '.xlsx');
     }
     function issue() {
       const c = cur(), now = new Date(), [h, m] = C.L.nowTime(now).split(':').map(Number);
@@ -199,13 +207,24 @@
       const el = e.target.closest('[data-sact]'); if (!el) return;
       const a = el.dataset.sact;
       if (a === 'login') login(); else if (a === 'logout') logout(); else if (a === 'xlsx') xlsx();
-      else if (a === 'jobadd') { const v = ($('#sh_newjob') || {}).value || ''; if (v.trim()) { jobsList().push(v.trim()); C.saveSettings(); C.render(); } }
-      else if (a === 'jobrm') { jobsList().splice(Number(el.dataset.i), 1); C.saveSettings(); C.render(); }
+      else if (a === 'jobadd' && C.unlocked()) {
+        const pt = (($('#sj_pt') || {}).value || '').trim(), en = (($('#sj_en') || {}).value || '').trim();
+        if (!pt || !en) { C.toast(C.t('sj_need')); return; }
+        jobsList().push({ pt, en }); C.saveSettings(); C.render();
+      } else if (a === 'jobrm' && C.unlocked()) { jobsList().splice(Number(el.dataset.i), 1); C.saveSettings(); C.render(); }
     });
     document.addEventListener('change', e => {
       if (e.target.id === 'sh_day' && e.target.value) { sel().day = e.target.value; C.render(); }
       if (e.target.id === 'sh_win') { sel().win = e.target.value === 'N' ? 'N' : 'D'; C.render(); }
     });
-    return { view, issue, reload, refreshPlan };
+    // Definições (só desbloqueado com o PIN de supervisor): lista dos trabalhos do turno, em português e em inglês
+    function jobsEditor() {
+      return '<div class="card stack"><h2>' + esc(C.t('sj_title')) + '</h2><p class="small muted">' + esc(C.t('sj_note')) + '</p>' +
+        jobsList().map((j, i) => '<div class="row"><span class="grow small">' + esc(j.pt) + '<br><span class="muted">' + esc(j.en) + '</span></span>' +
+          '<button type="button" class="btn small" data-sact="jobrm" data-i="' + i + '">' + esc(C.t('sj_rm')) + '</button></div>').join('') +
+        '<div class="grid2"><label>' + esc(C.t('sj_pt')) + '<input id="sj_pt"></label><label>' + esc(C.t('sj_en')) + '<input id="sj_en"></label></div>' +
+        '<button type="button" class="btn small" data-sact="jobadd">' + esc(C.t('sj_add')) + '</button></div>';
+    }
+    return { view, issue, reload, refreshPlan, jobsEditor };
   };
 })(typeof window !== 'undefined' ? window : this);

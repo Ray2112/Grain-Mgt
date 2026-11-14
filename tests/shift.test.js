@@ -18,3 +18,11 @@ assert.strictEqual(R.planKg({ days: { '2026-11-13': [{ targetKg: 200000 }] } }, 
 assert.strictEqual(R.planKg(null, '2026-11-13'), null);
 assert.strictEqual(R.pct(190000, 200000), 95); assert.strictEqual(R.pct(3, 0), null);
 console.log('shift (silos): OK');
+
+// 0.12.1: trabalhos nas duas línguas; listas antigas (texto) continuam válidas
+assert.strictEqual(R.jobText({ pt: 'Controlo de pragas', en: 'Pest control' }, 'en'), 'Pest control');
+assert.strictEqual(R.jobText('Limpeza', 'en'), 'Limpeza', 'trabalho escrito à mão fica como foi escrito');
+assert.deepStrictEqual(R.normJobs(['Limpeza X', { pt: 'A', en: '' }]), [{ pt: 'Limpeza X', en: 'Limpeza X' }, { pt: 'A', en: 'A' }]);
+assert.strictEqual(R.normJobs(undefined).length, 3);
+assert.deepStrictEqual(R.normJobs(['Controlo de pragas'])[0], { pt: 'Controlo de pragas', en: 'Pest control' }, 'trabalho de origem gravado na 0.12.0 ganha o inglês');
+console.log('jobs pt/en: OK');

@@ -4,6 +4,8 @@
 (function () {
   'use strict';
   const t = function (k) { return I18n.t(k); };
+  const tf = function (k, v) { let s = I18n.t(k); Object.keys(v || {}).forEach(function (x) { s = s.split('{' + x + '}').join(v[x]); }); return s; };   // 0.12.1
+  const dxMsg = function (r) { return r.code ? tf('dx_' + r.code, { s: r.status }) : r.msg; };
   const L = window.Logic;
   const $ = function (sel, el) { return (el || document).querySelector(sel); };
   const esc = function (s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -616,26 +618,26 @@
   }
   function reconCard() {
     const r = S.recon;
-    let h = '<details class="card stack"' + (r ? ' open' : '') + '><summary class="strong">Conciliação das bins (Prodn-Mgt)</summary>';
+    let h = '<details class="card stack"' + (r ? ' open' : '') + '><summary class="strong">' + esc(t('rc_title')) + '</summary>';
     if (!window.FeedSync || !window.FeedSync.configured() || !window.BinsFeed) return h + '<p class="small muted">' + esc(FEED_MSG.FEED_NOT_CONFIGURED) + '.</p></details>';
-    h += '<p class="small muted">Descargas registadas aqui para cada bin, comparadas com a receção na Prodn-Mgt, silo a silo, desde o último vazio da bin. Tolerância 0 kg.</p>';
-    h += '<button type="button" class="btn small" data-action="recon-refresh"' + (r && r.loading ? ' disabled' : '') + '>' + (r && r.loading ? 'A ler…' : 'Ler ficheiro e conciliar') + '</button>';
+    h += '<p class="small muted">' + esc(t('rc_note')) + '</p>';
+    h += '<button type="button" class="btn small" data-action="recon-refresh"' + (r && r.loading ? ' disabled' : '') + '>' + esc(r && r.loading ? t('rc_reading') : t('rc_read')) + '</button>';
     if (!r || r.loading) return h + '</details>';
     const status = r.status || r.last;
-    if (r.error) h += '<p class="warn small">' + esc('Ficheiro das bins indisponível: ' + (FEED_MSG['FEED_' + r.error] || r.error) + (status ? '. A mostrar a última cópia guardada.' : '.')) + '</p>';
+    if (r.error) h += '<p class="warn small">' + esc(tf('rc_unavail', { e: FEED_MSG['FEED_' + r.error] || r.error }) + (status ? ' ' + t('rc_last_copy') : '')) + '</p>';
     if (!status) return h + '</details>';
     const fr = window.BinsFeed.freshness(status, Date.now());
-    h += '<p class="small muted">Ficheiro de ' + esc(lt(status.generatedAt)) + (fr.ageMin !== null ? ' (há ' + fr.ageMin + ' min)' : '') + '</p>';
-    if (!fr.ok) h += '<p class="warn small">' + esc((FEED_MSG['FRESHNESS_' + fr.reason.toUpperCase()] || fr.reason) + ': confirmar com o chefe de turno antes de dar a conciliação por fechada.') + '</p>';
+    h += '<p class="small muted">' + esc(tf('rc_file', { d: lt(status.generatedAt) }) + (fr.ageMin !== null ? ' ' + tf('rc_ago', { m: fr.ageMin }) : '')) + '</p>';
+    if (!fr.ok) h += '<p class="warn small">' + esc(tf('rc_check', { r: FEED_MSG['FRESHNESS_' + fr.reason.toUpperCase()] || fr.reason })) + '</p>';
     window.BinsFeed.reconcileBins(status, S.events, evMs).forEach(function (b) {
-      h += '<div class="stack"><div class="row"><span class="strong grow">' + esc(b.bin) + '</span><span class="badge ' + (b.ok ? 'b-ACCEPTED">Confere' : 'b-REJECTED">Diferença ' + esc(fmtDiff(b.diffKg))) + '</span></div>';
-      if (b.empty) h += '<p class="small muted">Sem descargas nem receções neste ciclo.</p>';
-      else h += '<div class="row small muted"><span class="grow">Silo</span><span>Grain-Mgt · Prodn-Mgt · diferença</span></div>' + b.silos.map(function (x) {
+      h += '<div class="stack"><div class="row"><span class="strong grow">' + esc(b.bin) + '</span><span class="badge ' + (b.ok ? 'b-ACCEPTED">' + esc(t('rc_ok')) : 'b-REJECTED">' + esc(tf('rc_diff', { d: fmtDiff(b.diffKg) }))) + '</span></div>';
+      if (b.empty) h += '<p class="small muted">' + esc(t('rc_empty')) + '</p>';
+      else h += '<div class="row small muted"><span class="grow">Silo</span><span>' + esc(t('rc_cols')) + '</span></div>' + b.silos.map(function (x) {
         return '<div class="row small"><span class="mono grow">' + esc(x.silo) + '</span><span>' + fmtKg(x.appKg) + ' · ' + fmtKg(x.qcKg) + ' · ' + (x.ok ? '<span>' : '<span class="flag">') + esc(fmtDiff(x.diffKg)) + '</span></span></div>';
       }).join('');
-      if (b.pendingN) h += '<p class="small muted">' + b.pendingN + ' descarga(s) depois do ficheiro (' + fmtKg(b.pendingKg) + '): ainda não contam.</p>';
-      if (b.badN) h += '<p class="warn small">' + b.badN + ' descarga(s) sem data/hora válida: verificar os registos.</p>';
-      if (!b.ok && !b.badN) h += '<p class="warn small">Diferença: parar e perguntar ao chefe de turno (descarga em falta ou quantidade diferente numa das apps).</p>';
+      if (b.pendingN) h += '<p class="small muted">' + esc(tf('rc_pending', { n: b.pendingN, kg: fmtKg(b.pendingKg) })) + '</p>';
+      if (b.badN) h += '<p class="warn small">' + esc(tf('rc_bad', { n: b.badN })) + '</p>';
+      if (!b.ok && !b.badN) h += '<p class="warn small">' + esc(t('rc_diff_note')) + '</p>';
       h += '</div>';
     });
     return h + '</details>';
@@ -646,7 +648,7 @@
   function inspView() {
     if (!S.settings.silos.length) return '<p class="warn">' + esc(t('no_silos')) + '</p>';
     const all = S.settings.silos.map(function (s) { return { s: s, ss: siloSt(s) }; });
-    let h = '';
+    let h = window.__tempTrend ? window.__tempTrend.card(S.temps) : '';   // 0.13.0: tendência do mês (silo-temps.json do pipeline)
     all.forEach(function (x) {
       const s = x.s, ss = x.ss;
       const openEv = S.sev.find(function (e) { return e.silo === s.id && e.status === 'OPEN'; });
@@ -753,11 +755,12 @@
     if (!status) return { ok: false, reasons: [{ code: S.feed && S.feed.error ? 'FEED_' + S.feed.error : 'FEED_LOADING' }] };
     return window.BinsFeed.feedCheck(status, bin, silo0, Date.now(), (kg && kg > 0) ? kg : undefined);
   }
-  const FEED_MSG = { FRESHNESS_STALE: 'ficheiro das bins antigo', FRESHNESS_FUTURE: 'hora do ficheiro no futuro', FRESHNESS_INVALID: 'hora do ficheiro inválida', BIN_MISSING: 'bin não existe no ficheiro', BIN_NEG: 'bin com saldo negativo', BIN_OVER: 'bin acima da capacidade', SILO_NOT_DESIGNATED: 'silo sem cereal/cor/grau', OTHER_CEREAL: 'outro cereal na bin', OTHER_COLOUR: 'outra cor na bin', GRADE_MISMATCH: 'grau diferente na bin', NO_SPACE: 'sem espaço na bin', FEED_NOT_CONFIGURED: 'leitor do Dropbox não configurado', FEED_NOT_SIGNED_IN: 'sem sessão Dropbox neste telemóvel', FEED_FILE_MISSING: 'ficheiro das bins não existe', FEED_LOADING: 'a ler o ficheiro das bins…' };
+  // 0.12.1: mensagens na língua escolhida (chaves fm_* em i18n.js)
+  const FEED_MSG = new Proxy({}, { get: function (o, k) { const v = I18n.t('fm_' + String(k)); return v === 'fm_' + String(k) ? undefined : v; } });
   function feedText(c) {
     if (!c) return '';
-    const msgs = c.reasons.map(function (r) { return FEED_MSG[r.code] || (r.code.indexOf('FEED_') === 0 ? 'ficheiro das bins indisponível (' + r.code.slice(5) + ')' : r.code); });
-    if (c.ok) return '<p class="small">Bin ' + esc(sh_bin()) + ': ' + fmtKg(c.bin.kg) + ' kg · ' + esc('ficheiro há ' + c.freshness.ageMin + ' min') + '</p>';
+    const msgs = c.reasons.map(function (r) { return FEED_MSG[r.code] || (r.code.indexOf('FEED_') === 0 ? tf('fm_FEED_OTHER', { c: r.code.slice(5) }) : r.code); });
+    if (c.ok) return '<p class="small">' + esc(tf('fd_ok', { b: sh_bin(), kg: fmtKg(c.bin.kg), m: c.freshness.ageMin })) + '</p>';
     return '<p class="warn small">⚠ ' + esc(t('feed_warn') + ': ' + msgs.join('; ')) + '</p>';   // 0.12.0: aviso, não paragem
   }
   function sh_bin() { return S.sheet && S.sheet.v.bin ? S.sheet.v.bin : ''; }
@@ -1175,23 +1178,22 @@
     const R = window.RecSync;
     if (!R || !R.configured()) return '';
     const st = R.status();
-    let line = 'Ainda não enviados neste dispositivo.';
+    let line = t('dx_rec_none');
     if (st.lastTryAt) {
-      line = st.lastOkAt ? 'Último envio completo: ' + new Date(st.lastOkAt).toLocaleString('pt-PT') + '.' : 'Nenhum envio completo.';
-      if (st.failed) line += ' Falha: ' + st.lastError + '. Os dias em falta são reenviados na próxima gravação.';
-      if (st.undated) line += ' ' + st.undated + ' registo(s) sem data ou sem uid não entram nos ficheiros diários.';
+      line = st.lastOkAt ? tf('dx_rec_last', { d: lt(st.lastOkAt) }) : t('dx_rec_never');
+      if (st.failed) line += ' ' + tf('dx_rec_fail', { e: st.lastError });
+      if (st.undated) line += ' ' + tf('dx_rec_undated', { n: st.undated });
     }
-    return '<div class="card stack"><h2>Registos para o Dropbox (envio diário)</h2><p class="small muted">' +
-      (R.signedIn() ? 'Ligado neste dispositivo (Mill-App-Sync). Os registos de cada dia de produção são enviados após cada gravação e o dia é fechado depois das 07:00.' : 'Não ligado. Sem ligação, nada é enviado (os registos continuam guardados neste dispositivo).') +
-      '</p><p class="small">' + esc(line) + '</p><div class="grid2"><button type="button" class="btn" data-action="rec-in">Ligar envio ao Dropbox</button>' +
-      '<button type="button" class="btn" data-action="rec-now">Enviar agora</button><button type="button" class="btn" data-action="rec-out">Desligar envio</button></div></div>';
+    return '<div class="card stack"><h2>' + esc(t('dx_rec_title')) + '</h2><p class="small muted">' + esc(R.signedIn() ? t('dx_rec_on') : t('dx_rec_off')) +
+      '</p><p class="small">' + esc(line) + '</p><div class="grid2"><button type="button" class="btn" data-action="rec-in">' + esc(t('dx_rec_connect')) + '</button>' +
+      '<button type="button" class="btn" data-action="rec-now">' + esc(t('dx_rec_now')) + '</button><button type="button" class="btn" data-action="rec-out">' + esc(t('dx_rec_disconnect')) + '</button></div></div>';
   }
 
   // ---------------- definições / settings ----------------
   function settingsView() {
     const s = S.settings;
-    let h = '<div class="card stack"><h2>Ficheiro das bins (Dropbox, só leitura)</h2><p class="small muted">' + (window.FeedSync && window.FeedSync.configured() ? (window.FeedSync.signedIn() ? 'Ligado neste telemóvel.' : 'Não ligado.') : 'Aguarda a app de leitura do Dropbox (chave ainda não configurada).') + '</p>' +
-      (window.FeedSync && window.FeedSync.configured() ? '<div class="grid2"><button type="button" class="btn" data-action="feed-in">Ligar ao Dropbox</button><button type="button" class="btn" data-action="feed-out">Desligar</button></div>' : '') + '</div>' +
+    let h = '<div class="card stack"><h2>' + esc(t('dx_feed_title')) + '</h2><p class="small muted">' + esc(window.FeedSync && window.FeedSync.configured() ? (window.FeedSync.signedIn() ? t('dx_feed_on') : t('dx_feed_off')) : t('dx_feed_nokey')) + '</p>' +
+      (window.FeedSync && window.FeedSync.configured() ? '<div class="grid2"><button type="button" class="btn" data-action="feed-in">' + esc(t('dx_connect')) + '</button><button type="button" class="btn" data-action="feed-out">' + esc(t('dx_disconnect')) + '</button></div>' : '') + '</div>' +
       recSyncCard() +
       '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
       '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
@@ -1213,7 +1215,7 @@
       if (s.pin) h += '<div class="grid2b"><input name="unlockpin" type="password" inputmode="numeric" autocomplete="off" aria-label="' + esc(t('pin')) + '" placeholder="' + esc(t('pin')) + '"><button class="btn primary" type="submit">' + esc(t('unlock')) + '</button></div>';
       else h += '<p class="warn small">' + esc(t('pin_first')) + '</p>';
       h += '</div>';
-    } else h += protEditor();
+    } else h += protEditor() + SU.jobsEditor();   // 0.12.1: lista de trabalhos do turno só com o PIN de supervisor
     h += '</form><p class="small muted" id="storage"></p><p class="small muted">' + esc(t('install_hint')) + '</p>';
     setTimeout(function () {
       const el = $('#storage');
@@ -1373,13 +1375,13 @@
     if (a === 'discharge') { openSheet('out', { order: b.dataset.silo ? [b.dataset.silo] : [] }); }
     if (a === 'feed-in') { window.FeedSync.signIn().catch(function (e) { toast(e.message); }); return; }
     if (a === 'rec-in') { window.RecSync.signIn().catch(function (e) { toast(e.message); }); return; }
-    if (a === 'rec-out') { window.RecSync.signOut(); render(); toast('Envio para o Dropbox desligado neste dispositivo.'); return; }
+    if (a === 'rec-out') { window.RecSync.signOut(); render(); toast(t('dx_rec_off_toast')); return; }
     if (a === 'rec-now') {
-      if (!window.RecSync.signedIn()) { toast('Envio para o Dropbox: não ligado.'); return; }
-      window.RecSync.sync(true).then(function (r) { render(); if (r) toast(r.failed ? 'Dropbox: ' + r.failed + ' envio(s) falhado(s).' : 'Dropbox: registos enviados (' + r.ok + ' dia(s)).'); });
+      if (!window.RecSync.signedIn()) { toast(t('dx_rec_not')); return; }
+      window.RecSync.sync(true).then(function (r) { render(); if (r) toast(r.failed ? tf('dx_rec_failed', { n: r.failed }) : tf('dx_rec_sent', { n: r.ok })); });
       return;
     }
-    if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast('Dropbox desligado neste telemóvel.'); return; }
+    if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast(t('dx_feed_off_toast')); return; }
     if (a === 'recon-refresh') { refreshRecon(); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
       const id = b.dataset.silo;
@@ -1613,9 +1615,10 @@
 
   // ---------------- turno: login e logout da secção de silos (js/shift-ui.js, 0.12.0) ----------------
   const SU = window.ShiftUI({ S: S, L: L, DB: DB, esc: esc, fmtKg: function (n) { return fmtNum(n, 0); }, toast: toast, render: render, saveSettings: saveSettings, siloSt: siloSt,
-    lang: function () { return I18n.lang; },
+    lang: function () { return I18n.lang; }, t: t, unlocked: function () { return !!S.unlocked; },
     pmDue: function () { const w = MU.warnings().find(function (x) { return x.type === 'pm_tasks_overdue'; }); return w ? w.n : 0; } });
   window.__shiftUI = SU;
+  window.__tempTrend = window.TempTrend ? window.TempTrend({ esc: esc, lang: function () { return I18n.lang; }, render: render, temps: function () { return S.temps; } }) : null;
 
   // ---------------- arranque / start ----------------
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
@@ -1627,8 +1630,8 @@
     const R = window.RecSync;
     if (R) { R.setContext({ deviceId: S.settings.deviceId, site: S.settings.site || '' }); DB.onWrite(R.schedule); }
     (R ? R.handleReturn() : Promise.resolve(null)).then(function (r) {
-      if (r) { toast(r.msg); render(); }
-      if (window.FeedSync) return window.FeedSync.handleReturn().then(function (r2) { if (r2) { toast(r2.msg); render(); } });
+      if (r) { toast(dxMsg(r)); render(); }
+      if (window.FeedSync) return window.FeedSync.handleReturn().then(function (r2) { if (r2) { toast(dxMsg(r2)); render(); } });
     }).then(function () { if (R) R.schedule(); });
   });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');

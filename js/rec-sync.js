@@ -37,16 +37,16 @@
     if (!st || st.state !== p.get('state')) return null;
     sessionStorage.removeItem(STATE);
     history.replaceState(null, '', location.pathname);
-    if (p.get('error')) return { ok: false, msg: 'Dropbox (envio): ligação cancelada.' };
+    if (p.get('error')) return { ok: false, code: 'cancelled', msg: 'Dropbox (envio): ligação cancelada.' };
     try {
       const req = A().buildTokenRequest({ appKey: cfg().appKey, code: p.get('code'), verifier: st.verifier, redirectUri: redirect() });
       const r = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
       const json = await r.json().catch(() => null);
-      if (!r.ok) return { ok: false, msg: 'Dropbox (envio) recusou o código (' + r.status + ').' };
+      if (!r.ok) return { ok: false, code: 'refused', status: r.status, msg: 'Dropbox (envio) recusou o código (' + r.status + ').' };
       ls.set(KEY, A().parseTokenResponse(json, Date.now()));
       schedule();
-      return { ok: true, msg: 'Envio para o Dropbox ligado.' };
-    } catch (e) { return { ok: false, msg: 'Dropbox (envio): falha de rede.' }; }
+      return { ok: true, code: 'rec_connected', msg: 'Envio para o Dropbox ligado.' };
+    } catch (e) { return { ok: false, code: 'network', msg: 'Dropbox (envio): falha de rede.' }; }
   }
   function signOut() { ls.del(KEY); }
   async function token() {
