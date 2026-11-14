@@ -7,14 +7,15 @@
   const T = {
     pt: {
       title: 'Turno — login e logout (secção de silos)', day: 'Dia', shift: 'Turno', sD: 'Dia 07–19', sN: 'Noite 19–07',
-      login: 'Login de turno', loginHelp: 'Início do turno: chefe de turno, operadores, trabalhos a fazer, estado, leituras iniciais das balanças e comentários. O stock dos silos é registado sozinho.',
+      login: 'Login de turno', loginHelp: 'Início do turno: chefe de turno (com PIN), trabalhos a fazer, estado, leituras iniciais das balanças e comentários. O stock dos silos é registado sozinho.',
+      leaderPin: 'PIN do chefe de turno', leaderPinBad: 'PIN do chefe de turno errado', leaderPinNone: 'aviso: este chefe ainda não tem PIN (o supervisor define-o em Definições)', ldTitle: 'Chefes de turno (secção de silos)', ldNote: 'Um por turma. Cada chefe entra e sai do turno com o seu PIN. Escreva um PIN só para o criar ou mudar; vazio = fica como está. Mudar o nome apaga o PIN. Fica só neste telemóvel.', ldPin: 'PIN (4 a 8 algarismos)', ldSet: '(definido)', ldNotSet: '(sem PIN)', ldSave: 'Gravar chefes de turno', ldSaved: 'Chefes de turno gravados', ldFormat: 'O PIN tem 4 a 8 algarismos', 
       leader: 'Chefe de turno (secção de silos)', ops: 'Operadores de serviço', jobs: 'Trabalhos a fazer', jobsAuto: 'Da app (hoje)', jobsList: 'Lista (editável)',
       jobAdd: 'Acrescentar à lista', jobRm: 'Retirar', jobExtra: 'Outro trabalho (só neste turno)', trucks: 'Camiões esperados',
       state: 'Estado', rec1: 'Recepção 1', rec2: 'Recepção 2', feed: 'Alimentação da moagem', on: 'Ligada', off: 'Desligada',
       scalesStart: 'Leituras iniciais das balanças (kg)', scalesEnd: 'Leituras finais das balanças (kg)', scalesHelp: 'Totalizador de cada balança. Em branco fica sem leitura (nunca zero).',
       BA01: 'BA01 Recepção 1', BA02: 'BA02 Recepção 2', BA03: 'BA03 Alimentação moagem', BA04: 'BA04 Alimentação moagem',
       comments: 'Comentários', saveLogin: 'Gravar login', logout: 'Logout de turno', acts: 'Actividades feitas', saveLogout: 'Gravar logout', name: 'Nome',
-      report: 'Relatório do turno (Excel)', start: 'Início', end: 'Fim', qty: 'Quantidade (kg)', checks: 'Balanças × registos (aviso)',
+      report: 'Relatório do turno (Excel)', start: 'Início', end: 'Fim', qty: 'Quantidade (kg)', checks: 'Balanças e registos (aviso)',
       chkRec: 'BA01 + BA02 contra as recepções registadas', chkFeed: 'BA03 + BA04 contra as descargas para a linha', diff: 'diferença',
       targets: 'Objectivos', tFeed: 'Enviado para a moagem contra o plano do dia', tTrucks: 'Camiões recebidos contra os esperados',
       planNone: 'sem plano do OEE para o dia', planOff: 'plano não lido (ligue a leitura do Dropbox em Definições)',
@@ -29,14 +30,15 @@
     },
     en: {
       title: 'Shift — login and logout (silo section)', day: 'Day', shift: 'Shift', sD: 'Day 07–19', sN: 'Night 19–07',
-      login: 'Shift login', loginHelp: 'Start of the shift: shift leader, operators, jobs to be done, state, initial scale readings and comments. The silo stock is recorded automatically.',
+      login: 'Shift login', loginHelp: 'Start of the shift: shift leader (with PIN), jobs to be done, state, initial scale readings and comments. The silo stock is recorded automatically.',
+      leaderPin: 'Shift leader PIN', leaderPinBad: 'Wrong shift leader PIN', leaderPinNone: 'warning: this leader has no PIN yet (the supervisor sets it in Settings)', ldTitle: 'Shift leaders (silo section)', ldNote: 'One per crew. Each leader logs in and out of the shift with their own PIN. Type a PIN only to create or change it; blank = unchanged. Changing the name clears the PIN. Stays on this phone only.', ldPin: 'PIN (4 to 8 digits)', ldSet: '(set)', ldNotSet: '(no PIN)', ldSave: 'Save shift leaders', ldSaved: 'Shift leaders saved', ldFormat: 'The PIN has 4 to 8 digits', 
       leader: 'Shift leader (silo section)', ops: 'Operators on duty', jobs: 'Jobs to be done', jobsAuto: 'From the app (today)', jobsList: 'List (editable)',
       jobAdd: 'Add to the list', jobRm: 'Remove', jobExtra: 'Other job (this shift only)', trucks: 'Trucks expected',
       state: 'State', rec1: 'Reception 1', rec2: 'Reception 2', feed: 'Feed to the mill', on: 'On', off: 'Off',
       scalesStart: 'Initial scale readings (kg)', scalesEnd: 'Final scale readings (kg)', scalesHelp: 'Each scale totaliser. Left blank = no reading (never zero).',
       BA01: 'BA01 Reception 1', BA02: 'BA02 Reception 2', BA03: 'BA03 Feed to mill', BA04: 'BA04 Feed to mill',
       comments: 'Comments', saveLogin: 'Save login', logout: 'Shift logout', acts: 'Activities done', saveLogout: 'Save logout', name: 'Name',
-      report: 'Shift report (Excel)', start: 'Start', end: 'End', qty: 'Quantity (kg)', checks: 'Scales × records (warning)',
+      report: 'Shift report (Excel)', start: 'Start', end: 'End', qty: 'Quantity (kg)', checks: 'Scales and records (warning)',
       chkRec: 'BA01 + BA02 against the recorded intakes', chkFeed: 'BA03 + BA04 against the discharges to the line', diff: 'difference',
       targets: 'Targets', tFeed: 'Sent to the mill against the day plan', tTrucks: 'Trucks received against expected',
       planNone: 'no OEE plan for the day', planOff: 'plan not read (connect Dropbox reading in Settings)',
@@ -80,6 +82,26 @@
       const pm = C.pmDue ? C.pmDue() : 0; if (pm) out.push(both('a_pm', { n: pm }));
       return out;
     }
+    // 0.15.0 (Zhax, 14-11-2026): chefe de turno da secção de silos por turma A–D, com PIN definido pelo supervisor (Definições,
+    // parte protegida). Fica só neste telemóvel (settings.leaders = {A: {name, pin: {salt, hash, setAt}}}), nunca nos registos.
+    const CREWS = ['A', 'B', 'C', 'D'];
+    const leaders = () => (C.S.settings.leaders = C.S.settings.leaders || {});
+    const leaderList = () => CREWS.filter(k => leaders()[k] && leaders()[k].name).map(k => ({ crew: k, name: leaders()[k].name }));
+    const hex = b => Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+    const pinHash = async (salt, pin) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin)));
+    async function leaderPinCheck(name, pin) {   // 'ok' | 'bad' | 'none' (sem PIN: grava com aviso)
+      const k = CREWS.find(c => leaders()[c] && leaders()[c].name === name), p = k && leaders()[k].pin;
+      if (!p) return 'none';
+      return (await pinHash(p.salt, String(pin || ''))) === p.hash ? 'ok' : 'bad';
+    }
+    function leaderField(id, value) {
+      const list = leaderList();
+      if (!list.length) return '<input id="' + id + '" value="' + esc(value || '') + '">';
+      const known = list.some(x => x.name === value);
+      return '<select id="' + id + '"><option value="">—</option>' + list.map(x => '<option value="' + esc(x.name) + '"' + (x.name === value ? ' selected' : '') + '>' + esc(x.name) + ' (' + esc(t('crew')) + ' ' + x.crew + ')</option>').join('') +
+        (value && !known ? '<option value="' + esc(value) + '" selected>' + esc(value) + '</option>' : '') + '</select>';
+    }
+    const pinField = id => '<label>' + esc(t('leaderPin')) + ' *<input type="password" inputmode="numeric" autocomplete="off" id="' + id + '"></label>';
     const stock = () => (C.S.settings.silos || []).map(s => ({ silo: s.id, kg: C.L.siloContents(s.id, C.S.events).kg }));
     const chips = () => (st.picked || []).map((j, i) => '<span class="chip on">' + esc(jt(j)) + ' <button type="button" class="btn small" data-sact="unpick" data-i="' + i + '">✕</button></span>').join(' ');
     function pickJob() {
@@ -104,8 +126,7 @@
         const auto = autoJobs(s.day);
         st.offer = auto.concat(jobsList());
         h += '<div class="card stack"><h2>' + esc(t('login')) + '</h2><p class="small muted">' + esc(t('loginHelp')) + '</p>' +
-          '<label>' + esc(t('leader')) + ' *<input id="sh_leader" value="' + esc(C.S.settings.operator || '') + '"></label>' +
-          '<label>' + esc(t('ops')) + '<input id="sh_ops"></label>' +
+          '<div class="grid2"><label>' + esc(t('leader')) + ' *' + leaderField('sh_leader', (leaders()[C.L.crewOf(s.day, s.win === 'N' ? '20:00' : '08:00')] || {}).name || C.S.settings.operator || '') + '</label>' + pinField('sh_pin') + '</div>' +
           '<div class="lbl strong">' + esc(t('jobs')) + '</div>' +
           (auto.length ? '<div class="small muted">' + esc(t('jobsAuto')) + '</div>' + auto.map((j, i) => '<label class="check"><input type="checkbox" class="sh_job" data-i="' + i + '" checked> ' + esc(jt(j)) + '</label>').join('') : '') +
           // 0.14.1: como na Prodn-Mgt — escolher na lista e juntar (fica como etiqueta, retira-se com ✕); «Outro» leva texto
@@ -135,7 +156,7 @@
           '<label>' + esc(t('acts')) + ' *<textarea id="sh_acts" rows="4">' + esc(pre.join('\n')) + '</textarea></label>' +
           '<div class="lbl strong">' + esc(t('scalesEnd')) + '</div>' + scaleInputs('sh_e_') +
           '<label>' + esc(t('comments')) + '<textarea id="sh_comments" rows="2"></textarea></label>' +
-          '<label>' + esc(t('name')) + ' *<input id="sh_by" value="' + esc(li.leader) + '"></label>' +
+          '<div class="grid2"><label>' + esc(t('leader')) + ' *' + leaderField('sh_by', li.leader) + '</label>' + pinField('sh_pin') + '</div>' +
           '<button type="button" class="btn primary block" data-sact="logout">' + esc(t('saveLogout')) + '</button></div>';
         return h;
       }
@@ -158,10 +179,12 @@
       if (r.bad.length) { C.toast(t('bad') + ': ' + r.bad.join(', ')); return null; }
       return r.values;
     }
-    async function add(rec) { try { await C.DB.add('maint', rec); } catch (e) { C.toast(t('saveFail')); return false; } await reload(); C.toast(t('saved')); C.render(); return true; }
+    async function add(rec) { try { await C.DB.add('maint', rec); } catch (e) { C.toast(t('saveFail')); return false; } await reload(); C.toast(t('saved') + (rec.leaderPin === 'notSet' ? ' · ' + t('leaderPinNone') : '')); C.render(); return true; }
     async function login() {
       const s = sel(), leader = ($('#sh_leader') || {}).value || '';
       if (!leader.trim()) { C.toast(t('need') + ': ' + t('leader')); return; }
+      const pinR = await leaderPinCheck(leader.trim(), ($('#sh_pin') || {}).value);
+      if (pinR === 'bad') { C.toast(t('leaderPinBad')); return; }
       const sc = scalesOrToast('sh_s_'); if (!sc) return;
       const tr = R().num($('#sh_trucks').value);
       if (tr !== null && (isNaN(tr) || tr < 0)) { C.toast(t('bad') + ': ' + t('trucks')); return; }
@@ -169,13 +192,15 @@
         .concat(st.picked || []);   // escolhidos na lista ({pt, en}) e «Outro» escrito à mão (fica como foi escrito)
       const now = new Date(); st.picked = [];
       await add({ kind: 'shiftIn', shift: sid(s), prodDay: s.day, period: s.win, crew: C.L.crewOf(s.day, s.win === 'N' ? '20:00' : '08:00'), date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(),
-        leader: leader.trim(), operators: $('#sh_ops').value.trim(), jobs, trucksExpected: tr, planKg: R().planKg(st.plan, s.day),
+        leader: leader.trim(), leaderPin: pinR === 'ok' ? 'ok' : 'notSet', jobs, trucksExpected: tr, planKg: R().planKg(st.plan, s.day),
         state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, scalesStart: sc, stockStart: stock(), comments: $('#sh_comments').value.trim(), by: leader.trim() });
     }
     async function logout() {
       const s = sel(), li = rec('shiftIn', s); if (!li) return;
       const by = $('#sh_by').value.trim(), acts = $('#sh_acts').value.trim();
-      if (!by || !acts) { C.toast(t('need') + ': ' + t('acts') + ', ' + t('name')); return; }
+      if (!by || !acts) { C.toast(t('need') + ': ' + t('acts') + ', ' + t('leader')); return; }
+      const pinR = await leaderPinCheck(by, ($('#sh_pin') || {}).value);
+      if (pinR === 'bad') { C.toast(t('leaderPinBad')); return; }
       const sc = scalesOrToast('sh_e_'); if (!sc) return;
       const q = R().scaleKg(li.scalesStart, sc), r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
       // enviado no dia de produção até agora: turno de dia + (no turno da noite) este turno, pelos registos de descarga
@@ -187,13 +212,13 @@
         receivedKg: r.receivedKg, sentKg: r.sentKg, trucks: r.trucks, checks: R().scaleChecks(q.kg, r),
         targets: { feed: { planKg: plan, daySentKg: daySent, pct: R().pct(daySent, plan), note: plan === null ? (st.planErr === 'off' ? 'off' : 'none') : '' },   // código; o texto sai na língua de quem lê
           trucks: { expected: li.trucksExpected, received: r.trucks, pct: R().pct(r.trucks, li.trucksExpected) } },
-        stockEnd: stock(), comments: $('#sh_comments').value.trim(), by });
+        stockEnd: stock(), comments: $('#sh_comments').value.trim(), by, leaderPin: pinR === 'ok' ? 'ok' : 'notSet' });
     }
     function xlsx() {
       const X = root.XLSX, s = sel(), li = rec('shiftIn', s), lo = rec('shiftOut', s), r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
       if (!X || !li) return;
       const wb = X.utils.book_new(), add = (n, rows) => X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows), n.slice(0, 31));
-      add('Turno', [['Grain-Mgt — ' + t('title'), sid(s)], [], [t('leader'), li.leader], [t('ops'), li.operators], [t('crew'), li.crew], [t('jobs'), (li.jobs || []).map(jt).join(' | ')],
+      add('Turno', [['Grain-Mgt — ' + t('title'), sid(s)], [], [t('leader'), li.leader], [t('crew'), li.crew], [t('jobs'), (li.jobs || []).map(jt).join(' | ')],
         [t('state') + ' (' + t('login') + ')', [t('rec1') + ' ' + t(li.state.rec1), t('rec2') + ' ' + t(li.state.rec2), t('feed') + ' ' + t(li.state.feed)].join(', ')], [t('comments'), li.comments], [],
         ['', t('start'), t('end'), t('qty')], ...R().SCALES.map(k => [t(k), li.scalesStart[k], lo ? lo.scalesEnd[k] : '', lo ? lo.scaleKg[k] : '']), [],
         [t('logout'), lo ? lo.date + ' ' + lo.time : t('notDone')], [t('chkRec'), lo ? lo.checks.reception.scaleKg : '', lo ? lo.checks.reception.recordsKg : '', lo ? lo.checks.reception.diffKg : ''],
@@ -220,6 +245,7 @@
       const a = el.dataset.sact;
       if (a === 'login') login(); else if (a === 'logout') logout(); else if (a === 'xlsx') xlsx();
       else if (a === 'pickjob') pickJob();
+      else if (a === 'ldsave') leadersSave();
       else if (a === 'unpick') { (st.picked || []).splice(Number(el.dataset.i), 1); const c = $('#sh_jobs'); if (c) c.innerHTML = chips(); }
       else if (a === 'jobadd' && C.unlocked()) {
         const pt = (($('#sj_pt') || {}).value || '').trim(), en = (($('#sj_en') || {}).value || '').trim();
@@ -240,6 +266,26 @@
         '<div class="grid2"><label>' + esc(C.t('sj_pt')) + '<input id="sj_pt"></label><label>' + esc(C.t('sj_en')) + '<input id="sj_en"></label></div>' +
         '<button type="button" class="btn small" data-sact="jobadd">' + esc(C.t('sj_add')) + '</button></div>';
     }
-    return { view, issue, reload, refreshPlan, jobsEditor, recs: () => st.recs };
+    function leadersEditor() {
+      return '<div class="card stack"><h2>' + esc(t('ldTitle')) + '</h2><p class="small muted">' + esc(t('ldNote')) + '</p><div class="grid2">' +
+        CREWS.map(k => '<label>' + esc(t('crew')) + ' ' + k + '<input id="ld_n_' + k + '" maxlength="60" value="' + esc((leaders()[k] || {}).name || '') + '"></label>' +
+          '<label>' + esc(t('ldPin')) + ' <span class="small muted">' + esc((leaders()[k] || {}).pin ? t('ldSet') : t('ldNotSet')) + '</span><input id="ld_p_' + k + '" type="password" inputmode="numeric" autocomplete="off"></label>').join('') +
+        '</div><button type="button" class="btn small" data-sact="ldsave">' + esc(t('ldSave')) + '</button></div>';
+    }
+    async function leadersSave() {
+      if (!C.unlocked()) return;
+      const pins = CREWS.map(k => (($('#ld_p_' + k) || {}).value || '').trim());
+      if (pins.some(p => p && !/^\d{4,8}$/.test(p))) { C.toast(t('ldFormat')); return; }
+      for (let i = 0; i < CREWS.length; i++) {
+        const k = CREWS[i], name = (($('#ld_n_' + k) || {}).value || '').trim().replace(/\s+/g, ' '), o = leaders()[k] || {};
+        if (!name) { delete leaders()[k]; continue; }
+        const n = { name: name, pin: name === o.name ? o.pin : null };   // novo nome = PIN novo
+        if (pins[i]) { const salt = hex(crypto.getRandomValues(new Uint8Array(16))); n.pin = { salt, hash: await pinHash(salt, pins[i]), setAt: new Date().toISOString() }; }
+        if (!n.pin) delete n.pin;
+        leaders()[k] = n;
+      }
+      await C.saveSettings(); C.toast(t('ldSaved')); C.render();
+    }
+    return { view, issue, reload, refreshPlan, jobsEditor, leadersEditor, recs: () => st.recs };
   };
 })(typeof window !== 'undefined' ? window : this);
