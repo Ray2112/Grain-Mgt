@@ -32,16 +32,16 @@
     const st = (() => { try { return JSON.parse(sessionStorage.getItem(STATE) || 'null'); } catch (e) { return null; } })();
     sessionStorage.removeItem(STATE);
     history.replaceState(null, '', location.pathname);
-    if (p.get('error')) return { ok: false, msg: 'Dropbox: ligação cancelada.' };
-    if (!st || st.state !== p.get('state')) return { ok: false, msg: 'Dropbox: resposta não confere.' };
+    if (p.get('error')) return { ok: false, code: 'cancelled', msg: 'Dropbox: ligação cancelada.' };
+    if (!st || st.state !== p.get('state')) return { ok: false, code: 'mismatch', msg: 'Dropbox: resposta não confere.' };
     try {
       const req = auth().buildTokenRequest({ appKey: cfg().appKey, code: p.get('code'), verifier: st.verifier, redirectUri: redirect() });
       const r = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
       const json = await r.json().catch(() => null);
-      if (!r.ok) return { ok: false, msg: 'Dropbox recusou o código (' + r.status + ').' };
+      if (!r.ok) return { ok: false, code: 'refused', status: r.status, msg: 'Dropbox recusou o código (' + r.status + ').' };
       store.set(KEY, auth().parseTokenResponse(json, Date.now()));
-      return { ok: true, msg: 'Dropbox ligado (leitura).' };
-    } catch (e) { return { ok: false, msg: 'Dropbox: falha de rede.' }; }
+      return { ok: true, code: 'feed_connected', msg: 'Dropbox ligado (leitura).' };
+    } catch (e) { return { ok: false, code: 'network', msg: 'Dropbox: falha de rede.' }; }
   }
   function signOut() { store.del(KEY); store.del(LAST); }
   async function token() {
