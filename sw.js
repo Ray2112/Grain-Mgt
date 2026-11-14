@@ -1,6 +1,6 @@
 /* Service worker: guarda a aplicação no telemóvel para funcionar sem rede.
    Alterar CACHE quando publicar uma nova versão. / Bump CACHE on each release. */
-const CACHE = 'moagem-v0.14.0-a';
+const CACHE = 'moagem-v0.14.1-a';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/styles.css',
   './js/i18n.js', './js/logic.js', './js/db.js', './js/dropbox-auth.js', './js/dropbox-read.js', './js/bins-feed.js', './js/feed-config.js', './js/feed-sync.js', './js/dropbox-upload.js', './js/day-records.js', './js/rec-config.js', './js/rec-sync.js', './js/shift-rules.js', './js/shift-ui.js', './js/temp-trend.js', './js/grain-book.js', './js/maint-codes.js', './js/pm-list.js', './js/maint.js', './js/maint-ui.js', './js/silo-sensors.js', './js/fssc-reqs.js', './js/fssc.js', './js/fssc-ui.js', './js/app.js', './vendor/xlsx.mini.min.js',

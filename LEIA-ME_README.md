@@ -1,4 +1,8 @@
-# Moagem — Registos (v0.14.0, Fase A)
+# Moagem — Registos (v0.14.1, Fase A)
+
+> **v0.14.1 — Login do turno como na Prodn-Mgt; limpar avisos (Zhax, 14-11-2026).** No login do turno os trabalhos escolhem-se numa lista («Juntar trabalho» — cada um fica como etiqueta e retira-se com ✕; «Outro» leva texto escrito à mão). Em Definições, na parte protegida (PIN de supervisor), o cartão Avisos mostra todos os avisos e o botão «Limpar todos os avisos (n)», com nome e motivo, gravado como registo. Um aviso volta se a situação mudar; os do dia (login, envio) voltam no dia seguinte se continuarem.
+>
+> *EN:* shift login jobs picked from a dropdown ("Add job", chips removed with ✕, "Other" takes typed text), as in Prodn-Mgt; Settings (supervisor PIN) gets a Warnings card with "Clear all warnings (n)", name and reason, saved as a record; a warning comes back if the situation changes, daily ones (login, sending) the next day if still true.
 
 > **v0.14.0 — Registos (release 3; Zhax, 14-11-2026).** Descarga para a linha com **SG01** além de C e D (para SG01 a bin é opcional). O separador Exportar passa a **Registos**: tudo o que foi registado no dia de produção, por categoria e hora (recepções, descargas, transferências, silos, monitorização, turno, paragens, manutenção), com a exportação e a cópia de segurança por baixo. Manutenção: Intervenções dentro de Paragens; preventiva em inglês com a app em inglês. Leituras das balanças BA01–BA04 com vírgula a cada 3 algarismos.
 >
