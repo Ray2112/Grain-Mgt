@@ -237,3 +237,20 @@ console.log('maint: ' + n + ' testes OK');
   assert.deepStrictEqual(M.validateStop({ category: 'Breakdown', code: 'A01', durationMin: '30', description: 'x', by: 'y' }, codes), [], 'registos antigos (categoria + duração) continuam válidos');
   console.log('paragem v3: OK');
 }
+
+// v2.12.0 / v0.16.0: registar tarefas da lista como feitas (Zhax, 14-11-2026)
+{
+  const tasks = [{ id: 'T1', code: 'FMO1', asset: 'Moinho', task: 'Lubrificar', freq: 'mensal', months: 1, group: 'G' },
+    { id: 'T2', code: 'FMO2', asset: 'Peneiro', task: 'Limpar', freq: 'trimestral', months: 3, group: 'G' }];
+  const E = [{ uid: 'j2', kind: 'pmJob', week: '2026-W46', dueDate: '2026-11-15', taskId: 'T2', equipment: 'x', task: 'y', responsible: 'r', by: 'b', t: 1, prodDay: '2026-11-10' }];
+  let cat = M.pmCatalog(tasks, E, '2026-11-14');
+  assert.deepStrictEqual(cat.map(c => c.id + ':' + c.overdue), ['T1:true', 'T2:true'], 'sem registo = em atraso');
+  assert.deepStrictEqual(M.validatePmDone({ taskIds: [], doneOn: '2026-11-20', doneBy: '', by: '' }, '2026-11-14'), ['pmTasksPick', 'doneOn', 'doneBy', 'by']);
+  let n = 0;
+  const recs = M.pmDoneRecords({ taskIds: ['T1', 'T2'], doneOn: '2026-11-02', doneBy: 'Rui', note: '', by: 'Zé' }, cat, () => 'new' + (++n), tk => ({ equipment: tk.code, task: tk.task }));
+  assert.deepStrictEqual(recs.map(r => r.kind + ':' + (r.jobUid || r.uid)), ['pmJob:new1', 'pmUpdate:new1', 'pmUpdate:j2'], 'T2 tinha trabalho em aberto: só o feito');
+  const E2 = E.concat(recs.map((r, i) => Object.assign({ uid: r.uid || 'u' + i, t: 10 + i, prodDay: '2026-11-14' }, r)));
+  cat = M.pmCatalog(tasks, E2, '2026-11-14');
+  assert.deepStrictEqual(cat.map(c => c.id + ':' + c.lastDone + ':' + c.nextDue + ':' + c.overdue), ['T1:2026-11-02:2026-12-02:false', 'T2:2026-11-02:2027-02-02:false'], 'feita em = doneOn');
+  console.log('preventiva feita: OK');
+}

@@ -1,4 +1,8 @@
-# Moagem — Registos (v0.15.1, Fase A)
+# Moagem — Registos (v0.16.0, Fase A)
+
+> **v0.16.0 — Preventiva — registar feita (Zhax, 14-11-2026).** Na lista de preventiva, cada tarefa tem «✓ Registar feita»: dia em que foi feita (hoje ou antes), quem fez, nota. «✓ Registar várias como feitas» deixa marcar várias tarefas (ou todas as do filtro) com o mesmo dia e nome. A tarefa deixa de estar em atraso e a próxima data conta a partir do dia em que foi feita. Uma tarefa com trabalho planeado fecha esse trabalho como feito. Tarefa sem registo de execução conta como atraso (também no relatório). Módulo de manutenção igual ao da Prodn-Mgt 2.12.0.
+>
+> *EN:* preventive list: "✓ Record done" on each task (date done, today or earlier, who did it, note) and "✓ Record several as done" (tick several tasks, or all in the filter, with one date and name); the task stops being overdue and the next date counts from the day it was done; a task with a planned job closes that job as done; no record of execution counts as overdue (also in the report). Maintenance module same as Prodn-Mgt 2.12.0.
 
 > **v0.15.1 — 14-11-2026.** Módulo FSSC igual ao da Prodn-Mgt 2.11.0 (a formação só aparece na Prodn-Mgt). Sem outras mudanças.
 >

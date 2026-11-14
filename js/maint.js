@@ -241,7 +241,8 @@
         status = u.status;
         if (u.status === 'in_progress' && isNum(num(u.progressPct))) progress = num(u.progressPct);
         if (u.status === 'postponed') { due = u.newDue; postponed++; }
-        if (u.status === 'done') { progress = 100; doneAt = u.prodDay || null; doneBy = u.doneBy || null; }
+        // v2.12.0 / v0.16.0: doneOn = dia em que foi mesmo feita (pode ser antes do registo); sem doneOn, o dia do registo
+        if (u.status === 'done') { progress = 100; doneAt = u.doneOn || u.prodDay || null; doneBy = u.doneBy || null; }
       });
       const open = status !== 'done' && status !== 'cancelled';
       const overdue = open && DAY_RE.test(today || '') && today > due;
@@ -412,7 +413,33 @@
     return w;
   }
 
-  const api = { KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
+  // v2.12.0 / v0.16.0 (Zhax, 14-11-2026: "a way to actualize the events when action is taken"): registar tarefas da lista como feitas,
+  // uma ou várias de uma vez, com o dia em que foram feitas (hoje ou antes). f: {taskIds: [..], doneOn, doneBy, note, by}
+  function validatePmDone(f, today) {
+    const e = [];
+    if (!Array.isArray(f.taskIds) || !f.taskIds.length) e.push('pmTasksPick');
+    if (!DAY_RE.test(f.doneOn || '') || (DAY_RE.test(today || '') && f.doneOn > today)) e.push('doneOn');
+    if (!txt(f.doneBy)) e.push('doneBy');
+    if (!txt(f.by)) e.push('by');
+    return e;
+  }
+  // Registos a gravar: tarefa com trabalho em aberto -> só o 'feito' desse trabalho; sem trabalho -> trabalho + 'feito' (mesmo uid).
+  // cat = pmCatalog(...); newUid() dá o uid do trabalho novo; name(tk) = texto do equipamento e da tarefa.
+  function pmDoneRecords(f, cat, newUid, name) {
+    const out = [];
+    f.taskIds.forEach(id => {
+      const c = (cat || []).find(x => x.id === id); if (!c) return;
+      const up = { kind: 'pmUpdate', status: 'done', doneOn: f.doneOn, doneBy: txt(f.doneBy), note: txt(f.note), by: txt(f.by), progressPct: null, newDue: null };
+      if (c.openJob) { out.push(Object.assign(up, { jobUid: c.openJob.uid })); return; }
+      const uid = newUid(), nm = name(c.task);
+      out.push({ uid, kind: 'pmJob', week: weekOf(f.doneOn), dueDate: f.doneOn, lineId: null, equipment: nm.equipment, task: nm.task,
+        taskId: c.task.id, taskFreq: c.task.freq, responsible: txt(f.doneBy), by: txt(f.by), fromList: true });
+      out.push(Object.assign(up, { jobUid: uid }));
+    });
+    return out;
+  }
+
+  const api = { validatePmDone, pmDoneRecords, KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
     num, addDays, daysBetween, weekOf, weekRange, validWeek, catOfCode, codesFor, findCode, effective, cleanParts,
     STOP_KINDS, KIND_CAT, minsBetween, validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
     validateBrushCheck, validateRollConfig, validateNote, validateConsumable,
