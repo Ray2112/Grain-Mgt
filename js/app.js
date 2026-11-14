@@ -212,6 +212,7 @@
     if (S.tab === 'maint') main.innerHTML = MU.view();
     if (S.tab === 'fssc') main.innerHTML = FU.view();
     if (S.tab === 'export') main.innerHTML = recordsView();
+    if (S.tab === 'report') main.innerHTML = reportView();
     // 0.14.1: avisos no topo a partir de uma só lista, com chave, para poderem ser limpos (Definições → Avisos, com PIN)
     warnList().filter(function (w) { return w.tab !== S.tab; }).reverse().forEach(function (w) { main.insertAdjacentHTML('afterbegin', w.html); });
     if (S.tab === 'settings') main.innerHTML = settingsView();
@@ -600,7 +601,7 @@
   function silosView() {
     if (!S.settings.silos.length) return '<p class="warn">' + esc(t('no_silos')) + '</p>';
     const lotsById = {}; S.lots.forEach(function (l) { lotsById[l.id] = l; });
-    let h = '<button class="btn primary block" data-action="discharge">' + esc(t('act_out')) + '</button>' + reconCard() + tempLegend();
+    let h = '<button class="btn primary block" data-action="discharge">' + esc(t('act_out')) + '</button>' + reconCard() + fifoCard() + tempLegend();
     S.settings.silos.forEach(function (s) {
       const ss = siloSt(s), c = { kg: ss.kg, lots: ss.lots };
       const bs = L.binState(s, S.events), cap = bs.cap;
@@ -644,6 +645,28 @@
     window.FeedSync.fetchStatus().then(function (st) { S.recon = { status: st }; })
       .catch(function (e) { S.recon = { error: e.message, last: window.FeedSync.lastStatus() }; })
       .then(function () { if (S.tab === 'silos') render(); });
+  }
+  // ---------------- FIFO (0.15.0) ----------------
+  const fifoKg = function (id) { return siloSt(siloById(id)).kg; };
+  function fifoCard() {
+    if (!window.Fifo) return '';
+    const q = window.Fifo.queues(S.settings.silos, S.events, fifoKg), lotsById = {};
+    S.lots.forEach(function (l) { lotsById[l.id] = l; });
+    const dm = function (e) { return e ? String(e.date || '').split('-').reverse().slice(0, 2).join('/') + ' ' + (e.time || '') : '—'; };
+    const lotTxt = function (e) { return (e.from ? t('fifo_from') + ' ' + e.from + (e.lots.length ? ' · ' : '') : '') + e.lots.map(function (id) { return (lotsById[id] && (lotsById[id].code || lotsById[id].id)) || id; }).join(', '); };
+    return '<div class="card stack"><h2>' + esc(t('fifo_title')) + '</h2><p class="small muted">' + esc(t('fifo_note')) + '</p>' +
+      (q.length ? q.map(function (g) {
+        return '<div class="lbl strong">' + esc(g.grade ? siloDesig(g) : t('not_designated')) + '</div>' + g.silos.map(function (s) {
+          return '<details><summary>' + s.pos + '. <b>' + esc(s.id) + '</b> · ' + esc(t('fifo_since')) + ' ' + esc(dm(s.firstIn)) + ' · ' + fmtKg(s.kg) + (s.pos === 1 ? ' · <b>' + esc(t('fifo_next')) + '</b>' : '') + '</summary>' +
+            (s.entries.length ? '<table class="tbl small"><tr><th>' + esc(t('fifo_when')) + '</th><th>' + esc(t('fifo_lot')) + '</th><th>kg</th></tr>' + s.entries.map(function (e) {
+              return '<tr><td>' + esc(dm(e)) + '</td><td>' + esc(lotTxt(e) || (e.type === 'OPENING' ? t('fifo_opening') : '—')) + '</td><td>' + fmtKg(e.kg) + '</td></tr>'; }).join('') + '</table>'
+              : '<p class="small muted">' + esc(t('fifo_noentry')) + '</p>') + '</details>';
+        }).join('');
+      }).join('') : '<p class="small muted">' + esc(t('fifo_empty')) + '</p>') + '</div>';
+  }
+  function fifoWarns(ids) {
+    if (!window.Fifo) return [];
+    return ids.map(function (id) { const f = window.Fifo.outOfOrder(id, ids, S.settings.silos, S.events, fifoKg); return f ? t('fifo_warn').replace('{s}', id).replace('{f}', f) : null; }).filter(Boolean);
   }
   function reconCard() {
     const r = S.recon;
@@ -1004,6 +1027,7 @@
       const warns = [];
       if (pl.a.short > 0) warns.push(t('short_stock') + ' ' + fmtKg(pl.a.short) + ' → ' + sh.order[sh.order.length - 1]);
       sh.order.forEach(function (id) { const q = siloSt(siloById(id)); if (q.holdWarn || q.rejectWarn) warns.push(id + ': ' + t('warn_red_short')); });
+      fifoWarns(parts.map(function (x) { return x.silo; })).forEach(function (w) { warns.push(w); });   // 0.15.0: fora da ordem FIFO = aviso
       L.binCheck(parts.map(function (x) { return { silo: x.silo, type: 'OUT', kg: x.kg }; }), S.events).forEach(function (b) { warns.push(binMsg(b)); });
       const fc = feedCheckNow(sh);
       if (fc && !fc.ok) warns.push(t('feed_warn') + ': ' + fc.reasons.map(function (r) { return FEED_MSG[r.code] || r.code; }).join('; '));
@@ -1017,6 +1041,7 @@
       const c = transferCheck();
       if (c.errors.length) { toast(c.errors[0]); return; }
       const ev = Object.assign({}, base, { type: 'TRANSFER', toSilo: sv('toSilo'), kg: c.kg, lots: L.lotsCarried(sh.silo, S.events) });
+      const fw = fifoWarns([sh.silo]); if (fw.length) { ev.warnings = fw; ev.notes = t('warn_prefix') + ' ' + fw.join(' · '); toast(fw[0]); }   // 0.15.0: aviso FIFO
       const go = function (auth) { if (auth) { ev.auth = auth; ev.notes = t('auth_mismatch') + ' — ' + auth.by + ': ' + auth.reason; } return DB.add('events', ev); };
       if (c.needs.length) {
         verifyAuth(v).then(function (err) {
@@ -1108,6 +1133,38 @@
       '<div class="chips">' + [''].concat(window.GrainBook.CATS).filter(function (c) { return !c || counts[c]; }).map(function (c) {
         return '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-action="reccat" data-cat="' + c + '">' + esc(c ? window.GrainBook.catName(c, I18n.lang) : t('rec_all')) + ' ' + (c ? counts[c] : all.length) + '</button>'; }).join('') + '</div></div>' +
       '<div class="card stack">' + (list.length ? list.map(function (x) { return '<div class="row small"><span class="mono">' + esc(L.nowTime(new Date(x.t))) + '</span><span class="grow">' + esc(window.GrainBook.text(x, I18n.lang, fmtKg)) + '</span><span class="muted">' + esc(window.GrainBook.catName(x.cat, I18n.lang)) + '</span></div>'; }).join('') : '<p class="small muted">' + esc(t('rec_none')) + '</p>') + '</div>' + exportView();
+  }
+  // ---------------- Relatório (0.15.0) ----------------
+  function repData() {
+    const day = S.repDay || L.shiftOf(L.today(), L.nowTime()).date, win = S.repWin || '';
+    const items = window.GrainBook.items({ lots: S.lots, events: S.events, mon: S.mon, maint: (window.__shiftUI && window.__shiftUI.recs ? window.__shiftUI.recs() : []) }, day, L.shiftOf);
+    return { day: day, win: win, r: window.GrainReport.summary(items, win, L.shiftOf) };
+  }
+  function reportView() {
+    const x = repData(), r = x.r, kpi = function (v, l) { return '<div class="kpi"><div class="big2">' + v + '</div><div class="small muted">' + esc(l) + '</div></div>'; };
+    return '<div class="card stack"><h2>' + esc(t('rp_title')) + '</h2><div class="grid2"><label>' + esc(t('rec_day')) + '<input type="date" id="repday" value="' + esc(x.day) + '"></label>' +
+      '<label>' + esc(t('rp_shift')) + '<select id="repwin"><option value="">' + esc(t('rp_whole')) + '</option><option value="D"' + (x.win === 'D' ? ' selected' : '') + '>' + esc(t('rp_D')) + '</option><option value="N"' + (x.win === 'N' ? ' selected' : '') + '>' + esc(t('rp_N')) + '</option></select></label></div>' +
+      '<div class="grid2">' + kpi(r.intake.trucks + ' · ' + fmtKg(r.intake.kg), t('rp_intake')) + kpi(r.discharge.n + ' · ' + fmtKg(r.discharge.kg), t('rp_out')) +
+        kpi(r.transfer.n + ' · ' + fmtKg(r.transfer.kg), t('rp_tr')) + kpi(r.stops.n + ' · ' + r.stops.min + ' min', t('rp_stops')) + '</div>' +
+      '<button type="button" class="btn primary block" data-action="rep-xlsx"' + (r.count ? '' : ' disabled') + '>' + esc(t('rp_xlsx')) + '</button></div>' +
+      '<div class="card stack"><h2>' + esc(t('rp_intake')) + '</h2>' + (Object.keys(r.intake.byCereal).length ? Object.keys(r.intake.byCereal).map(function (k) { return '<div class="row small"><span class="grow">' + esc(cerName(k.split(' ')[0]) + (k.indexOf(' ') > 0 ? ' ' + k.slice(k.indexOf(' ') + 1) : '')) + '</span><span>' + r.intake.byCereal[k].trucks + ' · ' + fmtKg(r.intake.byCereal[k].kg) + '</span></div>'; }).join('') : '<p class="small muted">—</p>') + '</div>' +
+      '<div class="card stack"><h2>' + esc(t('rp_out')) + '</h2>' + (Object.keys(r.discharge.byLine).length ? Object.keys(r.discharge.byLine).map(function (k) { return '<div class="row small"><span class="grow">' + esc(k) + '</span><span>' + fmtKg(r.discharge.byLine[k]) + '</span></div>'; }).join('') : '<p class="small muted">—</p>') +
+        (r.discharge.warned ? '<p class="small warn">' + esc(t('rp_warned').replace('{n}', r.discharge.warned)) + '</p>' : '') + '</div>' +
+      '<div class="card stack"><h2>' + esc(t('rp_shifts')) + '</h2>' + (r.shifts.length ? r.shifts.map(function (s) { return '<div class="small">' + esc((s.period === 'N' ? t('rp_N') : t('rp_D')) + ' · ' + s.leader + (s.pin === 'ok' ? ' 🔒' : s.pin ? ' · ' + t('rp_nopin') : '') + ' · ' + t('rp_in') + ' ' + s.at + ' · ' + (s.out ? t('rp_outsh') + ' ' + s.out.date + ' ' + s.out.time : t('rp_noout'))) + '</div>'; }).join('') : '<p class="small muted">—</p>') + '</div>' +
+      '<div class="card stack"><h2>' + esc(t('rp_stock')) + '</h2>' + (r.stockEnd ? '<table class="tbl small">' + r.stockEnd.map(function (s) { return '<tr><td>' + esc(s.silo) + '</td><td>' + fmtKg(s.kg) + '</td></tr>'; }).join('') + '</table>' : '<p class="small muted">' + esc(t('rp_nostock')) + '</p>') + '</div>';
+  }
+  function reportXlsx() {
+    const X = window.XLSX, x = repData(), r = x.r; if (!X) return;
+    const wb = X.utils.book_new(), add = function (n, rows) { X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows), n.slice(0, 31)); };
+    const per = x.win === 'D' ? t('rp_D') : x.win === 'N' ? t('rp_N') : t('rp_whole');
+    add(t('rp_sum'), [['Grain-Mgt — ' + t('rp_title'), x.day, per], [], ['', 'n', 'kg'], [t('rp_intake'), r.intake.trucks, r.intake.kg], [t('rp_out'), r.discharge.n, r.discharge.kg], [t('rp_tr'), r.transfer.n, r.transfer.kg],
+      [t('rp_stops'), r.stops.n, r.stops.min + ' min'], [t('rp_monit'), r.monit.n, ''], [],
+      [t('rp_intake')]].concat(Object.keys(r.intake.byCereal).map(function (k) { return [k, r.intake.byCereal[k].trucks, r.intake.byCereal[k].kg]; }))
+      .concat([[], [t('rp_out')]]).concat(Object.keys(r.discharge.byLine).map(function (k) { return [k, '', r.discharge.byLine[k]]; }))
+      .concat([[], [t('rp_shifts')]]).concat(r.shifts.map(function (s) { return [s.period === 'N' ? t('rp_N') : t('rp_D'), s.leader, s.at, s.out ? s.out.date + ' ' + s.out.time : t('rp_noout'), s.pin === 'ok' ? 'PIN' : t('rp_nopin')]; })));
+    add(t('rp_stock'), [['Silo', 'kg']].concat(r.stockEnd ? r.stockEnd.map(function (s) { return [s.silo, s.kg]; }) : [[t('rp_nostock')]]));
+    add(t('rp_all'), [[t('date'), t('time'), t('rp_cat'), t('rp_desc')]].concat(r.items.map(function (i) { return [i.rec.date, i.rec.time, window.GrainBook.catName(i.cat, I18n.lang), window.GrainBook.text(i, I18n.lang, fmtKg)]; })));
+    X.writeFile(wb, x.day + (x.win ? '_' + (I18n.lang === 'en' ? (x.win === 'D' ? 'Day' : 'Night') : (x.win === 'D' ? 'Dia' : 'Noite')) : '') + (I18n.lang === 'en' ? '_Silos_Report.xlsx' : '_Silos_Relatorio.xlsx'));
   }
   function exportView() {
     const d = L.today();
@@ -1255,7 +1312,7 @@
       if (s.pin) h += '<div class="grid2b"><input name="unlockpin" type="password" inputmode="numeric" autocomplete="off" aria-label="' + esc(t('pin')) + '" placeholder="' + esc(t('pin')) + '"><button class="btn primary" type="submit">' + esc(t('unlock')) + '</button></div>';
       else h += '<p class="warn small">' + esc(t('pin_first')) + '</p>';
       h += '</div>';
-    } else h += protEditor() + SU.jobsEditor() + warnCard();   // 0.14.1: limpar avisos (parte protegida por PIN)   // 0.12.1: lista de trabalhos do turno só com o PIN de supervisor
+    } else h += protEditor() + SU.jobsEditor() + SU.leadersEditor() + warnCard();   // 0.14.1: limpar avisos (parte protegida por PIN)   // 0.12.1: lista de trabalhos do turno só com o PIN de supervisor
     h += '</form><p class="small muted" id="storage"></p><p class="small muted">' + esc(t('install_hint')) + '</p>';
     setTimeout(function () {
       const el = $('#storage');
@@ -1424,6 +1481,7 @@
     if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast(t('dx_feed_off_toast')); return; }
     if (a === 'recon-refresh') { refreshRecon(); return; }
     if (a === 'warn-clear') { clearWarnings(); return; }
+    if (a === 'rep-xlsx') { reportXlsx(); return; }
     if (a === 'reccat') { S.recCat = b.dataset.cat || ''; render(); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
       const id = b.dataset.silo;
@@ -1473,6 +1531,8 @@
     }
     if (S.sheet && el.form && el.form.id === 'sheetform' && el.name) S.sheet.v[el.name] = el.type === 'checkbox' ? el.checked : el.value; // sem redesenhar: o 'input' já tratou (evita perder o foco)
     if (el.id === 'recday' && el.value) { S.recDay = el.value; render(); return; }   // 0.14.0: dia dos Registos
+    if (el.id === 'repday' && el.value) { S.repDay = el.value; render(); return; }   // 0.15.0: Relatório
+    if (el.id === 'repwin') { S.repWin = el.value; render(); return; }
     if (el.id === 'restore') restore(el.files[0], el);
     if (el.name === 'lang' && el.form && el.form.id === 'generalform') {
       readGeneral(el.form); I18n.set(S.settings.lang);

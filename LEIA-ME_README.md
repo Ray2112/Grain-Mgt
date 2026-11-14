@@ -1,4 +1,13 @@
-# Moagem — Registos (v0.14.1, Fase A)
+# Moagem — Registos (v0.15.0, Fase A)
+
+> **v0.15.0 — Release 4 (Zhax, 14-11-2026).**
+> - **PIN de cada chefe de turno:** em Definições (parte protegida pelo PIN de supervisor), um chefe por turma A–D com o seu PIN. Login e logout do turno pedem o PIN; PIN errado não grava; sem PIN = grava com aviso. Fica só no telemóvel.
+> - **Sem lista de operadores** no login do turno.
+> - **FIFO em Silos:** por designação (cereal · cor · grau), os silos com grão pela ordem da primeira entrada desde o último vazio, com as entradas (data, lote, kg) de cada um. O n.º 1 sai primeiro; descarregar ou transferir outro silo grava um aviso.
+> - **Separador Relatório (novo):** dia inteiro ou turno — recepções, descargas por linha, transferências, paragens, turnos (login / logout) e stock no logout; Excel.
+> - **Sem fórmulas no ecrã** (nota da abertura, FSSC).
+>
+> *EN:* each shift leader's PIN (Settings, behind the supervisor PIN), asked at login and logout; no operators list; FIFO card in Silos (per designation, silos in order of first entry since last empty, with their entries; another silo out first = warning); new Report tab (whole day or shift, Excel); no formulas on screen.
 
 > **v0.14.1 — Login do turno como na Prodn-Mgt; limpar avisos (Zhax, 14-11-2026).** No login do turno os trabalhos escolhem-se numa lista («Juntar trabalho» — cada um fica como etiqueta e retira-se com ✕; «Outro» leva texto escrito à mão). Em Definições, na parte protegida (PIN de supervisor), o cartão Avisos mostra todos os avisos e o botão «Limpar todos os avisos (n)», com nome e motivo, gravado como registo. Um aviso volta se a situação mudar; os do dia (login, envio) voltam no dia seguinte se continuarem.
 >
