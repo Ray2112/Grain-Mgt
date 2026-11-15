@@ -1,4 +1,8 @@
-# FMO - Silo Cereais (antes Grain-Mgt) · v0.17.0
+# FMO - Silo Cereais (antes Grain-Mgt) · v0.17.1
+
+> **v0.17.1 — Logótipo Carrinho no cabeçalho (Zhax, 15-11-2026).**
+>
+> *EN:* Carrinho logo in the header.
 
 > **v0.17.0 — Release 5 (Zhax, 14-11-2026).** Novo nome: FMO - Silo Cereais (em inglês, FMO - Grain Silos); no ícone do telemóvel fica o nome em português. Um turno com login e sem logout abre no separador Turno e fica um alerta em todos os ecrãs até ao logout (não se limpa com «Limpar todos os avisos»).
 >

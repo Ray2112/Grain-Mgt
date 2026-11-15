@@ -99,3 +99,6 @@ input[readonly]{background:#F1EEE6;color:var(--muted)}
 .tsc-cell{width:22px;height:10px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}.tsc-lb{font-size:9px;color:var(--muted);line-height:1}.tsc-air{background:#D9D5CB;color:#45494D}.tsc-none{background:#fff}.tsc-err{background:#fff;color:var(--bad);font-weight:700;text-align:center}
 .tsc-txt{min-width:84px}.tsc-leg{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.tsc-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:3px;vertical-align:-2px}
 .tablewrap{overflow-x:auto}.tsc-grid{border-collapse:collapse;font-size:12px}.tsc-grid td,.tsc-grid th{padding:3px 5px;border:1px solid var(--line);text-align:center;white-space:nowrap}.tsc-grid td.lv0,.tsc-grid td.lv1,.tsc-grid td.lv4,.tsc-grid td.lv5{color:#fff}
+
+/* 2.13.1 / 0.17.1 (Zhax, 15-11-2026): logótipo Carrinho no cabeçalho, num painel branco (o ficheiro tem fundo branco) */
+.logo{height:30px;width:auto;background:#fff;border-radius:6px;padding:3px 6px;display:block;flex:none}
