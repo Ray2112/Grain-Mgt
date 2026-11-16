@@ -59,7 +59,15 @@ t('intervenção: material com quantidade e unidade; fim depois do início', () 
 
 t('turno de manutenção e consumível', () => {
   assert.deepStrictEqual(M.validateShift({ prodDay: '2026-10-27', period: 'N', technicians: 'Ana', by: 'X' }), []);
-  assert.deepStrictEqual(M.validateShift({ prodDay: '27/10', period: 'X', technicians: '', by: '' }), ['prodDay', 'period', 'technicians', 'by']);
+  assert.deepStrictEqual(M.validateShift({ prodDay: '27/10', period: 'X', technicians: '', by: '' }), ['prodDay', 'period', 'tasks', 'by']);
+  // v2.15.0: tarefas do turno em vez de técnicos; avaria precisa de descrição
+  assert.deepStrictEqual(M.validateShift({ prodDay: '2026-11-16', period: 'D', tasks: [{ type: 'preventive' }], by: 'X' }), []);
+  assert.deepStrictEqual(M.validateShift({ prodDay: '2026-11-16', period: 'D', tasks: [{ type: 'breakdown', description: ' ' }], by: 'X' }), ['breakdownDesc']);
+  // catálogo de consumíveis: o mais recente de cada artigo; retirado sai
+  const ce = [{ uid: 'a', kind: 'consItem', itemId: 'i1', name: 'Rolamento', dims: '6205', unit: 'un', t: 1 }, { uid: 'b', kind: 'consItem', itemId: 'i1', name: 'Rolamento', dims: '6205-2RS', unit: 'un', t: 2 },
+    { uid: 'c', kind: 'consItem', itemId: 'i2', name: 'Correia', unit: 'un', t: 3 }, { uid: 'd', kind: 'consItem', itemId: 'i2', name: 'Correia', unit: 'un', removed: true, t: 4 }];
+  assert.deepStrictEqual(M.consCatalog(ce).map(x => x.dims), ['6205-2RS']);
+  assert.deepStrictEqual(M.validateConsItem({ name: '', unit: 'zz', by: '' }), ['item', 'unit', 'by']);
   assert.deepStrictEqual(M.validateConsumable({ item: 'Massa', qty: '0,5', unit: 'kg', by: 'X' }), []);
   assert.deepStrictEqual(M.validateConsumable({ item: 'Massa', qty: '-1', unit: 'kg', by: 'X' }), ['qty']);
   assert.deepStrictEqual(M.validateConsumable({ item: 'Massa', qty: '1', unit: 'ton', by: 'X' }), ['unit']);

@@ -828,7 +828,8 @@
     let h = '<form class="sheet-card stack" id="sheetform" novalidate><h2>' + esc(titles[sh.kind]) + (sh.silo ? ' · ' + esc(sh.silo) : '') + '</h2>';
     if (sh.kind !== 'event') h += '<div class="grid2">' + sInput('date', t('date'), ' type="date"') + sInput('time', t('time'), ' type="time"') + '</div>';
     if (sh.kind === 'out') {
-      h += '<div class="grid2">' + selInput('line', t('line') + ' *', LINES.map(function (l) { return [l, l]; })) + selInput('bin', t('dirty_bin') + ' *', DIRTY_BINS.map(function (b) { return [b, b]; })) + '</div>';
+      // 0.18.0 (Zhax, 16-11-2026): descarga para SG01 não pede bin de milho sujo
+      h += '<div class="grid2">' + selInput('line', t('line') + ' *', LINES.map(function (l) { return [l, l]; })) + '<div id="outbin"' + (NO_BIN_LINES.indexOf(sv('line')) >= 0 ? ' hidden' : '') + '>' + selInput('bin', t('dirty_bin') + ' *', DIRTY_BINS.map(function (b) { return [b, b]; })) + '</div></div>';
       h += '<div class="grid2">' + sInput('kg', t('kg') + ' *', DEC) + sInput('prodLot', t('prod_lot')) + '</div>';
     }
     if (sh.kind === 'transfer') {
@@ -1035,7 +1036,7 @@
       if (fc && !fc.ok) warns.push(t('feed_warn') + ': ' + fc.reasons.map(function (r) { return FEED_MSG[r.code] || r.code; }).join('; '));
       const feedNote = warns.length ? t('warn_prefix') + ' ' + warns.join(' · ') : '';
       p = DB.addMany(parts.map(function (part) {
-        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('line'), bin: sv('bin'), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots, notes: feedNote, warnings: warns }) };
+        return { store: 'events', obj: Object.assign({}, base, { silo: part.silo, type: 'OUT', kg: part.kg, place: sv('line'), bin: NO_BIN_LINES.indexOf(sv('line')) >= 0 ? '' : sv('bin'), prodLot: sv('prodLot'), lots: L.siloContents(part.silo, S.events).lots, notes: feedNote, warnings: warns }) };
       }));
       if (warns.length) toast(t('saved_with_warn'));
     }
@@ -1532,6 +1533,11 @@
       else if (el.name === 'qcGrade') { S.form.dest = []; updateDyn(); }
     }
     if (S.sheet && el.form && el.form.id === 'sheetform' && el.name) S.sheet.v[el.name] = el.type === 'checkbox' ? el.checked : el.value; // sem redesenhar: o 'input' já tratou (evita perder o foco)
+    if (S.sheet && S.sheet.kind === 'out' && el.form && el.form.id === 'sheetform' && el.name === 'line') {   // 0.18.0: SG01 sem bin
+      const nb = NO_BIN_LINES.indexOf(el.value) >= 0, box = document.getElementById('outbin');
+      if (box) box.hidden = nb;
+      if (nb) { S.sheet.v.bin = ''; const b = el.form.querySelector('[name="bin"]'); if (b) b.value = ''; }
+    }
     if (el.id === 'recday' && el.value) { S.recDay = el.value; render(); return; }   // 0.14.0: dia dos Registos
     if (el.id === 'repday' && el.value) { S.repDay = el.value; render(); return; }   // 0.15.0: Relatório
     if (el.id === 'repwin') { S.repWin = el.value; render(); return; }
