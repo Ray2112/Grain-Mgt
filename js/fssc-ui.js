@@ -128,7 +128,6 @@ window.FsscUI = function (C) {
         <div class="${MS.closed ? 'fs-ok' : ''}"><b>${MS.closed ? '✔' : '…'}</b><span>${esc(MS.closed ? t('closed') : t('open'))}</span></div></div>
       ${S.band ? `<p class="fs-sub"><span class="fs-c ${BAND_CLS[S.band]}">${esc(t('b_' + S.band))}</span> ${esc(t('counts', { c: S.counts.C, mi: S.counts.MI, ma: S.counts.MA, cr: S.counts.CR, na: S.counts.NA }))}</p>` : ''}
       ${last ? `<p class="fs-sub">${esc(last.kind === 'close' ? t('closedBy') : t('reopenedBy'))} ${esc(last.by)} · ${esc(ddmm(last.date))} ${esc(last.time || '')}${last.reason ? ' — ' + esc(last.reason) : ''}</p>` : ''}
-      <p class="fs-sub">${esc(t('rules'))}</p>
       ${closeBox || (MS.closed ? `<button type="button" class="btn" data-fact="reopen">${esc(t('reopen'))}</button>`
         : `<button type="button" class="btn primary" data-fact="close" ${S.complete ? '' : 'disabled'}>${esc(t('closeMonth'))}</button>${S.complete ? '' : `<p class="fs-sub">${esc(t('needAll'))}</p>`}`)}</section>`;
     Q.SECTIONS.forEach(([sid]) => {

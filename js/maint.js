@@ -11,14 +11,17 @@
  *   brushCheck  — estado das escovas do par (bom | gasto | crítico | em falta) (só Prodn-Mgt)
  *   rollConfig  — Definições dos rolos: horas ideais por passagem, ou IDs dos rolos de um par (com PIN; só Prodn-Mgt)
  *   sensorAck   — defeito de sensor de temperatura já conhecido (silo, cabo, sensor; só Grain-Mgt): sai do aviso do topo
- *   consumable  — consumível pedido/usado no turno
+ *   consumable  — consumível pedido/usado no turno (itemId e dimensões quando escolhido do catálogo)
+ *   consItem    — artigo do catálogo de consumíveis: nome, dimensões, descrição, unidade (o mais recente de cada itemId manda)
  *   note        — informação adicional: observação, requisito ou outra
  *   void        — anulação de um registo (os registos nunca se alteram nem se apagam)
  * Registos de manutenção são separados do diário de turno da Prodn-Mgt (decisão de Zhax, 27-10-2026):
  * os minutos aqui NÃO entram no indicador de paragens de 72 min/dia. */
 (function (root) {
   'use strict';
-  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'note', 'void'];
+  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'consItem', 'note', 'void'];
+  // v2.15.0 / v0.18.0 (Zhax, 16-11-2026): o turno de manutenção regista as tarefas (avarias a atender com descrição; preventiva)
+  const SHIFT_TASKS = ['breakdown', 'preventive'];
   // Categorias pedidas por Zhax; os códigos vêm da lista FMO pela primeira letra (P = Process, A = Breakdown, O = Other),
   // como no diário de turno. Códigos sem P/A/O ficam em Other.
   const CATEGORIES = ['Process', 'Breakdown', 'Other'];
@@ -91,7 +94,9 @@
     const e = [];
     if (!DAY_RE.test(o.prodDay || '')) e.push('prodDay');
     if (o.period !== 'D' && o.period !== 'N') e.push('period');
-    if (!txt(o.technicians)) e.push('technicians');
+    const tk = (o.tasks || []).filter(x => x && SHIFT_TASKS.indexOf(x.type) >= 0);
+    if (!tk.length && !txt(o.technicians)) e.push('tasks');
+    if (tk.some(x => x.type === 'breakdown' && !txt(x.description))) e.push('breakdownDesc');
     if (!txt(o.by)) e.push('by');
     return e;
   }
@@ -226,6 +231,20 @@
     if (UNITS.indexOf(o.unit) < 0) e.push('unit');
     if (!txt(o.by)) e.push('by');
     return e;
+  }
+
+  function validateConsItem(o) {
+    const e = [];
+    if (!txt(o.name)) e.push('item');
+    if (UNITS.indexOf(o.unit) < 0) e.push('unit');
+    if (!txt(o.by)) e.push('by');
+    return e;
+  }
+  // Catálogo de consumíveis em vigor: o registo mais recente de cada itemId; removed = retirado do catálogo
+  function consCatalog(entries) {
+    const m = new Map();
+    effective(entries).filter(e => e.kind === 'consItem' && e.itemId).sort(byTime).forEach(e => m.set(e.itemId, e));
+    return Array.from(m.values()).filter(e => !e.removed).sort((a, b) => txt(a.name).localeCompare(txt(b.name)));
   }
 
   // ---------- preventiva ----------
@@ -441,7 +460,7 @@
 
   const api = { validatePmDone, pmDoneRecords, KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
     num, addDays, daysBetween, weekOf, weekRange, validWeek, catOfCode, codesFor, findCode, effective, cleanParts,
-    STOP_KINDS, KIND_CAT, minsBetween, validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
+    STOP_KINDS, KIND_CAT, SHIFT_TASKS, validateConsItem, consCatalog, minsBetween, validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
     validateBrushCheck, validateRollConfig, validateNote, validateConsumable,
     pmState, pmWeek, addMonthsDate, pmCatalog, lineHours, effectiveLimits, rollIdsOf, rollState, consumableTotals, shiftSummary, warnings, passageOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
