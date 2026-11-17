@@ -1,5 +1,7 @@
-# FMO - Silo Cereais (antes Grain-Mgt) · v0.18.0
+# FMO - Silo Cereais (antes Grain-Mgt) · v0.19.0
 
+> **v0.19.0 — Sem balanças, tempo de ciclo, totais (Zhax, 17-11-2026).** Login e logout de turno sem leituras de balança; totais do turno pelos registos (recebido, transferido, descarregado por destino, silos esvaziados). Recepção: tempo de ciclo fosso → silo por camião (no lote ou depois, com média e máximo do dia). Manutenção: lista de tarefas e trabalhos de preventiva escolhidos da lista no registo do turno.
+>
 > **v0.18.0 — SG01 e manutenção (Zhax, 16-11-2026).** Descarga para a linha SG01 já não pede bin de milho sujo. Manutenção (igual na Moagem de Milho): o turno regista as tarefas (avarias com descrição; preventiva abre o separador Preventiva), sem nomes de técnicos; novo Catálogo de consumíveis (dimensões, descrição). Retirados textos de explicação da Manutenção e da FSSC.
 >
 > **v0.17.1 — Logótipo Carrinho no cabeçalho (Zhax, 15-11-2026).**

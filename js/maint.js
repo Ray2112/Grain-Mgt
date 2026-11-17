@@ -21,7 +21,9 @@
   'use strict';
   const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'consItem', 'note', 'void'];
   // v2.15.0 / v0.18.0 (Zhax, 16-11-2026): o turno de manutenção regista as tarefas (avarias a atender com descrição; preventiva)
-  const SHIFT_TASKS = ['breakdown', 'preventive'];
+  // v2.16.0 / v0.19.0 (Zhax, 17-11-2026): lista de tarefas de manutenção; preventiva escolhida da lista de preventiva (várias, «juntar trabalho»)
+  const SHIFT_TASKS = ['breakdown', 'inspection', 'cleaning', 'lubrication', 'preventive', 'other'];
+  const TASK_NEEDS_DESC = ['breakdown', 'other'];
   // Categorias pedidas por Zhax; os códigos vêm da lista FMO pela primeira letra (P = Process, A = Breakdown, O = Other),
   // como no diário de turno. Códigos sem P/A/O ficam em Other.
   const CATEGORIES = ['Process', 'Breakdown', 'Other'];
@@ -96,7 +98,8 @@
     if (o.period !== 'D' && o.period !== 'N') e.push('period');
     const tk = (o.tasks || []).filter(x => x && SHIFT_TASKS.indexOf(x.type) >= 0);
     if (!tk.length && !txt(o.technicians)) e.push('tasks');
-    if (tk.some(x => x.type === 'breakdown' && !txt(x.description))) e.push('breakdownDesc');
+    if (tk.some(x => TASK_NEEDS_DESC.indexOf(x.type) >= 0 && !txt(x.description))) e.push('breakdownDesc');
+    if (o.needPmTask && tk.some(x => x.type === 'preventive' && !txt(x.taskId))) e.push('pmTaskPick');
     if (!txt(o.by)) e.push('by');
     return e;
   }
@@ -460,7 +463,7 @@
 
   const api = { validatePmDone, pmDoneRecords, KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
     num, addDays, daysBetween, weekOf, weekRange, validWeek, catOfCode, codesFor, findCode, effective, cleanParts,
-    STOP_KINDS, KIND_CAT, SHIFT_TASKS, validateConsItem, consCatalog, minsBetween, validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
+    STOP_KINDS, KIND_CAT, SHIFT_TASKS, TASK_NEEDS_DESC, validateConsItem, consCatalog, minsBetween, validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
     validateBrushCheck, validateRollConfig, validateNote, validateConsumable,
     pmState, pmWeek, addMonthsDate, pmCatalog, lineHours, effectiveLimits, rollIdsOf, rollState, consumableTotals, shiftSummary, warnings, passageOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
