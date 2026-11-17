@@ -686,31 +686,23 @@
     if (!window.Fifo) return [];
     return ids.map(function (id) { const f = window.Fifo.outOfOrder(id, ids, S.settings.silos, S.events, fifoKg); return f ? t('fifo_warn').replace('{s}', id).replace('{f}', f) : null; }).filter(Boolean);
   }
+  // 0.20.0 (Zhax, 17-11-2026): bins D/M — só tipo (cor), grau, quantidade, % cheia e movimento do mês (descargas registadas aqui)
   function reconCard() {
     const r = S.recon;
-    let h = '<details class="card stack"' + (r ? ' open' : '') + '><summary class="strong">' + esc(t('rc_title')) + '</summary>';
-    if (!window.FeedSync || !window.FeedSync.configured() || !window.BinsFeed) return h + '<p class="small muted">' + esc(FEED_MSG.FEED_NOT_CONFIGURED) + '.</p></details>';
-    h += '<p class="small muted">' + esc(t('rc_note')) + '</p>';
-    h += '<button type="button" class="btn small" data-action="recon-refresh"' + (r && r.loading ? ' disabled' : '') + '>' + esc(r && r.loading ? t('rc_reading') : t('rc_read')) + '</button>';
-    if (!r || r.loading) return h + '</details>';
-    const status = r.status || r.last;
-    if (r.error) h += '<p class="warn small">' + esc(tf('rc_unavail', { e: FEED_MSG['FEED_' + r.error] || r.error }) + (status ? ' ' + t('rc_last_copy') : '')) + '</p>';
-    if (!status) return h + '</details>';
-    const fr = window.BinsFeed.freshness(status, Date.now());
-    h += '<p class="small muted">' + esc(tf('rc_file', { d: lt(status.generatedAt) }) + (fr.ageMin !== null ? ' ' + tf('rc_ago', { m: fr.ageMin }) : '')) + '</p>';
-    if (!fr.ok) h += '<p class="warn small">' + esc(tf('rc_check', { r: FEED_MSG['FRESHNESS_' + fr.reason.toUpperCase()] || fr.reason })) + '</p>';
-    window.BinsFeed.reconcileBins(status, S.events, evMs).forEach(function (b) {
-      h += '<div class="stack"><div class="row"><span class="strong grow">' + esc(b.bin) + '</span><span class="badge ' + (b.ok ? 'b-ACCEPTED">' + esc(t('rc_ok')) : 'b-REJECTED">' + esc(tf('rc_diff', { d: fmtDiff(b.diffKg) }))) + '</span></div>';
-      if (b.empty) h += '<p class="small muted">' + esc(t('rc_empty')) + '</p>';
-      else h += '<div class="row small muted"><span class="grow">Silo</span><span>' + esc(t('rc_cols')) + '</span></div>' + b.silos.map(function (x) {
-        return '<div class="row small"><span class="mono grow">' + esc(x.silo) + '</span><span>' + fmtKg(x.appKg) + ' · ' + fmtKg(x.qcKg) + ' · ' + (x.ok ? '<span>' : '<span class="flag">') + esc(fmtDiff(x.diffKg)) + '</span></span></div>';
-      }).join('');
-      if (b.pendingN) h += '<p class="small muted">' + esc(tf('rc_pending', { n: b.pendingN, kg: fmtKg(b.pendingKg) })) + '</p>';
-      if (b.badN) h += '<p class="warn small">' + esc(tf('rc_bad', { n: b.badN })) + '</p>';
-      if (!b.ok && !b.badN) h += '<p class="warn small">' + esc(t('rc_diff_note')) + '</p>';
-      h += '</div>';
-    });
-    return h + '</details>';
+    let h = '<div class="card stack"><div class="row"><h2 class="grow">' + esc(t('bm_title')) + '</h2>';
+    if (!window.FeedSync || !window.FeedSync.configured() || !window.BinsFeed) return h + '</div><p class="small muted">' + esc(FEED_MSG.FEED_NOT_CONFIGURED) + '.</p></div>';
+    h += '<button type="button" class="btn small" data-action="recon-refresh"' + (r && r.loading ? ' disabled' : '') + '>' + esc(r && r.loading ? t('rc_reading') : t('bm_read')) + '</button></div>';
+    const status = r && (r.status || r.last);
+    const month = L.today().slice(0, 7);
+    const mtd = function (bin) { return S.events.filter(function (e) { return e.type === 'OUT' && e.bin === bin && !e.test && String(e.date || '').slice(0, 7) === month; }).reduce(function (a, e) { return a + (Number(e.kg) || 0); }, 0); };
+    const bins = status && status.bins ? status.bins : DIRTY_BINS.map(function (b) { return { id: b }; });
+    h += '<table class="tbl"><tr><th></th><th>' + esc(t('bm_type')) + '</th><th>' + esc(t('bm_grade')) + '</th><th>kg</th><th>%</th><th>' + esc(t('bm_mtd')) + '</th></tr>' +
+      bins.map(function (b) {
+        const cap = Number(b.binCapKg) || null, kg = typeof b.kg === 'number' ? b.kg : null;
+        return '<tr><td class="strong">' + esc(b.id) + '</td><td>' + esc(b.colour || '—') + '</td><td>' + esc(b.grade || '—') + '</td><td class="n">' + (kg === null ? '—' : fmtKg(kg)) +
+          '</td><td class="n">' + (kg !== null && cap ? Math.round(kg / cap * 1000) / 10 + ' %' : '—') + '</td><td class="n">' + fmtKg(mtd(b.id)) + '</td></tr>';
+      }).join('') + '</table>';
+    return h + '</div>';
   }
 
   // ---------------- monitorização / storage monitoring (SOP-OPS-002) ----------------

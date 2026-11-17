@@ -160,9 +160,7 @@
         (li.comments ? '<p class="small">' + esc(li.comments) + '</p>' : '') + '</div>';
       const r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
       if (!lo) {
-        const pre = [t('trucksRec') + ': ' + r.trucks + ' (' + fmtKg(r.receivedKg) + ' kg)', t('sentKg') + ': ' + fmtKg(r.sentKg) + ' kg'];
-        if (r.transfers.length) pre.push(t('transfers') + ': ' + r.transfers.length);
-        if (r.empties.length) pre.push(t('empties') + ': ' + r.empties.map(e => e.silo).join(', '));
+        const pre = [];   // 0.20.0: os totais estão no cartão acima (sem repetir aqui)
         const stops = st.recs.filter(x => x.kind === 'stop' && x.shift === sid(s)); if (stops.length) pre.push(t('stops') + ': ' + stops.map(x => (x.code || '') + ' ' + (x.durationMin || '') + ' min').join(', '));
         h += totalsCard(r) + '<div class="card stack"><h2>' + esc(t('logout')) + '</h2><div class="grid2">' + onOff('rec1', li.state.rec1) + onOff('rec2', li.state.rec2) + onOff('feed', li.state.feed) + '</div>' +
           '<label>' + esc(t('acts')) + ' *<textarea id="sh_acts" rows="4">' + esc(pre.join('\n')) + '</textarea></label>' +
