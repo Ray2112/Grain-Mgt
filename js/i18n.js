@@ -5,6 +5,7 @@
     pt: {
       app_name: 'FMO - Silo Cereais', offline_badge: 'Funciona sem rede', footer: 'Dados guardados apenas neste dispositivo.',
       // 0.12.1 — tudo traduzido (Zhax, 13-11-2026): conciliação, Dropbox, bins, lista de trabalhos do turno
+      bm_title: 'Bins de milho sujo (D/M)', bm_read: 'Actualizar', bm_type: 'Tipo', bm_grade: 'Grau', bm_mtd: 'Movimento do mês (kg)',
       rc_title: 'Conciliação das bins (Moagem de Milho)', rc_note: 'Descargas registadas aqui para cada bin, comparadas com a receção na app Moagem de Milho, silo a silo, desde o último vazio da bin. Tolerância 0 kg.',
       rc_read: 'Ler ficheiro e conciliar', rc_reading: 'A ler…', rc_unavail: 'Ficheiro das bins indisponível: {e}', rc_last_copy: 'A mostrar a última cópia guardada.',
       rc_file: 'Ficheiro de {d}', rc_ago: '(há {m} min)', rc_check: '{r}: confirmar com o chefe de turno antes de dar a conciliação por fechada.',
@@ -154,6 +155,7 @@
     en: {
       app_name: 'FMO - Grain Silos', offline_badge: 'Works offline', footer: 'Data stored on this device only.',
       // 0.12.1 — everything translated (Zhax, 13 Nov 2026): reconciliation, Dropbox, bins, shift jobs list
+      bm_title: 'Dirty maize bins (D/M)', bm_read: 'Refresh', bm_type: 'Type', bm_grade: 'Grade', bm_mtd: 'Movement MTD (kg)',
       rc_title: 'Bin reconciliation (Maize Mill)', rc_note: 'Discharges recorded here for each bin, compared with the intake in Maize Mill, silo by silo, since the bin was last emptied. Tolerance 0 kg.',
       rc_read: 'Read file and reconcile', rc_reading: 'Reading…', rc_unavail: 'Bin file unavailable: {e}', rc_last_copy: 'Showing the last saved copy.',
       rc_file: 'File of {d}', rc_ago: '({m} min ago)', rc_check: '{r}: check with the shift leader before closing the reconciliation.',

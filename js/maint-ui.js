@@ -8,6 +8,7 @@
  *   C.extraTabs [{id, label(), view()}] separadores próprios da app (Grain-Mgt: Sensores); os seus botões usam os atributos da app
  *   Rolos (só Prodn-Mgt, C.rolls = true): C.passages() pares de rolos (js/roll-passages.js) · C.rollDefaults() horas ideais por grupo
  *   · C.rollHours() roll-hours.json (ou null) · C.rollHoursRefresh() -> Promise<bool> · C.checkPin(pin) -> {ok} · C.pinMsg(r)
+ *   C.who(pin) -> Promise<{role, title} | {err}> (opcional; Moagem de Milho 2.17.0): sem nomes — só o PIN; grava o título da função
  * Eventos próprios (data-mact, data-mf, data-mp); não usa os atributos das apps. */
 window.MaintUI = function (C) {
   'use strict';
@@ -135,6 +136,9 @@ window.MaintUI = function (C) {
   const fld = (label, inner, req) => `<label class="mt-f${req ? ' mt-req' : ''}">${esc(label)}${inner}</label>`;
   const inp = (k, v, extra) => `<input data-mf="${k}" value="${esc(v)}" ${extra || ''}>`;
   const area = (k, v) => `<textarea rows="2" data-mf="${k}">${esc(v)}</textarea>`;
+  // v2.17.0 / v0.20.0: com C.who (Moagem de Milho) pede-se só o PIN; sem C.who (Silo Cereais) mantém-se o nome
+  const byF = f => C.who ? fld(t('pin'), `<input type="password" maxlength="4" autocomplete="off" data-mf="whopin" value="">`, 1) : fld(t('by'), inp('by', f.by), 1);
+  const nameF = (k, v, lab) => C.who ? '' : fld(t(lab), inp(k, v), 1);
   const lineSel = cur => `<select data-mf="lineId"><option value="">—</option>${C.lines().map(l => opt(l.id, cur, l.name)).join('')}</select>`;
 
   // Hora de um turno → ms locais: no turno N, horas antes das 07:00 são do dia seguinte
@@ -214,7 +218,7 @@ window.MaintUI = function (C) {
   function voidBox(uid) {
     if (!st.act || st.act.uid !== uid) return `<button type="button" class="btn small" data-mact="voidask" data-uid="${esc(uid)}">${esc(t('void'))}</button>`;
     return `<div class="mt-box">${fld(t('voidReason'), `<textarea rows="2" data-mf="vreason">${esc(st.act.reason || '')}</textarea>`, 1)}
-      ${fld(t('name'), `<input data-mf="vby" value="${esc(st.act.by || C.operator())}">`, 1)}
+      ${C.who ? fld(t('pin'), `<input type="password" maxlength="4" autocomplete="off" data-mf="vpin">`, 1) : fld(t('name'), `<input data-mf="vby" value="${esc(st.act.by || C.operator())}">`, 1)}
       <button type="button" class="btn small primary" data-mact="voidsave">${esc(t('save'))}</button>
       <button type="button" class="btn small" data-mact="cancel">${esc(t('cancel'))}</button></div>`;
   }
@@ -239,7 +243,7 @@ window.MaintUI = function (C) {
         <div class="row"><button type="button" class="btn small" data-mact="taskadd" data-v="breakdown">＋ ${esc(t('addBreakdown'))}</button>
           <button type="button" class="btn small" data-mact="taskadd" data-v="preventive">＋ ${esc(t('addPmJob'))}</button>
           <button type="button" class="btn small" data-mact="taskadd" data-v="">＋ ${esc(t('addTask'))}</button></div>
-        ${fld(t('notes'), area('notes', f.notes))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saveshift')}</div>` : newBtn('shift', t('newShift'))}</section>
+        ${fld(t('notes'), area('notes', f.notes))}${byF(f)}${saveBtns('saveshift')}</div>` : newBtn('shift', t('newShift'))}</section>
       <section class="card">${sm.shifts.map(r => `<div class="mt-item">${(r.tasks || []).map(x => `<div><b>${esc(t('tk_' + x.type))}</b>${x.pmLabel ? ': ' + esc(pmName(x.pmLabel)) : ''}${x.description ? ': ' + esc(x.description) : ''}</div>`).join('')}${r.technicians ? `<b>${esc(t('technicians'))}:</b> ${esc(r.technicians)}` : ''}
         ${r.notes ? `<div>${esc(r.notes)}</div>` : ''}${meta(r)}<div>${voidBox(r.uid)}</div></div>`).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
   }
@@ -259,7 +263,7 @@ window.MaintUI = function (C) {
         ${fld(t('line'), lineSel(f.lineId))}${fld(t('equipment'), inp('equipment', f.equipment))}
         ${fld(t('startTime'), inp('startTime', f.startTime, 'type="time"'), 1)}${fld(t('endTime'), inp('endTime', f.endTime, 'type="time"'), 1)}</div>
         <p class="mt-sub">${esc(dur !== null ? t('durCalc', { m: dur }) : t('durHint'))}</p>
-        ${fld(t('description'), area('description', f.description), 1)}${fld(t('stopAction'), area('action', f.action))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savestop')}</div>`;
+        ${fld(t('description'), area('description', f.description), 1)}${fld(t('stopAction'), area('action', f.action))}${byF(f)}${saveBtns('savestop')}</div>`;
     }
     return `<section class="card">${C.kpiNote ? `` : ''}${f ? form : newBtn('stop', t('newStop'))}</section>
       <section class="card"><h3>${esc(t('t_stops'))} · ${sm.stopMin} min</h3>${sm.stops.map(r => `<div class="mt-item">
@@ -296,7 +300,7 @@ window.MaintUI = function (C) {
           <input data-mp="${i}|qty" value="${esc(p.qty)}" inputmode="decimal" placeholder="${esc(t('qty'))}">
           <select data-mp="${i}|unit">${M.UNITS.map(u => opt(u, p.unit, t('u_' + u))).join('')}</select></div>`).join('')}
           <button type="button" class="btn small" data-mact="addpart">${esc(t('addPart'))}</button></div>${itemList()}
-        ${fld(t('doneBy'), inp('doneBy', f.doneBy), 1)}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savework')}</div>`;
+        ${nameF('doneBy', f.doneBy, 'doneBy')}${byF(f)}${saveBtns('savework')}</div>`;
     }
     return `<section class="card">${f ? form : newBtn('work', t('newWork'))}</section>
       <section class="card"><h3>${esc(t('t_work'))}</h3>${sm.works.map(r => `<div class="mt-item">
@@ -337,7 +341,7 @@ window.MaintUI = function (C) {
         `<option value="${esc(c.id)}" ${f.taskId === c.id ? 'selected' : ''} ${c.pickable ? '' : 'disabled'}>${esc(c.task.code + ' ' + pmName(c.task.asset) + ' — ' + t('fq_' + c.task.freq) + ' · ' + t('ps_' + c.status) + (c.nextDue ? ' · ' + t('nextDue') + ' ' + ddmm(c.nextDue) : ''))}</option>`).join('')}</optgroup>`).join('')}</select>`); };
     if (f && f.kind === 'pmJob') form = `<div class="mt-box">${pickSel()}<div class="grid2">${fld(t('week'), inp('week', f.week), 1)}${fld(t('dueDate'), inp('dueDate', f.dueDate, 'type="date"'), 1)}
         ${fld(t('line'), lineSel(f.lineId))}${fld(t('equipment'), inp('equipment', f.equipment), 1)}</div>
-        ${fld(t('task'), area('task', f.task), 1)}<div class="grid2">${fld(t('responsible'), inp('responsible', f.responsible), 1)}${fld(t('by'), inp('by', f.by), 1)}</div>${saveBtns('savepm')}</div>`;
+        ${fld(t('task'), area('task', f.task), 1)}<div class="grid2">${nameF('responsible', f.responsible, 'responsible')}${byF(f)}</div>${saveBtns('savepm')}</div>`;
     const job = s => {
       const up = f && f.kind === 'pmUpdate' && f.jobUid === s.uid;
       return `<div class="mt-item ${s.overdue ? 'mt-late' : ''}"><div><b>${esc(pmName(s.job.equipment))}</b> — ${esc(pmName(s.job.task))}
@@ -348,8 +352,8 @@ window.MaintUI = function (C) {
         ${up ? `<div class="mt-box"><div class="grid2">${fld(t('status'), `<select data-mf="status"><option value="">—</option>${M.PM_UPDATES.map(x => opt(x, f.status, t('s_' + x))).join('')}</select>`, 1)}
             ${f.status === 'in_progress' ? fld(t('progressPct'), inp('progressPct', f.progressPct, 'inputmode="decimal"'), 1) : ''}
             ${f.status === 'postponed' ? fld(t('newDue'), inp('newDue', f.newDue, 'type="date"'), 1) : ''}
-            ${f.status === 'done' ? fld(t('doneBy'), inp('doneBy', f.doneBy), 1) : ''}</div>
-            ${fld(t('note'), area('note', f.note), f.status === 'postponed' || f.status === 'cancelled')}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savepmup')}</div>`
+            ${f.status === 'done' ? nameF('doneBy', f.doneBy, 'doneBy') : ''}</div>
+            ${fld(t('note'), area('note', f.note), f.status === 'postponed' || f.status === 'cancelled')}${byF(f)}${saveBtns('savepmup')}</div>`
           : (s.open && !f ? `<button type="button" class="btn small" data-mact="pmup" data-uid="${esc(s.uid)}">${esc(t('update'))}</button>` : '')}
         ${up ? '' : voidBox(s.uid)}</div>`;
     };
@@ -372,8 +376,8 @@ window.MaintUI = function (C) {
     const n = k => k === 'late' ? CAT.filter(c => c.overdue).length : k === 'due' ? CAT.filter(c => c.pickable).length : CAT.length;
     let prev = null;
     const f = st.form && st.form.kind === 'pmDone' ? st.form : null, many = !!(f && f.many), one = !!(f && !f.many);
-    const doneForm = () => `<div class="mt-box"><div class="grid2">${fld(t('doneOn'), inp('doneOn', f.doneOn, 'type="date"'), 1)}${fld(t('doneBy'), inp('doneBy', f.doneBy), 1)}</div>
-        ${fld(t('note'), area('note', f.note))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savepmdone')}</div>`;
+    const doneForm = () => `<div class="mt-box"><div class="grid2">${fld(t('doneOn'), inp('doneOn', f.doneOn, 'type="date"'), 1)}${nameF('doneBy', f.doneBy, 'doneBy')}</div>
+        ${fld(t('note'), area('note', f.note))}${byF(f)}${saveBtns('savepmdone')}</div>`;
     const rows = show.map(c => {
       const g = c.task.group !== prev ? `<h4 class="mt-grp">${esc(pmName(c.task.group))}</h4>` : '';
       prev = c.task.group;
@@ -437,17 +441,17 @@ window.MaintUI = function (C) {
     const f = st.form;
     if (!f || f.passageId !== r.id) return '';
     if (f.kind === 'rollCheck') return `<div class="mt-box">${fld(t('condition'), `<select data-mf="condition"><option value="">—</option>${M.ROLL_COND.map(c => opt(c, f.condition, t('r_' + c))).join('')}</select>`, 1)}
-        ${fld(t('note'), area('note', f.note), f.condition && f.condition !== 'good')}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saverchk')}</div>`;
+        ${fld(t('note'), area('note', f.note), f.condition && f.condition !== 'good')}${byF(f)}${saveBtns('saverchk')}</div>`;
     if (f.kind === 'brushCheck') return `<div class="mt-box">${fld(t('brushes'), `<select data-mf="state"><option value="">—</option>${M.BRUSH_STATES.map(c => opt(c, f.state, t('b_' + c))).join('')}</select>`, 1)}
-        ${fld(t('note'), area('note', f.note), f.state === 'critical' || f.state === 'missing')}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savebrush')}</div>`;
+        ${fld(t('note'), area('note', f.note), f.state === 'critical' || f.state === 'missing')}${byF(f)}${saveBtns('savebrush')}</div>`;
     if (f.kind === 'rollMeasure') return `<div class="mt-box"><div class="grid2">${fld(t('diaFast'), inp('diaFast', f.diaFast, 'inputmode="decimal"'))}${fld(t('diaSlow'), inp('diaSlow', f.diaSlow, 'inputmode="decimal"'))}
-        ${fld(t('date'), inp('date', f.date, 'type="date"'), 1)}</div>${fld(t('note'), area('note', f.note))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savemeas')}</div>`;
+        ${fld(t('date'), inp('date', f.date, 'type="date"'), 1)}</div>${fld(t('note'), area('note', f.note))}${byF(f)}${saveBtns('savemeas')}</div>`;
     if (f.kind === 'rollChange') return `<div class="mt-box"><div class="grid2">${fld(t('date'), inp('date', f.date, 'type="date"'), 1)}
         ${fld(t('reason'), `<select data-mf="reason"><option value="">—</option>${M.ROLL_REASONS.map(c => opt(c, f.reason, t('rr_' + c))).join('')}</select>`, 1)}
         ${fld(t('newFast'), inp('newFast', f.newFast))}${fld(t('newSlow'), inp('newSlow', f.newSlow))}
         ${fld(t('diaFast'), inp('diaFast', f.diaFast, 'inputmode="decimal"'))}${fld(t('diaSlow'), inp('diaSlow', f.diaSlow, 'inputmode="decimal"'))}</div>
         <label class="mt-chk"><input type="checkbox" data-mf="refluted" ${f.refluted ? 'checked' : ''}> ${esc(t('refluted'))}</label>
-        ${fld(t('note'), area('note', f.note))}${fld(t('doneBy'), inp('doneBy', f.doneBy), 1)}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saverchg')}</div>`;
+        ${fld(t('note'), area('note', f.note))}${nameF('doneBy', f.doneBy, 'doneBy')}${byF(f)}${saveBtns('saverchg')}</div>`;
     return '';
   }
   function vRolls() {
@@ -522,7 +526,7 @@ window.MaintUI = function (C) {
     const D = C.rollDefaults ? C.rollDefaults() : {}, lim = rollCtx().limits, f = st.form && st.form.kind === 'rollConfig' ? st.form : null;
     const groups = Object.keys(D);
     const P = (C.passages() || []).filter(p => p.lineId === (st.rollLine || 'C'));
-    const pinBox = () => `<div class="grid2">${fld(t('changeReason'), inp('reason', f.reason), 1)}${fld(t('pin'), `<input type="password" inputmode="numeric" data-mf="pin" value="${esc(f.pin)}">`, 1)}</div>${fld(t('by'), inp('by', f.by), 1)}`;
+    const pinBox = () => `<div class="grid2">${fld(t('changeReason'), inp('reason', f.reason), 1)}${fld(t('pin'), `<input type="password" maxlength="4" data-mf="pin" value="${esc(f.pin)}">`, 1)}</div>${C.who ? '' : fld(t('by'), inp('by', f.by), 1)}`;
     const hoursRows = groups.map(g => `<tr><td>${esc(g === 'R' ? t('allR') : g)}</td><td class="mt-n">${esc(nf(lim[g]))} h</td><td class="mt-sub">${lim[g] !== D[g] ? esc(nf(D[g])) + ' h' : ''}</td></tr>`).join('');
     const hoursForm = f && f.scope === 'hours' ? `<div class="mt-box"><div class="grid2">${fld(t('group'), `<select data-mf="group">${groups.map(g => opt(g, f.group, g === 'R' ? t('allR') : g)).join('')}</select>`, 1)}
         ${fld(t('hours'), inp('hours', f.hours, 'inputmode="numeric"'), 1)}</div>${pinBox()}${saveBtns('saverset')}</div>` : '';
@@ -562,7 +566,7 @@ window.MaintUI = function (C) {
     return `<section class="card">${f ? `<div class="mt-box"><div class="grid2">
         ${fld(t('topic'), `<select data-mf="topic"><option value="">—</option>${M.NOTE_TOPICS.map(x => opt(x, f.topic, t('n_' + x))).join('')}</select>`, 1)}
         ${fld(t('line'), lineSel(f.lineId))}</div>${fld(t('equipment'), inp('equipment', f.equipment))}${fld(t('text'), area('text', f.text), 1)}
-        ${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savenote')}</div>` : newBtn('note', t('newNote'))}</section>
+        ${byF(f)}${saveBtns('savenote')}</div>` : newBtn('note', t('newNote'))}</section>
       <section class="card"><h3>${esc(t('dayNotes'))} ${esc(ddmm(sh().day))}</h3>${day.notes.map(item).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
   }
   async function saveNote() {
@@ -580,7 +584,7 @@ window.MaintUI = function (C) {
       + (ci ? `<p class="mt-sub">${esc([ci.dims, ci.descr].filter(Boolean).join(' · '))}</p>` : fld(t('item'), inp('item', f.item, 'list="mtItems"'), 1)) : fld(t('item'), inp('item', f.item, 'list="mtItems"'), 1);
     return `<section class="card">${f ? `<div class="mt-box">${itemFld}<div class="grid2">
         ${fld(t('qty'), inp('qty', f.qty, 'inputmode="decimal"'), 1)}${fld(t('unit'), `<select data-mf="unit">${M.UNITS.map(u => opt(u, f.unit, t('u_' + u))).join('')}</select>`, 1)}
-        ${fld(t('line'), lineSel(f.lineId))}</div>${itemList()}${fld(t('purpose'), inp('purpose', f.purpose))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('savecons')}</div>`
+        ${fld(t('line'), lineSel(f.lineId))}</div>${itemList()}${fld(t('purpose'), inp('purpose', f.purpose))}${byF(f)}${saveBtns('savecons')}</div>`
         : newBtn('consumable', t('newCons'))}</section>
       <section class="card"><h3>${esc(t('totShift'))}</h3>${tot(sm.consumableTotals)}<h3>${esc(t('totDay'))} ${esc(ddmm(sh().day))}</h3>${tot(day.consumableTotals)}</section>
       <section class="card"><h3>${esc(t('t_cons'))}</h3>${sm.consumables.map(r => `<div class="mt-item"><div><b>${esc(r.item)}</b>${r.dims ? ' (' + esc(r.dims) + ')' : ''} · ${esc(nf(r.qty))} ${esc(t('u_' + r.unit))}${r.lineId ? ' · ' + esc(lineName(r.lineId)) : ''}${r.purpose ? ' · ' + esc(r.purpose) : ''}</div>
@@ -598,7 +602,7 @@ window.MaintUI = function (C) {
     const CAT = M.consCatalog(st.entries), f = st.form && st.form.kind === 'consItem' ? st.form : null;
     return `<section class="card">${f ? `<div class="mt-box"><div class="grid2">${fld(t('item'), inp('name', f.name), 1)}${fld(t('dims'), inp('dims', f.dims))}
         ${fld(t('unit'), `<select data-mf="unit">${M.UNITS.map(u => opt(u, f.unit, t('u_' + u))).join('')}</select>`, 1)}</div>
-        ${fld(t('descr'), area('descr', f.descr))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saveitem')}</div>` : newBtn('consItem', t('newItem'))}</section>
+        ${fld(t('descr'), area('descr', f.descr))}${byF(f)}${saveBtns('saveitem')}</div>` : newBtn('consItem', t('newItem'))}</section>
       <section class="card"><h3>${esc(t('t_catalog'))}</h3>${CAT.length ? `<table class="mt-t"><tr><td><b>${esc(t('item'))}</b></td><td><b>${esc(t('dims'))}</b></td><td><b>${esc(t('unit'))}</b></td><td></td></tr>${CAT.map(x => `<tr><td>${esc(x.name)}${x.descr ? `<br><small class="mt-sub">${esc(x.descr)}</small>` : ''}</td><td>${esc(x.dims || '—')}</td><td>${esc(t('u_' + x.unit))}</td>
         <td><button type="button" class="btn small" data-mact="itemedit" data-uid="${esc(x.itemId)}">${esc(t('editItem'))}</button> <button type="button" class="btn small" data-mact="itemrm" data-uid="${esc(x.itemId)}">${esc(t('removeItem'))}</button></td></tr>`).join('')}</table>` : `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
   }
@@ -688,12 +692,19 @@ window.MaintUI = function (C) {
     if (a === 'voidask') { st.act = { uid, reason: '', by: C.operator() || '' }; keep(); return; }
     if (a === 'voidsave') {
       const x = st.act;
+      if (x && C.who) { const w = await C.who(x.pin); if (w.err) return C.toast(w.err); x.by = w.title; }
       if (!x || !String(x.reason).trim() || !String(x.by).trim()) return C.toast(t('fill') + ': ' + t('voidReason') + ', ' + t('name'));
       const target = st.entries.find(r => r.uid === x.uid);
       const s0 = st.sh;
       if (target && target.prodDay) st.sh = { day: target.prodDay, period: target.period || 'D' };   // anulação vai para o dia do registo anulado
       await save({ kind: 'void', voids: x.uid, voidsKind: target ? target.kind : null, reason: String(x.reason).trim(), by: String(x.by).trim() }, t('voided'));
       st.sh = s0; C.render(); return;
+    }
+    if (SAVE[a] && st.form && C.who) {   // PIN → título da função (e quem fez / responsável)
+      const w = await C.who(st.form.whopin || st.form.pin); if (w.err) return C.toast(w.err);
+      st.form.by = w.title; st.form.byRole = w.role;
+      if ('doneBy' in st.form && !String(st.form.doneBy || '').trim()) st.form.doneBy = w.title;
+      if ('responsible' in st.form && !String(st.form.responsible || '').trim()) st.form.responsible = w.title;
     }
     if (SAVE[a] && st.form) { el.disabled = true; try { await SAVE[a](); } finally { el.disabled = false; } }
   });
@@ -706,6 +717,7 @@ window.MaintUI = function (C) {
   function onField(el, isChange) {
     if (el.dataset.mf === 'vreason' && st.act) { st.act.reason = el.value; return; }
     if (el.dataset.mf === 'vby' && st.act) { st.act.by = el.value; return; }
+    if (el.dataset.mf === 'vpin' && st.act) { st.act.pin = el.value; return; }
     if (el.dataset.mf && st.form) {
       const k = el.dataset.mf;
       st.form[k] = el.type === 'checkbox' ? el.checked : el.value;

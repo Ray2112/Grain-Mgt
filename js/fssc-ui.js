@@ -4,6 +4,7 @@
  *   C.area 'mill' (Prodn-Mgt) | 'grain' (Grain-Mgt) · C.operator() · C.pin(pin) -> Promise<{ok, msg}> (PIN de supervisor da app)
  *   C.complaints (reclamações de clientes) · C.products() nomes dos produtos (sugestões) · C.lots() lotes da app (sugestões)
  *   C.customers [{id, label}] clientes internos (Grain-Mgt: FMO, FRA); sem lista = cliente escrito à mão (externo)
+ *   C.who(pin) (opcional; Moagem de Milho 2.17.0): sem nomes — só o PIN; grava o título da função. C.roleTitles(): responsáveis possíveis
  * Eventos próprios (data-fact, data-ff); não usa os atributos das apps. */
 window.FsscUI = function (C) {
   'use strict';
@@ -76,6 +77,9 @@ window.FsscUI = function (C) {
   const opt = (v, cur, label) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`;
   const fld = (label, inner, req) => `<label class="fs-f${req ? ' fs-req' : ''}">${esc(label)}${inner}</label>`;
   const inp = (k, v, extra) => `<input data-ff="${k}" value="${esc(v)}" ${extra || ''}>`;
+  // v2.17.0 / v0.20.0: com C.who pede-se só o PIN (nome = título da função); responsável escolhido da lista de funções
+  const byF = (f, lab) => C.who ? fld(t('pin'), `<input type="password" maxlength="4" autocomplete="off" data-ff="whopin" value="">`, 1) : fld(t(lab || 'by'), inp('by', f.by), 1);
+  const ownerF = f => C.roleTitles ? fld(t('owner'), `<select data-ff="owner"><option value="">—</option>${C.roleTitles().map(x => `<option ${x === f.owner ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`, 1) : ownerF(f);
   const area = (k, v) => `<textarea rows="2" data-ff="${k}">${esc(v)}</textarea>`;
   const reqs = () => F.applicable(Q.REQS, C.area);
   const month = () => st.month || (st.month = F.monthOf(today()));
@@ -118,7 +122,7 @@ window.FsscUI = function (C) {
     const cov = F.docCoverage(Q.REQS, C.area, st.entries, today());
     const f = st.form;
     const closeBox = f && (f.kind === 'close' || f.kind === 'reopen') ? `<div class="fs-box">${f.kind === 'reopen' ? fld(t('reason'), area('reason', f.reason), 1) : ''}
-        ${fld(t('name'), inp('by', f.by), 1)}${fld(t('pin'), `<input type="password" inputmode="numeric" data-ff="pin" value="">`, 1)}
+        ${C.who ? '' : byF(f, 'name')}${fld(t('pin'), `<input type="password" maxlength="4" data-ff="pin" value="">`, 1)}
         <div class="row"><button type="button" class="btn primary" data-fact="${f.kind === 'close' ? 'closesave' : 'reopensave'}">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : '';
     const last = MS.history[MS.history.length - 1];
     let h = `<section class="card"><div class="row">${fld(t('month'), `<input type="month" id="fsMonth" value="${esc(m)}">`)}</div>
@@ -146,8 +150,8 @@ window.FsscUI = function (C) {
     if (f) {
       const nc = f.grade === 'MI' || f.grade === 'MA' || f.grade === 'CR';
       form = `<div class="fs-box"><b>${esc(t('g_' + f.grade))}</b>${fld(t('evidence'), area('evidence', f.evidence), f.grade !== 'C')}
-        ${nc ? `${fld(t('action'), area('action', f.action), 1)}<div class="grid2">${fld(t('owner'), inp('owner', f.owner), 1)}${fld(t('due'), inp('due', f.due, 'type="date"'), 1)}</div>` : ''}
-        ${fld(t('by'), inp('by', f.by), 1)}<div class="row"><button type="button" class="btn primary" data-fact="gradesave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`;
+        ${nc ? `${fld(t('action'), area('action', f.action), 1)}<div class="grid2">${ownerF(f)}${fld(t('due'), inp('due', f.due, 'type="date"'), 1)}</div>` : ''}
+        ${byF(f, 'by')}<div class="row"><button type="button" class="btn primary" data-fact="gradesave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`;
     }
     return `<div class="fs-item"><div><b>${esc(r.ref)}</b> ${esc(reqTitle(r))} ${chip}${r.doc ? ` <small class="fs-sub">· ${esc(t('reqDoc'))}</small>` : ''}${r.na ? ` <small class="fs-sub">· ${esc(t('naHint'))}: ${esc(r.na)}</small>` : ''}</div>
       ${g && g.evidence ? `<div class="fs-sub">${esc(g.evidence)}</div>` : ''}${g && g.action ? `<div class="fs-sub">→ ${esc(g.action)} · ${esc(g.owner || '')} · ${esc(ddmm(g.due))}</div>` : ''}
@@ -180,11 +184,11 @@ window.FsscUI = function (C) {
     const docReqs = reqs().filter(r => r.doc);
     const form = f ? `<div class="fs-box"><div class="grid2">${fld(t('code'), inp('code', f.code), 1)}${fld(t('version'), inp('version', f.version))}</div>
         ${fld(t('docTitle'), inp('title', f.title), 1)}
-        <div class="grid2">${fld(t('status'), `<select data-ff="status">${F.DOC_STATUS.map(s => opt(s, f.status, t('s_' + s))).join('')}</select>`, 1)}${fld(t('owner'), inp('owner', f.owner), 1)}
+        <div class="grid2">${fld(t('status'), `<select data-ff="status">${F.DOC_STATUS.map(s => opt(s, f.status, t('s_' + s))).join('')}</select>`, 1)}${ownerF(f)}
         ${fld(t('approvedOn'), inp('approvedOn', f.approvedOn, 'type="date"'))}${fld(t('reviewMonths'), inp('reviewMonths', f.reviewMonths, 'inputmode="numeric"'))}</div>
         ${fld(t('location'), inp('location', f.location))}
         <details open><summary class="fs-sub">${esc(t('reqIds'))} (${f.reqIds.length})</summary><div class="fs-reqs">${docReqs.map(r => `<label class="fs-chk"><input type="checkbox" data-freq="${esc(r.id)}" ${f.reqIds.indexOf(r.id) >= 0 ? 'checked' : ''}> <b>${esc(r.ref)}</b> ${esc(reqTitle(r))}</label>`).join('')}</div></details>
-        ${fld(t('by'), inp('by', f.by), 1)}<div class="row"><button type="button" class="btn primary" data-fact="docsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
+        ${byF(f, 'by')}<div class="row"><button type="button" class="btn primary" data-fact="docsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
       : `<button type="button" class="btn primary" data-fact="newdoc">＋ ${esc(t('newDoc'))}</button>`;
     return `<section class="card">${form}</section>
       <section class="card"><h3>${esc(t('t_docs'))} (${D.length})</h3>${D.map(d => `<div class="fs-item"><div><b>${esc(d.code)}</b> ${esc(d.doc.title)} <span class="fs-c ${DOC_CLS[d.state]}">${esc(t('d_' + d.state))}</span></div>
@@ -207,7 +211,7 @@ window.FsscUI = function (C) {
     const item = a => { const g = a.grade, r = Q.REQS.find(x => x.id === g.reqId) || { ref: g.reqId, pt: '', en: '' };
       return `<div class="fs-item ${a.overdue ? 'fs-late' : ''}"><div><span class="fs-c ${GRADE_CLS[g.grade]}">${esc(t('g_' + g.grade))}</span> <b>${esc(r.ref)}</b> ${esc(reqTitle(r))} · ${esc(g.month)}</div>
         <div>→ ${esc(g.action)}</div><div class="fs-sub">${esc(t('owner'))}: ${esc(g.owner)} · ${esc(t('due'))} ${esc(ddmm(g.due))}${a.overdue ? ' · <b>' + esc(t('overdue')) + ' ' + esc(t('daysLate', { n: a.daysLate })) + '</b>' : ''}${a.done ? ' · ✔ ' + esc(ddmm(a.done.date)) + ' ' + esc(a.done.by) + (a.done.note ? ': ' + esc(a.done.note) : '') : ''}</div>
-        ${a.done ? '' : (f && f.gradeUid === g.uid ? `<div class="fs-box">${fld(t('note'), area('note', f.note), 1)}${fld(t('name'), inp('by', f.by), 1)}<div class="row"><button type="button" class="btn primary" data-fact="donesave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
+        ${a.done ? '' : (f && f.gradeUid === g.uid ? `<div class="fs-box">${fld(t('note'), area('note', f.note), 1)}${byF(f, 'name')}<div class="row"><button type="button" class="btn primary" data-fact="donesave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
           : (st.form ? '' : `<button type="button" class="btn small" data-fact="done" data-v="${esc(g.uid)}">${esc(t('complete'))}</button>`))}</div>`; };
     const open = A.filter(a => !a.done), done = A.filter(a => a.done);
     return `<section class="card"><h3>${esc(t('openActions'))} (${open.length})</h3>${open.map(item).join('') || `<p class="fs-sub">${esc(t('none'))}</p>`}</section>
@@ -226,7 +230,7 @@ window.FsscUI = function (C) {
         ${fld(t('reason'), `<select data-ff="reason"><option value="">—</option>${F.COMPLAINT_REASONS.map(r => opt(r, nf_.reason, t('cr_' + r))).join('')}</select>`, 1)}${fld(t('ref'), inp('ref', nf_.ref))}</div>
         ${fld(t('description'), area('description', nf_.description), 1)}
         <label class="fs-chk"><input type="checkbox" data-ff="foodSafety" ${nf_.foodSafety ? 'checked' : ''}> ${esc(t('foodSafety'))}</label>
-        <div class="grid2">${fld(t('owner'), inp('owner', nf_.owner), 1)}${fld(t('due'), inp('due', nf_.due, 'type="date"'), 1)}</div>${fld(t('by'), inp('by', nf_.by), 1)}
+        <div class="grid2">${ownerF(nf_)}${fld(t('due'), inp('due', nf_.due, 'type="date"'), 1)}</div>${byF(nf_)}
         <datalist id="fsLots">${lots.map(x => `<option value="${esc(x)}">`).join('')}</datalist><datalist id="fsProds">${prods.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
         <div class="row"><button type="button" class="btn primary" data-fact="ccsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
       : `<button type="button" class="btn primary" data-fact="ccnew">＋ ${esc(t('newComplaint'))}</button>`;
@@ -242,8 +246,8 @@ window.FsscUI = function (C) {
           <div><b>${esc(t('prevention'))}</b><span>${esc(x.prevention || '—')}</span></div>${x.open ? '' : `<div><b>${esc(t('verification'))}</b><span>${esc(x.verification)} · ${esc(t('closedOn'))} ${esc(ddmm(x.closedOn))} · ${esc(x.closedBy)}</span></div>`}</div>
         ${up ? `<div class="fs-box">${fld(t('remedy'), area('remedy', f.remedy))}${fld(t('further'), area('further', f.further))}${fld(t('prevention'), area('prevention', f.prevention))}
             <label class="fs-chk"><input type="checkbox" data-ff="close" ${f.close ? 'checked' : ''}> ${esc(t('closeIt'))}</label>${f.close ? fld(t('verification'), area('verification', f.verification), 1) : ''}
-            ${fld(t('by'), inp('by', f.by), 1)}<div class="row"><button type="button" class="btn primary" data-fact="ccupsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : ''}
-        ${vd ? `<div class="fs-box">${fld(t('voidReason'), area('reason', f.reason), 1)}${fld(t('name'), inp('by', f.by), 1)}<div class="row"><button type="button" class="btn primary" data-fact="ccvoidsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : ''}
+            ${byF(f, 'by')}<div class="row"><button type="button" class="btn primary" data-fact="ccupsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : ''}
+        ${vd ? `<div class="fs-box">${fld(t('voidReason'), area('reason', f.reason), 1)}${byF(f, 'name')}<div class="row"><button type="button" class="btn primary" data-fact="ccvoidsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : ''}
         ${st.form ? '' : `<div class="row">${x.open ? `<button type="button" class="btn small primary" data-fact="ccup" data-v="${esc(x.uid)}">${esc(t('followUp'))}</button>` : ''}<button type="button" class="btn small" data-fact="ccvoid" data-v="${esc(x.uid)}">${esc(t('voidIt'))}</button></div>`}</div>`;
     };
     return `<section class="card">${form}</section>
@@ -288,13 +292,13 @@ window.FsscUI = function (C) {
     const L = F.trainings(st.entries, today()), f = st.form, mo = today().slice(0, 7), M = F.trainingMonth(L, mo);
     const newForm = f && f.kind === 'training' ? `<div class="fs-box"><div class="grid2">${fld(t('trDate'), inp('date', f.date, 'type="date"'), 1)}${fld(t('trTime'), inp('time', f.time, 'type="time"'))}</div>
         ${fld(t('trTopic'), inp('topic', f.topic), 1)}${fld(t('trTrainer'), inp('trainer', f.trainer))}${fld(t('trAudience'), inp('audience', f.audience))}
-        ${fld(t('trExpected'), inp('expected', f.expected, 'inputmode="numeric"'))}${fld(t('trNotes'), area('notes', f.notes))}${fld(t('name'), inp('by', f.by), 1)}
+        ${fld(t('trExpected'), inp('expected', f.expected, 'inputmode="numeric"'))}${fld(t('trNotes'), area('notes', f.notes))}${byF(f, 'name')}
         <div class="row"><button type="button" class="btn primary" data-fact="trsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
       : (st.form ? '' : `<button type="button" class="btn primary" data-fact="trnew">＋ ${esc(t('trNew'))}</button>`);
     const head = x => `<b>${esc(ddmm(x.training.date))}${x.training.time ? ' ' + esc(x.training.time) : ''} · ${esc(x.training.topic)}</b>
       <div class="fs-sub">${[x.training.trainer, x.training.audience].filter(Boolean).map(esc).join(' · ')}${x.training.expected ? ' · ' + esc(t('trExpected')) + ' ' + esc(x.training.expected) : ''}</div>${x.training.notes ? `<div class="fs-sub">${esc(x.training.notes)}</div>` : ''}`;
     const attForm = x => f && f.kind === 'trainingAtt' && f.trainingUid === x.training.uid ? `<div class="fs-box">${fld(t('trHeldOn'), inp('heldOn', f.heldOn, 'type="date"'), 1)}
-        ${fld(t('trAttendees'), `<textarea rows="4" data-ff="attendees">${esc(f.attendees)}</textarea>`, 1)}${fld(t('trNotes'), area('notes', f.notes))}${fld(t('name'), inp('by', f.by), 1)}
+        ${fld(t('trAttendees'), `<textarea rows="4" data-ff="attendees">${esc(f.attendees)}</textarea>`, 1)}${fld(t('trNotes'), area('notes', f.notes))}${byF(f, 'name')}
         <div class="row"><button type="button" class="btn primary" data-fact="trattsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
       : (st.form ? '' : `<button type="button" class="btn small" data-fact="tratt" data-v="${esc(x.training.uid)}">${esc(t('trAtt'))}</button>`);
     const sec = (ttl, xs, body) => xs.length ? `<section class="card"><h3>${esc(ttl)}</h3>${xs.map(x => `<div class="fs-item">${head(x)}${body(x)}</div>`).join('')}</section>` : '';
@@ -320,6 +324,9 @@ window.FsscUI = function (C) {
   document.addEventListener('click', async e => {
     const el = e.target.closest('[data-fact]'); if (!el) return;
     const a = el.dataset.fact, v = el.dataset.v;
+    if (C.who && st.form && /save$/.test(a)) {   // v2.17.0: PIN → título da função
+      const w = await C.who(st.form.whopin !== undefined ? st.form.whopin : st.form.pin); if (w.err) return C.toast(w.err); st.form.by = w.title;
+    }
     if (a === 'tab') { st.tab = v; st.form = null; keep(); return; }
     if (a === 'cancel') { st.form = null; keep(); return; }
     if (a === 'trnew') { st.form = { kind: 'training', date: today(), time: '', topic: '', trainer: '', audience: '', expected: '', notes: '', by: op() }; keep(); return; }
@@ -374,5 +381,5 @@ window.FsscUI = function (C) {
       '.fs-cc{display:grid;gap:4px;margin:6px 0}.fs-cc div{background:#f6f7f4;border-radius:8px;padding:6px 8px;font-size:13px}.fs-cc b{display:block;font-size:12px;color:#5b6a60}';
     document.head.appendChild(s);
   }
-  return { view, reload, warnings, warnText, t };
+  return { view, reload, warnings, warnText, t, entries: () => st.entries };
 };
