@@ -17,6 +17,7 @@
       BA01: 'BA01 Recepção 1', BA02: 'BA02 Recepção 2', BA03: 'BA03 Alimentação moagem', BA04: 'BA04 Alimentação moagem',
       comments: 'Comentários', saveLogin: 'Gravar login', logout: 'Logout de turno', acts: 'Actividades feitas', saveLogout: 'Gravar logout', name: 'Nome',
       report: 'Relatório do turno (Excel)', start: 'Início', end: 'Fim', qty: 'Quantidade (kg)', checks: 'Balanças e registos (aviso)',
+      totTitle: 'Totais do turno', totRec: 'Recebido (camiões)', totTr: 'Transferido entre silos', totOut: 'Descarregado', totTo: 'para {p}',
       chkRec: 'BA01 + BA02 contra as recepções registadas', chkFeed: 'BA03 + BA04 contra as descargas para a linha', diff: 'diferença',
       targets: 'Objectivos', tFeed: 'Enviado para a moagem contra o plano do dia', tTrucks: 'Camiões recebidos contra os esperados',
       planNone: 'sem plano do OEE para o dia', planOff: 'plano não lido (ligue a leitura do Dropbox em Definições)',
@@ -41,6 +42,7 @@
       BA01: 'BA01 Reception 1', BA02: 'BA02 Reception 2', BA03: 'BA03 Feed to mill', BA04: 'BA04 Feed to mill',
       comments: 'Comments', saveLogin: 'Save login', logout: 'Shift logout', acts: 'Activities done', saveLogout: 'Save logout', name: 'Name',
       report: 'Shift report (Excel)', start: 'Start', end: 'End', qty: 'Quantity (kg)', checks: 'Scales and records (warning)',
+      totTitle: 'Shift totals', totRec: 'Received (trucks)', totTr: 'Transferred between silos', totOut: 'Discharged', totTo: 'to {p}',
       chkRec: 'BA01 + BA02 against the recorded intakes', chkFeed: 'BA03 + BA04 against the discharges to the line', diff: 'difference',
       targets: 'Targets', tFeed: 'Sent to the mill against the day plan', tTrucks: 'Trucks received against expected',
       planNone: 'no OEE plan for the day', planOff: 'plan not read (connect Dropbox reading in Settings)',
@@ -147,7 +149,6 @@
           '<p class="small muted">' + esc(t('jobsEdit')) + '</p>' +
           '<label>' + esc(t('trucks')) + '<input inputmode="numeric" id="sh_trucks"></label>' +
           '<div class="lbl strong">' + esc(t('state')) + '</div><div class="grid2">' + onOff('rec1', 'on') + onOff('rec2', 'on') + onOff('feed', 'on') + '</div>' +
-          '<div class="lbl strong">' + esc(t('scalesStart')) + '</div>' + scaleInputs('sh_s_') +
           '<label>' + esc(t('comments')) + '<textarea id="sh_comments" rows="2"></textarea></label>' +
           '<button type="button" class="btn primary block" data-sact="login">' + esc(t('saveLogin')) + '</button></div>';
         return h;
@@ -163,27 +164,28 @@
         if (r.transfers.length) pre.push(t('transfers') + ': ' + r.transfers.length);
         if (r.empties.length) pre.push(t('empties') + ': ' + r.empties.map(e => e.silo).join(', '));
         const stops = st.recs.filter(x => x.kind === 'stop' && x.shift === sid(s)); if (stops.length) pre.push(t('stops') + ': ' + stops.map(x => (x.code || '') + ' ' + (x.durationMin || '') + ' min').join(', '));
-        h += '<div class="card stack"><h2>' + esc(t('logout')) + '</h2><div class="grid2">' + onOff('rec1', li.state.rec1) + onOff('rec2', li.state.rec2) + onOff('feed', li.state.feed) + '</div>' +
+        h += totalsCard(r) + '<div class="card stack"><h2>' + esc(t('logout')) + '</h2><div class="grid2">' + onOff('rec1', li.state.rec1) + onOff('rec2', li.state.rec2) + onOff('feed', li.state.feed) + '</div>' +
           '<label>' + esc(t('acts')) + ' *<textarea id="sh_acts" rows="4">' + esc(pre.join('\n')) + '</textarea></label>' +
-          '<div class="lbl strong">' + esc(t('scalesEnd')) + '</div>' + scaleInputs('sh_e_') +
           '<label>' + esc(t('comments')) + '<textarea id="sh_comments" rows="2"></textarea></label>' +
           '<div class="grid2"><label>' + esc(t('leader')) + ' *' + leaderField('sh_by', li.leader) + '</label>' + pinField('sh_pin') + '</div>' +
           '<button type="button" class="btn primary block" data-sact="logout">' + esc(t('saveLogout')) + '</button></div>';
         return h;
       }
-      const sc = v => R().fmtScale(v) || '—';
-      const row = k => '<tr><td>' + esc(t(k)) + '</td><td>' + sc(li.scalesStart[k]) + '</td><td>' + sc(lo.scalesEnd[k]) + '</td><td' + ((lo.negative || []).indexOf(k) >= 0 ? ' class="warn"' : '') + '>' + sc(lo.scaleKg[k]) + '</td></tr>';
-      const ck = c => c.scaleKg === null ? '—' : fmtKg(c.scaleKg) + ' / ' + fmtKg(c.recordsKg) + ' kg · ' + esc(t('diff')) + ' ' + (c.diffKg > 0 ? '+' : '') + fmtKg(c.diffKg);
       const tg = lo.targets;
-      h += '<div class="card stack"><h2>' + esc(t('logout')) + ' · ' + esc(lo.date + ' ' + lo.time) + '</h2>' +
-        '<table class="tbl"><tr><th></th><th>' + esc(t('start')) + '</th><th>' + esc(t('end')) + '</th><th>' + esc(t('qty')) + '</th></tr>' + R().SCALES.map(row).join('') + '</table>' +
-        '<div class="lbl strong">' + esc(t('checks')) + '</div><p class="small' + (lo.checks.reception.diffKg ? ' warn' : '') + '">' + esc(t('chkRec')) + ': ' + ck(lo.checks.reception) + '</p>' +
-        '<p class="small' + (lo.checks.feed.diffKg ? ' warn' : '') + '">' + esc(t('chkFeed')) + ': ' + ck(lo.checks.feed) + '</p>' +
+      h += totalsCard(r) + '<div class="card stack"><h2>' + esc(t('logout')) + ' · ' + esc(lo.date + ' ' + lo.time) + '</h2>' +
         '<div class="lbl strong">' + esc(t('targets')) + '</div><p class="small">' + esc(t('tFeed')) + ': ' + (tg.feed.planKg === null ? esc(tg.feed.note === 'off' ? t('planOff') : tg.feed.note === 'none' ? t('planNone') : tg.feed.note) : fmtKg(tg.feed.daySentKg) + ' / ' + fmtKg(tg.feed.planKg) + ' kg = ' + (tg.feed.pct === null ? '—' : String(tg.feed.pct).replace('.', ',') + ' %')) + '</p>' +
         '<p class="small">' + esc(t('tTrucks')) + ': ' + tg.trucks.received + ' / ' + (tg.trucks.expected === null ? '—' : tg.trucks.expected) + (tg.trucks.pct === null ? '' : ' = ' + String(tg.trucks.pct).replace('.', ',') + ' %') + '</p>' +
         '<p class="small"><b>' + esc(t('acts')) + ':</b><br>' + esc(lo.activities).replace(/\n/g, '<br>') + '</p>' + (lo.comments ? '<p class="small">' + esc(lo.comments) + '</p>' : '') +
         '<button type="button" class="btn block" data-sact="xlsx">' + esc(t('report')) + '</button></div>';
       return h;
+    }
+    // 0.19.0 (Zhax, 17-11-2026): sem leituras de balança; totais do turno pelos registos
+    function totalsCard(r) {
+      const row = (lab, n, kg) => '<tr><td>' + esc(lab) + '</td><td class="n">' + n + '</td><td class="n">' + fmtKg(kg) + '</td></tr>';
+      return '<div class="card stack"><h2>' + esc(t('totTitle')) + '</h2><table class="tbl"><tr><th></th><th>n</th><th>kg</th></tr>' +
+        row(t('totRec'), r.trucks, r.receivedKg) + row(t('totTr'), r.transfers.length, r.transferKg) + row(t('totOut'), r.outs.length, r.outKg) +
+        Object.keys(r.byPlace).sort().map(k => row('  ' + t('totTo', { p: k }), r.byPlace[k].n, r.byPlace[k].kg)).join('') +
+        '<tr><td>' + esc(t('empties')) + '</td><td class="n">' + r.empties.length + '</td><td>' + esc(r.empties.map(e => e.silo).join(', ')) + '</td></tr></table></div>';
     }
     function scalesOrToast(p) {
       const r = R().readScales(scaleVals(p));
@@ -196,7 +198,6 @@
       if (!leader.trim()) { C.toast(t('need') + ': ' + t('leader')); return; }
       const pinR = await leaderPinCheck(leader.trim(), ($('#sh_pin') || {}).value);
       if (pinR === 'bad') { C.toast(t('leaderPinBad')); return; }
-      const sc = scalesOrToast('sh_s_'); if (!sc) return;
       const tr = R().num($('#sh_trucks').value);
       if (tr !== null && (isNaN(tr) || tr < 0)) { C.toast(t('bad') + ': ' + t('trucks')); return; }
       const jobs = [...document.querySelectorAll('.sh_job')].filter(x => x.checked).map(x => (st.offer || [])[Number(x.dataset.i)]).filter(Boolean)
@@ -204,7 +205,7 @@
       const now = new Date(); st.picked = [];
       await add({ kind: 'shiftIn', shift: sid(s), prodDay: s.day, period: s.win, crew: C.L.crewOf(s.day, s.win === 'N' ? '20:00' : '08:00'), date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(),
         leader: leader.trim(), leaderPin: pinR === 'ok' ? 'ok' : 'notSet', jobs, trucksExpected: tr, planKg: R().planKg(st.plan, s.day),
-        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, scalesStart: sc, stockStart: stock(), comments: $('#sh_comments').value.trim(), by: leader.trim() });
+        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, stockStart: stock(), comments: $('#sh_comments').value.trim(), by: leader.trim() });
     }
     async function logout() {
       const s = sel(), li = rec('shiftIn', s); if (!li) return;
@@ -212,15 +213,14 @@
       if (!by || !acts) { C.toast(t('need') + ': ' + t('acts') + ', ' + t('leader')); return; }
       const pinR = await leaderPinCheck(by, ($('#sh_pin') || {}).value);
       if (pinR === 'bad') { C.toast(t('leaderPinBad')); return; }
-      const sc = scalesOrToast('sh_e_'); if (!sc) return;
-      const q = R().scaleKg(li.scalesStart, sc), r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
+      const r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
       // enviado no dia de produção até agora: turno de dia + (no turno da noite) este turno, pelos registos de descarga
       const daySent = s.win === 'N' ? Math.round((R().shiftRecords(s.day + '/D', C.S, C.L.shiftOf).sentKg + r.sentKg) * 1000) / 1000 : r.sentKg;
       const plan = R().planKg(st.plan, s.day) !== null ? R().planKg(st.plan, s.day) : li.planKg;
       const now = new Date();
       await add({ kind: 'shiftOut', shift: sid(s), prodDay: s.day, period: s.win, crew: li.crew, date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(), inUid: li.uid,
-        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, activities: acts, scalesEnd: sc, scaleKg: q.kg, negative: q.negative,
-        receivedKg: r.receivedKg, sentKg: r.sentKg, trucks: r.trucks, checks: R().scaleChecks(q.kg, r),
+        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, activities: acts,
+        receivedKg: r.receivedKg, sentKg: r.sentKg, trucks: r.trucks, transferKg: r.transferKg, outKg: r.outKg, byPlace: r.byPlace,
         targets: { feed: { planKg: plan, daySentKg: daySent, pct: R().pct(daySent, plan), note: plan === null ? (st.planErr === 'off' ? 'off' : 'none') : '' },   // código; o texto sai na língua de quem lê
           trucks: { expected: li.trucksExpected, received: r.trucks, pct: R().pct(r.trucks, li.trucksExpected) } },
         stockEnd: stock(), comments: $('#sh_comments').value.trim(), by, leaderPin: pinR === 'ok' ? 'ok' : 'notSet' });
@@ -231,9 +231,9 @@
       const wb = X.utils.book_new(), add = (n, rows) => X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows), n.slice(0, 31));
       add('Turno', [[(C.lang() === 'en' ? 'FMO - Grain Silos — ' : 'FMO - Silo Cereais — ') + t('title'), sid(s)], [], [t('leader'), li.leader], [t('crew'), li.crew], [t('jobs'), (li.jobs || []).map(jt).join(' | ')],
         [t('state') + ' (' + t('login') + ')', [t('rec1') + ' ' + t(li.state.rec1), t('rec2') + ' ' + t(li.state.rec2), t('feed') + ' ' + t(li.state.feed)].join(', ')], [t('comments'), li.comments], [],
-        ['', t('start'), t('end'), t('qty')], ...R().SCALES.map(k => [t(k), li.scalesStart[k], lo ? lo.scalesEnd[k] : '', lo ? lo.scaleKg[k] : '']), [],
-        [t('logout'), lo ? lo.date + ' ' + lo.time : t('notDone')], [t('chkRec'), lo ? lo.checks.reception.scaleKg : '', lo ? lo.checks.reception.recordsKg : '', lo ? lo.checks.reception.diffKg : ''],
-        [t('chkFeed'), lo ? lo.checks.feed.scaleKg : '', lo ? lo.checks.feed.recordsKg : '', lo ? lo.checks.feed.diffKg : ''],
+        ['', 'n', 'kg'], [t('totRec'), r.trucks, r.receivedKg], [t('totTr'), r.transfers.length, r.transferKg], [t('totOut'), r.outs.length, r.outKg],
+        ...Object.keys(r.byPlace).sort().map(k => [t('totTo', { p: k }), r.byPlace[k].n, r.byPlace[k].kg]), [],
+        [t('logout'), lo ? lo.date + ' ' + lo.time : t('notDone')], [],
         [t('tFeed'), lo ? lo.targets.feed.daySentKg : '', lo ? lo.targets.feed.planKg : '', lo ? lo.targets.feed.pct : ''], [t('tTrucks'), lo ? lo.targets.trucks.received : '', lo ? lo.targets.trucks.expected : '', lo ? lo.targets.trucks.pct : ''],
         [t('acts'), lo ? lo.activities : ''], [t('comments'), lo ? lo.comments : '']]);
       add(t('recKg'), [[t('xDate'), t('xTime'), t('xLot'), t('xGuia'), t('xSupplier'), t('xPlate'), t('xCereal'), t('xColour'), 'kg'], ...r.lots.map(l => [l.date, l.time, l.code || l.id, l.guia, l.supplier, l.plate, l.cereal, l.colour, l.kg])]);

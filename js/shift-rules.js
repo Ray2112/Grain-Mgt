@@ -56,8 +56,12 @@
     const ev = (d.events || []).filter(e => real(e) && inShift(e));
     const outs = ev.filter(e => e.type === 'OUT'), toBins = outs.filter(e => DIRTY_BINS.indexOf(e.bin) >= 0);
     const sum = (a, f) => r3(a.reduce((s, x) => s + (Number(f(x)) || 0), 0));
-    return { lots, outs, toBins, transfers: ev.filter(e => e.type === 'TRANSFER'), empties: ev.filter(e => e.type === 'EMPTY'),
-      receivedKg: sum(lots, l => l.kg), sentKg: sum(toBins, e => e.kg), trucks: lots.length };
+    const transfers = ev.filter(e => e.type === 'TRANSFER'), byPlace = {};
+    outs.forEach(e => { const k = e.place || '—'; byPlace[k] = byPlace[k] || { n: 0, kg: 0 }; byPlace[k].n++; byPlace[k].kg = r3(byPlace[k].kg + (Number(e.kg) || 0)); });
+    // 0.19.0 (Zhax, 17-11-2026): totais do turno pelos registos (as leituras das balanças foram retiradas)
+    return { lots, outs, toBins, transfers, empties: ev.filter(e => e.type === 'EMPTY'),
+      receivedKg: sum(lots, l => l.kg), sentKg: sum(toBins, e => e.kg), trucks: lots.length,
+      transferKg: sum(transfers, e => e.kg), outKg: sum(outs, e => e.kg), byPlace };
   }
   const fmtScale = v => isNum(v) ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
   const pct = (a, b) => isNum(a) && isNum(b) && b > 0 ? Math.round(a / b * 1000) / 10 : null;

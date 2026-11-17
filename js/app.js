@@ -3,7 +3,7 @@
    inspecções periódicas e autorização por PIN do supervisor. */
 (function () {
   'use strict';
-  const t = function (k) { return I18n.t(k); };
+  const t = function (k, v) { let s = I18n.t(k); if (v) Object.keys(v).forEach(function (x) { s = s.split('{' + x + '}').join(v[x]); }); return s; };   // 0.19.0: com valores {x}
   const tf = function (k, v) { let s = I18n.t(k); Object.keys(v || {}).forEach(function (x) { s = s.split('{' + x + '}').join(v[x]); }); return s; };   // 0.12.1
   const dxMsg = function (r) { return r.code ? tf('dx_' + r.code, { s: r.status }) : r.msg; };
   const L = window.Logic;
@@ -246,7 +246,10 @@
   // ---------------- recepção: lista / intake list ----------------
   function lotRow(l) {
     const dest = (l.dest && l.dest.length) ? ' · ' + l.dest.map(function (d) { return esc(d.silo); }).join('+') : (l.silo ? ' · ' + esc(l.silo) : '');
-    const act = l.status === 'HELD' ? '<button class="btn small" data-action="release" data-id="' + esc(l.id) + '">' + esc(t('decide_held')) + '</button>' : '';
+    let act = l.status === 'HELD' ? '<button class="btn small" data-action="release" data-id="' + esc(l.id) + '">' + esc(t('decide_held')) + '</button>' : '';
+    if (S.cycleLot === l.id) act += '<div class="grid2"><label>' + esc(t('pit_start')) + '<input type="time" id="cy_a" value="' + esc(l.pitStart || '') + '"></label><label>' + esc(t('silo_end')) + '<input type="time" id="cy_b" value="' + esc(l.siloEnd || '') + '"></label></div>' +
+      '<button class="btn small primary" data-action="cycle-save" data-id="' + esc(l.id) + '">' + esc(t('save')) + '</button> <button class="btn small" data-action="cycle-cancel">' + esc(t('cancel')) + '</button>';
+    else if (!l.cancelled) act += ' <button class="btn small" data-action="cycle" data-id="' + esc(l.id) + '">⏱ ' + esc(typeof l.cycleMin === 'number' ? t('cycle_n', { m: l.cycleMin }) : t('cycle_add')) + '</button>';
     return '<div class="card row"><div class="grow"><div class="mono">' + esc(l.code || l.id) + '</div><div class="muted small">' +
       esc(cerName(l.cereal)) + (l.colour ? ' ' + esc(l.colour) : '') + ' · ' + esc(l.supplier) + ' · ' + fmtKg(L.num(l.kg, 'kg')) + dest + '</div>' + act + '</div>' +
       '<div class="stack right">' + statusBadge(l.status) + gradeBadge(l.grade) + '</div></div>';
@@ -270,7 +273,8 @@
     }
     const todays = S.lots.filter(function (l) { return l.date === d; });
     const older = S.lots.filter(function (l) { return l.date !== d; }).slice(0, 30);
-    let h = '<h2>' + esc(t('lots_today')) + '</h2>' + (todays.length ? todays.map(lotRow).join('') : '<p class="muted">' + esc(t('no_lots')) + '</p>');
+    const cs = cycleStats(todays);
+    let h = '<h2>' + esc(t('lots_today')) + '</h2>' + (cs ? '<p class="small">⏱ ' + esc(t('cycle_stats', { n: cs.n, a: cs.avg, m: cs.max })) + '</p>' : '') + (todays.length ? todays.map(lotRow).join('') : '<p class="muted">' + esc(t('no_lots')) + '</p>');
     if (older.length) h += '<h2>' + esc(t('lots_older')) + '</h2>' + older.map(lotRow).join('') + '<p class="muted small">' + esc(t('use_search')) + '</p>';
     return h;
   }
@@ -279,7 +283,17 @@
   function newForm() {
     return { mode: 'new', date: L.today(), time: L.nowTime(), guia: '', supplier: '', origin: '', cereal: 'Milho', colour: '', plate: '', kg: '',
       hum: '', fat: '', fm: '', brk: '', dis: '', sw: '', ins: 'N', odor: 'Normal', afla: '', don: '', fum: '',
-      dest: [], responsible: S.settings.operator || '', notes: '', auth_by: '', auth_pin: '', auth_reason: '' };
+      dest: [], responsible: S.settings.operator || '', notes: '', auth_by: '', auth_pin: '', auth_reason: '', pitStart: '', siloEnd: '' };
+  }
+  // 0.19.0 (Zhax, 17-11-2026): tempo de ciclo fosso → silo de cada camião (lote): hora de início da descarga no fosso e hora em que o grão fica no silo
+  function cycleMin(a, b) {
+    if (!/^\d{2}:\d{2}$/.test(a || '') || !/^\d{2}:\d{2}$/.test(b || '')) return null;
+    const m = x => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5));
+    return (m(b) - m(a) + 1440) % 1440;
+  }
+  function cycleStats(lots) {
+    const v = lots.map(function (l) { return l.cycleMin; }).filter(function (x) { return typeof x === 'number' && x > 0; });
+    return v.length ? { n: v.length, avg: Math.round(v.reduce(function (s, x) { return s + x; }, 0) / v.length), max: Math.max.apply(null, v) } : null;
   }
   function releaseForm(lot) {
     return Object.assign(clone(lot), { mode: 'release', qcGrade: '', qcName: S.settings.operator || '', qcReason: '', dest: [], auth_by: '', auth_pin: '', auth_reason: '' });
@@ -318,6 +332,7 @@
       h += '<datalist id="suppliers">' + S.settings.suppliers.map(function (s) { return '<option value="' + esc(s) + '">'; }).join('') + '</datalist>';
       h += '<div class="grid2">' + field('guia', t('guia')) + field('plate', t('plate')) + '</div>';
       h += '<div class="grid2">' + field('origin', t('origin')) + field('kg', t('net_kg'), DEC, 'kg') + '</div>';
+      h += '<div class="grid2">' + field('pitStart', t('pit_start'), ' type="time"') + field('siloEnd', t('silo_end'), ' type="time"') + '</div>';
       h += siloPickHtml(f);
       h += '<h3>' + esc(t('quality')) + '</h3>';
       h += '<div class="grid2">' + field('hum', t('moisture'), DEC) + field('fat', t('fat'), DEC) + '</div>';
@@ -488,6 +503,7 @@
       id: newId(), uid: '', date: f.date, time: f.time, guia: f.guia, supplier: f.supplier.trim(), origin: f.origin, cereal: f.cereal, colour: f.cereal === 'Milho' ? f.colour : '',
       plate: f.plate, kg: kg, hum: L.num(f.hum), fat: L.num(f.fat), fm: L.num(f.fm), brk: L.num(f.brk), dis: L.num(f.dis), sw: L.num(f.sw),
       ins: f.ins, odor: f.odor, afla: L.num(f.afla), don: L.num(f.don), fum: L.num(f.fum),
+      pitStart: f.pitStart || '', siloEnd: f.siloEnd || '', cycleMin: cycleMin(f.pitStart, f.siloEnd),
       matrix: r.matrix, auto: r.code, reasons: r.reasons, holdReasons: r.hold, gradeNotes: r.notes, grade: d.grade, status: d.status,
       dest: [], auth: [], responsible: f.responsible.trim(), notes: f.notes, createdAt: now,
       history: [{ at: now, status: d.status, grade: d.grade, by: f.responsible.trim() }]
@@ -1188,11 +1204,11 @@
     const inRange = function (d) { return (!from || d >= from) && (!to || d <= to); };
     const pt = I18n.lang === 'pt';
     const yn = function (v) { return v === 'S' ? t('yes') : v === 'N' ? t('no') : ''; };
-    const H21 = [t('date'), t('time'), t('lot_code'), t('guia'), t('supplier'), t('origin'), t('cereal'), t('colour'), t('plate'), t('net_kg'),
+    const H21 = [t('date'), t('time'), t('lot_code'), t('guia'), t('supplier'), t('origin'), t('cereal'), t('colour'), t('plate'), t('net_kg'), t('pit_start'), t('silo_end'), t('cycle_add') + ' (min)',
       t('moisture'), t('fat'), t('foreign'), t('broken'), t('diseased'), t('sw'), t('odour'), t('infestation'), t('afla'), t('don'), t('fum'),
       t('x_matrix'), t('x_reasons'), t('x_status'), t('x_grade'), t('x_dest'), t('x_auth'), t('x_qc'), t('responsible'), t('notes')];
     const rows21 = S.lots.filter(function (l) { return inRange(l.date); }).sort(function (a, b) { return (a.code || a.id) < (b.code || b.id) ? -1 : 1; }).map(function (l) {
-      return [l.date, l.time, l.code || l.id, l.guia, l.supplier, l.origin, cerName(l.cereal), l.colour || '', l.plate, l.kg, l.hum, l.fat, l.fm, l.brk, l.dis, l.sw,
+      return [l.date, l.time, l.code || l.id, l.guia, l.supplier, l.origin, cerName(l.cereal), l.colour || '', l.plate, l.kg, l.pitStart || '', l.siloEnd || '', typeof l.cycleMin === 'number' ? l.cycleMin : '', l.hum, l.fat, l.fm, l.brk, l.dis, l.sw,
         l.odor === 'Anormal' ? t('abnormal') : t('normal'), yn(l.ins), l.afla, l.don, l.fum,
         l.matrix ? gradeName(l.matrix) : '', (l.reasons || []).map(function (x) { return x.k ? t(PLABEL[x.k]) + ' ' + x.v + ' → ' + gradeName(L.GRADES[x.level]) : t(x); }).concat((l.holdReasons || []).map(function (x) { return t('hold_' + x); })).join('; '),
         t('st_' + l.status), l.grade ? gradeName(l.grade) : '', (l.dest || []).map(function (d) { return d.silo + ': ' + d.kg; }).join('; ') || l.silo || '',
@@ -1461,6 +1477,17 @@
     const a = b.dataset.action;
     if (a === 'tab') { if (S.tab === 'settings' && b.dataset.tab !== 'settings') { S.unlocked = false; } S.tab = b.dataset.tab; S.sheet = null; render(); window.scrollTo(0, 0); }
     if (a === 'new-lot') { S.form = newForm(); render(); window.scrollTo(0, 0); }
+    if (a === 'cycle') { S.cycleLot = b.dataset.id; render(); return; }
+    if (a === 'cycle-cancel') { S.cycleLot = null; render(); return; }
+    if (a === 'cycle-save') {
+      const l = S.lots.find(function (x) { return x.id === b.dataset.id; }), pa = ($('#cy_a') || {}).value || '', pb = ($('#cy_b') || {}).value || '';
+      if (!l) return;
+      const m = cycleMin(pa, pb);
+      if (m === null) { toast(t('need_fields')); return; }
+      const upd = Object.assign({}, l, { pitStart: pa, siloEnd: pb, cycleMin: m, history: (l.history || []).concat([{ at: new Date().toISOString(), cycleMin: m, by: S.settings.operator || '' }]) });
+      DB.addMany([{ store: 'lots', obj: upd, put: true }]).then(load).then(function () { S.cycleLot = null; render(); toast(t('saved')); }).catch(function () { toast(t('save_failed')); });
+      return;
+    }
     if (a === 'release') { const l = S.lots.find(function (x) { return x.id === b.dataset.id; }); if (l) { S.form = releaseForm(l); render(); window.scrollTo(0, 0); } }
     if (a === 'cancel-lot') { S.form = null; render(); }
     if (a === 'seg') {

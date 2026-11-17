@@ -24,7 +24,8 @@ window.MaintUI = function (C) {
       save: 'Gravar', cancel: 'Cancelar', saved: 'Gravado.', saveFailed: 'Não foi possível gravar.', fill: 'Falta ou inválido', none: 'Sem registos.',
       void: 'Anular', voidReason: 'Motivo da anulação', voided: 'Anulado.', name: 'Nome', by: 'Registado por', loading: 'A carregar…',
       technicians: 'Técnicos de serviço', notes: 'Notas de passagem de turno', newShift: 'Registar turno de manutenção',
-      tasks: 'Tarefas do turno', taskPick: 'Tarefa', tk_breakdown: 'Atender avaria(s)', tk_preventive: 'Manutenção preventiva', breakdownDesc: 'Descrição da avaria',
+      tasks: 'Tarefas do turno', taskPick: 'Tarefa', tk_breakdown: 'Atender avaria(s)', tk_preventive: 'Manutenção preventiva', breakdownDesc: 'Descrição',
+      tk_inspection: 'Inspecção', tk_cleaning: 'Limpeza', tk_lubrication: 'Lubrificação', tk_other: 'Outra', pmTaskPick: 'Tarefa de preventiva', addPmJob: 'Juntar trabalho de preventiva', pmJobsPlanned: '{n} trabalho(s) de preventiva planeado(s) nesta semana.',
       addBreakdown: 'Mais uma avaria', addTask: 'Mais uma tarefa', toPm: 'Escolha as tarefas de preventiva.', t_catalog: 'Catálogo', newItem: 'Novo artigo',
       dims: 'Dimensões', descr: 'Descrição', editItem: 'Editar', removeItem: 'Retirar', removed: 'Retirado do catálogo.', catPick: 'Do catálogo', catFree: '— outro (escrever)',
       sumStops: 'Paragens', sumMin: 'min de paragem', sumWork: 'Intervenções', sumCons: 'Consumíveis',
@@ -74,7 +75,8 @@ window.MaintUI = function (C) {
       save: 'Save', cancel: 'Cancel', saved: 'Saved.', saveFailed: 'Could not save.', fill: 'Missing or invalid', none: 'No records.',
       void: 'Void', voidReason: 'Reason for voiding', voided: 'Voided.', name: 'Name', by: 'Recorded by', loading: 'Loading…',
       technicians: 'Technicians on duty', notes: 'Shift handover notes', newShift: 'Record maintenance shift',
-      tasks: 'Shift tasks', taskPick: 'Task', tk_breakdown: 'Attend breakdown(s)', tk_preventive: 'Preventive maintenance', breakdownDesc: 'Breakdown description',
+      tasks: 'Shift tasks', taskPick: 'Task', tk_breakdown: 'Attend breakdown(s)', tk_preventive: 'Preventive maintenance', breakdownDesc: 'Description',
+      tk_inspection: 'Inspection', tk_cleaning: 'Cleaning', tk_lubrication: 'Lubrication', tk_other: 'Other', pmTaskPick: 'Preventive task', addPmJob: 'Add preventive job', pmJobsPlanned: '{n} preventive job(s) planned this week.',
       addBreakdown: 'One more breakdown', addTask: 'One more task', toPm: 'Pick the preventive tasks.', t_catalog: 'Catalogue', newItem: 'New item',
       dims: 'Dimensions', descr: 'Description', editItem: 'Edit', removeItem: 'Remove', removed: 'Removed from the catalogue.', catPick: 'From the catalogue', catFree: '— other (type)',
       sumStops: 'Stoppages', sumMin: 'stop min', sumWork: 'Interventions', sumCons: 'Consumables',
@@ -231,12 +233,14 @@ window.MaintUI = function (C) {
       <p class="mt-sub">${M.CATEGORIES.map(c => esc(t('c_' + c)) + ' ' + sm.byCat[c] + ' min').join(' · ')}</p>
       ${f ? `<div class="mt-box"><div class="mt-req">${esc(t('tasks'))}</div>${f.tasks.map((x, i) => `<div class="mt-box">
           ${fld(t('taskPick'), `<select data-mtask="${i}|type"><option value="">—</option>${M.SHIFT_TASKS.map(k => opt(k, x.type, t('tk_' + k))).join('')}</select>`, 1)}
-          ${x.type === 'breakdown' ? fld(t('breakdownDesc'), `<textarea rows="2" data-mtask="${i}|description">${esc(x.description || '')}</textarea>`, 1) : ''}
+          ${x.type === 'preventive' && pmCat().length ? fld(t('pmTaskPick'), `<select data-mtask="${i}|taskId"><option value="">—</option>${pmCat().map(c => opt(c.id, x.taskId, c.task.code + ' · ' + pmName(c.task.asset) + ' — ' + pmName(c.task.task) + (c.overdue ? ' ⏰' : ''))).join('')}</select>`, 1) : ''}
+          ${x.type && x.type !== 'preventive' ? fld(t('breakdownDesc'), `<textarea rows="2" data-mtask="${i}|description">${esc(x.description || '')}</textarea>`, M.TASK_NEEDS_DESC.indexOf(x.type) >= 0) : ''}
           ${f.tasks.length > 1 ? `<button type="button" class="btn small" data-mact="taskrm" data-v="${i}">✕</button>` : ''}</div>`).join('')}
         <div class="row"><button type="button" class="btn small" data-mact="taskadd" data-v="breakdown">＋ ${esc(t('addBreakdown'))}</button>
+          <button type="button" class="btn small" data-mact="taskadd" data-v="preventive">＋ ${esc(t('addPmJob'))}</button>
           <button type="button" class="btn small" data-mact="taskadd" data-v="">＋ ${esc(t('addTask'))}</button></div>
         ${fld(t('notes'), area('notes', f.notes))}${fld(t('by'), inp('by', f.by), 1)}${saveBtns('saveshift')}</div>` : newBtn('shift', t('newShift'))}</section>
-      <section class="card">${sm.shifts.map(r => `<div class="mt-item">${(r.tasks || []).map(x => `<div><b>${esc(t('tk_' + x.type))}</b>${x.description ? ': ' + esc(x.description) : ''}</div>`).join('')}${r.technicians ? `<b>${esc(t('technicians'))}:</b> ${esc(r.technicians)}` : ''}
+      <section class="card">${sm.shifts.map(r => `<div class="mt-item">${(r.tasks || []).map(x => `<div><b>${esc(t('tk_' + x.type))}</b>${x.pmLabel ? ': ' + esc(pmName(x.pmLabel)) : ''}${x.description ? ': ' + esc(x.description) : ''}</div>`).join('')}${r.technicians ? `<b>${esc(t('technicians'))}:</b> ${esc(r.technicians)}` : ''}
         ${r.notes ? `<div>${esc(r.notes)}</div>` : ''}${meta(r)}<div>${voidBox(r.uid)}</div></div>`).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
   }
 
@@ -629,13 +633,23 @@ window.MaintUI = function (C) {
 
   // ---------- eventos ----------
   function keep() { const y = window.scrollY; C.render(); window.scrollTo(0, y); }
+  // lista de preventiva com o estado desta semana (escolher no registo do turno)
+  const pmCat = () => C.pmTasks ? M.pmCatalog(C.pmTasks(), st.entries, today(), week()) : [];
   async function saveShift() {
-    const f = st.form, s = sh();
-    const tasks = f.tasks.filter(x => x.type).map(x => ({ type: x.type, description: x.type === 'breakdown' ? String(x.description || '').trim() : '' }));
-    if (errs(M.validateShift({ prodDay: s.day, period: s.period, tasks, by: f.by }))) return;
-    const ok = await save({ kind: 'shift', tasks, notes: f.notes.trim(), by: f.by.trim() });
-    // preventiva escolhida: segue para o separador Preventiva para escolher as tarefas
-    if (ok && tasks.some(x => x.type === 'preventive')) { st.tab = 'pm'; C.toast(t('toPm')); keep(); }
+    const f = st.form, s = sh(), CAT = pmCat();
+    const tasks = f.tasks.filter(x => x.type).map(x => {
+      const c = x.type === 'preventive' ? CAT.find(k => k.id === x.taskId) : null;
+      return { type: x.type, description: x.type !== 'preventive' ? String(x.description || '').trim() : '', taskId: c ? c.id : null, pmLabel: c ? c.task.code + ' · ' + c.task.asset + ' — ' + c.task.task : '' };
+    });
+    if (errs(M.validateShift({ prodDay: s.day, period: s.period, tasks, by: f.by, needPmTask: CAT.length > 0 }))) return;
+    // v2.16.0 / v0.19.0: cada trabalho de preventiva escolhido fica planeado para esta semana (se ainda não tiver trabalho em aberto)
+    const w = week(), due = (M.weekRange(w) || [])[1] || today(), now = Date.now();
+    const jobs = tasks.filter(x => x.taskId).map(x => CAT.find(k => k.id === x.taskId)).filter(c => c && !c.openJob);
+    try {
+      for (const c of jobs) await C.add({ kind: 'pmJob', prodDay: s.day, period: s.period, shift: s.day + '/' + s.period, crew: C.crewOf(s.day, s.period), t: now, date: today(), time: hhmm(now),
+        week: w, dueDate: due, lineId: null, equipment: c.task.code + ' ' + c.task.asset, task: c.task.task + ' — ' + t('fq_' + c.task.freq), taskId: c.id, taskFreq: c.task.freq, responsible: f.by.trim(), by: f.by.trim() });
+    } catch (e) { C.toast(t('saveFailed')); return; }
+    await save({ kind: 'shift', tasks, notes: f.notes.trim(), by: f.by.trim() }, jobs.length ? t('saved') + ' ' + t('pmJobsPlanned', { n: jobs.length }) : null);
   }
   const SAVE = { saveshift: saveShift, saveitem: saveItem,
     savestop: saveStop, savework: saveWork, savepm: savePm, savepmup: savePmUp, saverchk: saveRollCheck, saverchg: saveRollChange, savecons: saveCons,
@@ -704,7 +718,7 @@ window.MaintUI = function (C) {
       }
       return;
     }
-    if (el.dataset.mtask && st.form && st.form.tasks) { const [i, k] = el.dataset.mtask.split('|'); if (st.form.tasks[+i]) st.form.tasks[+i][k] = el.value; if (isChange && k === 'type') keep(); return; }
+    if (el.dataset.mtask && st.form && st.form.tasks) { const [i, k] = el.dataset.mtask.split('|'); if (st.form.tasks[+i]) st.form.tasks[+i][k] = el.value; if (isChange && (k === 'type' || k === 'taskId')) keep(); return; }
     if (el.dataset.mp && st.form && st.form.parts) { const [i, k] = el.dataset.mp.split('|'); if (st.form.parts[+i]) st.form.parts[+i][k] = el.value; return; }
     if (!isChange) return;
     if (el.id === 'mDay' && /^\d{4}-\d{2}-\d{2}$/.test(el.value)) { st.sh = Object.assign({}, sh(), { day: el.value }); st.form = null; keep(); }
