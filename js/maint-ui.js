@@ -21,7 +21,7 @@ window.MaintUI = function (C) {
   const T = {
     pt: {
       // v2.20.0 (Zhax, 26-11-2026)
-      t_stops: 'Avarias', k_planned: 'Planeada', slogin: 'Login', slogout: 'Logout', sLoginBtn: 'Fazer login', sLogoutBtn: 'Fazer logout', loginDone: 'Login gravado', logoutDone: 'Logout gravado',
+      t_stops: 'Avarias', k_planned: 'Planeada', fromProd: 'Paragem da Produção', slogin: 'Login', slogout: 'Logout', sLoginBtn: 'Fazer login', sLogoutBtn: 'Fazer logout', loginDone: 'Login gravado', logoutDone: 'Logout gravado',
       pctDone: '% feito', pctCol: '% feito', itemsPlanned: 'Planeado no login', noItems: 'Nada planeado no login.', comments: 'Comentários', readOnly: 'Só leitura.',
       pmPlanned: 'Preventiva planeada para este turno', bdAttend: 'Avarias a atender', bdAdd: 'Mais uma avaria', mill: 'Moagem', millC: 'Moagem C', millD: 'Moagem D',
       // v2.24.0
@@ -86,7 +86,7 @@ window.MaintUI = function (C) {
     },
     en: {
       // v2.20.0 (Zhax, 26-11-2026)
-      t_stops: 'Breakdowns', k_planned: 'Planned', slogin: 'Login', slogout: 'Logout', sLoginBtn: 'Log in', sLogoutBtn: 'Log out', loginDone: 'Login saved', logoutDone: 'Logout saved',
+      t_stops: 'Breakdowns', k_planned: 'Planned', fromProd: 'Production stoppage', slogin: 'Login', slogout: 'Logout', sLoginBtn: 'Log in', sLogoutBtn: 'Log out', loginDone: 'Login saved', logoutDone: 'Logout saved',
       pctDone: '% done', pctCol: '% done', itemsPlanned: 'Planned at login', noItems: 'Nothing planned at login.', comments: 'Comments', readOnly: 'Read only.',
       pmPlanned: 'Preventive planned for this shift', bdAttend: 'Breakdowns to attend to', bdAdd: 'One more breakdown', mill: 'Mill', millC: 'Mill C', millD: 'Mill D',
       // v2.24.0
@@ -427,7 +427,7 @@ window.MaintUI = function (C) {
     }
     return `<section class="card">${C.kpiNote ? `` : ''}${f ? form : newBtn('stop', t('newStop'))}</section>
       <section class="card"><h3>${esc(t('t_stops'))} · ${sm.stopMin} min</h3>${sm.stops.map(r => `<div class="mt-item">
-        <div><b>${esc(r.code || '')} ${esc((r.codeInfo && r.codeInfo.name) || '')}</b> <span class="mt-c">${esc(t('c_' + (M.CATEGORIES.indexOf(r.category) >= 0 ? r.category : 'Other')))}</span>
+        <div><b>${esc(r.code || '')} ${esc((r.codeInfo && r.codeInfo.name) || '')}</b> <span class="mt-c">${esc(t('c_' + (M.CATEGORIES.indexOf(r.category) >= 0 ? r.category : 'Other')))}</span>${r.src === 'prod' ? ` <span class="mt-c">${esc(t('fromProd'))}</span>` : ''}
         · <b>${esc(nf(r.durationMin))} min</b>${r.lineId ? ' · ' + esc(lineName(r.lineId)) : ''}${r.equipment ? ' · ' + esc(r.equipment) : ''}</div>
         <div>${r.stopKind ? '<b>' + esc(t('k_' + r.stopKind)) + ':</b> ' : ''}${esc(r.description)}</div>${r.action ? `<div class="mt-sub">${esc(t('intervention'))}: ${esc(r.action)}</div>` : ''}${r.consumables ? `<div class="mt-sub">${esc(t('consUsed'))}: ${esc(r.consumables)}</div>` : ''}${meta(r)}<div>${voidBox(r.uid)}</div></div>`).join('') || `<p class="mt-sub">${esc(t('none'))}</p>`}</section>`;
   }

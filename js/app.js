@@ -1890,7 +1890,7 @@
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
   load().then(MU.reload).then(FU.reload).then(SU.reload).then(PS.reload).then(function () {
     render(); DB.persist();
-    DB.onWrite(function () { Promise.all([SU.reload(), PS.reload()]).then(function () { if (S.tab === 'prod') render(); }); });
+    DB.onWrite(function () { Promise.all([SU.reload(), PS.reload(), MU.reload()]).then(function () { if (S.tab === 'prod' || S.tab === 'maint') render(); }); });
     SU.refreshPlan().then(function () { if (S.tab === 'prod') render(); }); setInterval(function () { SU.refreshPlan(); }, 3600000);
     refreshTemps(false); setInterval(function () { refreshTemps(false); }, 3600000);
     const R = window.RecSync;
