@@ -127,3 +127,46 @@ t('reclamações: cliente interno (FMO, FRA) ou externo; motivo de cereal/cor/gr
 });
 
 console.log('fssc: ' + n + ' testes OK');
+
+// v2.11.0: formação (Zhax, 14-11-2026)
+{
+  const F = require('../js/fssc.js');
+  const E = [{ uid: 't1', kind: 'training', date: '2026-11-10', topic: 'GMP', expected: 10, t: 1 },
+    { uid: 't2', kind: 'training', date: '2026-11-20', topic: 'Alergénios', t: 2 },
+    { uid: 't3', kind: 'training', date: '2026-11-05', topic: 'HACCP', expected: 4, t: 3 },
+    { uid: 'a1', kind: 'trainingAtt', trainingUid: 't3', heldOn: '2026-11-05', attendees: ['Ana', 'Rui', 'Zé'], t: 4 }];
+  const L = F.trainings(E, '2026-11-14');
+  assert.deepStrictEqual(L.map(x => x.training.uid + ':' + x.state), ['t3:held', 't1:overdue', 't2:upcoming']);
+  assert.strictEqual(L[0].attendancePct, 75);
+  const M = F.trainingMonth(L, '2026-11');
+  assert.deepStrictEqual([M.planned, M.held, M.people, M.attendancePct], [3, 1, 3, 75]);
+  assert.deepStrictEqual(F.namesOf('Ana\nRui, Rui ; Zé  Silva'), ['Ana', 'Rui', 'Zé Silva']);
+  assert.deepStrictEqual(F.validateTraining({ date: '2026-11-20', topic: '', expected: 'x', by: '' }), ['trTopic', 'trExpected', 'by']);
+  assert.deepStrictEqual(F.validateAttendance({ heldOn: '2026-11-20', attendees: ' ', by: 'Z' }), ['trAttendees']);
+  assert.ok(F.warnings(E, [], 'mill', '2026-11-14').some(w => w.type === 'training_overdue' && w.topic === 'GMP'));
+  console.log('fssc training: OK');
+}
+
+// v2.21.0 — MTD e Acções em aberto
+{
+  assert.strictEqual(F.adequacy('5', '10'), 50);
+  assert.strictEqual(F.adequacy('12,5', '10'), 125);
+  assert.strictEqual(F.adequacy('', '10'), null);
+  assert.strictEqual(F.adequacy('3', '0'), null);
+  assert.strictEqual(F.adequacy('x', '2'), null);
+  const li = rec('oaLogin', { day: '2026-11-26', items: [{ label: 'Lavar silo' }] });
+  const lo = rec('oaLogout', { day: '2026-11-26', loginUid: li.uid, items: [{ label: 'Lavar silo', pct: 80 }] });
+  const other = rec('oaLogin', { day: '2026-11-25', items: [] });
+  let D = F.oaDay([li, other], '2026-11-26');
+  assert.strictEqual(D.login.uid, li.uid); assert.strictEqual(D.logout, null);
+  D = F.oaDay([li, lo, other], '2026-11-26'); assert.strictEqual(D.logout.uid, lo.uid);
+  assert.ok(F.KINDS.indexOf('oaLogin') >= 0 && F.KINDS.indexOf('oaLogout') >= 0);
+  const g = rec('grade', { month: '2026-10', reqId: 'A', grade: 'C' }), cl = rec('close', { month: '2026-10', score: 80, counts: {} });
+  const Y = F.ytd([g, cl], REQS, 'mill', '2026-11-26');
+  assert.strictEqual(Y.months.length, 11); assert.strictEqual(Y.nClosed, 1); assert.strictEqual(Y.avgClosed, 80);
+  assert.ok(Y.months[9].closed && !Y.months[10].closed);
+  const P = F.monthPlan([li, lo], REQS, 'mill', '2026-11', '2026-11-26');
+  assert.strictEqual(P.daily.days, 1); assert.strictEqual(P.daily.pct, 80);
+  assert.strictEqual(P.reqs.done, 0);
+  console.log('fssc MTD/acções em aberto: OK');
+}

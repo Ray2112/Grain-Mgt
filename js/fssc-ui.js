@@ -11,11 +11,20 @@ window.FsscUI = function (C) {
   const F = window.Fssc, Q = window.FsscReqs, esc = C.esc;
   const pad = n => String(n).padStart(2, '0');
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
-  const st = { tab: 'month', month: null, entries: [], loaded: false, form: null, open: {} };
+  const st = { tab: 'mtd', month: null, entries: [], loaded: false, form: null, open: {} };
   const T = {
     pt: {
       t_training: 'Formação', trTitle: 'Formação e competências', trNew: 'Nova formação prevista', trDate: 'Data', trTime: 'Hora', trTopic: 'Tema', trTrainer: 'Formador', trAudience: 'Para quem (função, turma, secção)', trExpected: 'N.º de participantes previsto', trNotes: 'Notas', trUpcoming: 'Próximas formações', trOverdue: 'Previstas e ainda sem presenças', trHeld: 'Formações feitas', trAtt: 'Registar presenças', trHeldOn: 'Feita em', trAttendees: 'Presentes (um nome por linha)', trPresent: '{n} presente(s)', trOf: 'de {n} previstos', trMonth: 'Este mês: {p} prevista(s) · {h} feita(s) · {n} presença(s){a}', trPct: ' · presença {p} %', w_training_overdue: 'Formação sem presenças registadas — {t} ({d})', 
-      title: 'Conformidade FSSC 22000', t_month: 'Avaliação mensal', t_docs: 'Documentos', t_actions: 'Acções', t_hist: 'Histórico',
+      // v2.21.0 (Zhax, 26-11-2026)
+      planned: 'Planeado', done: 'Feito', t_mtd: 'MTD', t_actions: 'Acções em aberto', t_complaints: 'Reclamações de clientes', t_training: 'Formação', ytdTitle: 'Ano até à data', ytdAvg: 'Média dos meses fechados', monthsClosed: 'Meses fechados', monthNow: 'Mês actual',
+      planDone: 'Planeado e feito no mês', pd_reqs: 'Requisitos avaliados', pd_actions: 'Acções com prazo no mês', pd_training: 'Formações', pd_daily: '% feito (logouts do dia)', partial: 'parcial',
+      oaLogin: 'Login do dia', oaLogout: 'Logout do dia', oaLoginBtn: 'Fazer login', oaLogoutBtn: 'Fazer logout', oaPlanned: 'Planeado para o dia', oaAddItem: 'Mais uma tarefa', oaPickActions: 'Acções em aberto a tratar hoje',
+      oaNeeds: 'Necessidades', manpower: 'Mão-de-obra (n.º de pessoas)', supSupport: 'Apoio do supervisor', supYes: 'Sim', supNo: 'Não', consumables: 'Consumíveis',
+      cleanMat: 'Materiais de limpeza em stock', material: 'Material', unit: 'Unidade', inStock: 'Em stock', minStock: 'Mínimo', adequacy: '% adequação', matAdd: 'Mais um material',
+      pctDone: '% feito', comments: 'Comentários', readOnly: 'Só leitura.', noItems: 'Nada planeado no login.', loginSaved: 'Login gravado', logoutSaved: 'Logout gravado',
+      kOpen: 'Em aberto', kOverdue: 'Em atraso', kFs: 'Segurança alimentar', kClosedM: 'Fechadas no mês', trPlannedM: 'Planeadas no mês', trHeldM: 'Dadas no mês', trPeople: 'Pessoas formadas', trAttPct: 'Presença',
+      docsMore: 'Documentos (revisão e cobertura)',
+      title: 'Conformidade FSSC 22000', t_month: 'Avaliação mensal', t_docs: 'Documentos', t_hist: 'Histórico',
       month: 'Mês', score: 'Pontuação', docs: 'Documentação', graded: 'avaliados', closed: 'Mês fechado', open: 'Mês aberto', closeMonth: 'Fechar mês',
       reopen: 'Reabrir mês', needAll: 'Avalie todos os requisitos aplicáveis antes de fechar o mês.', pin: 'PIN de supervisor', name: 'Nome', reason: 'Motivo',
       save: 'Gravar', cancel: 'Cancelar', saved: 'Gravado.', fail: 'Não foi possível gravar.', fill: 'Falta ou inválido', loading: 'A carregar…', none: 'Sem registos.',
@@ -31,7 +40,7 @@ window.FsscUI = function (C) {
       histNone: 'Ainda não há meses fechados.', counts: 'C {c} · menor {mi} · maior {ma} · crítica {cr} · N/A {na}',
       w_month_open: 'FSSC: avaliação de {m} por fechar', w_action_overdue: 'FSSC: acção em atraso — {r} ({g}, prazo {d})', w_doc_review: 'FSSC: revisão em atraso — {c} {t}', w_month_critical: 'FSSC: {n} NC crítica(s) em {m}',
       reqDoc: 'exige documento', naHint: 'Pode ser N/A',
-      t_complaints: 'Reclamações', newComplaint: 'Nova reclamação de cliente', received: 'Recebida em', customer: 'Cliente', ref: 'Referência do cliente / contacto', product: 'Produto', lot: 'Lote nº',
+      newComplaint: 'Nova reclamação de cliente', received: 'Recebida em', customer: 'Cliente', ref: 'Referência do cliente / contacto', product: 'Produto', lot: 'Lote nº',
       reason: 'Motivo', description: 'Descrição da reclamação', foodSafety: 'Afecta a segurança alimentar', remedy: 'Correcção (remédio ao cliente)', further: 'Acção adicional (investigação, causa)',
       prevention: 'Prevenção da repetição', verification: 'Verificação da eficácia', followUp: 'Seguimento', closeIt: 'Fechar a reclamação', c_open: 'Aberta', c_closed: 'Fechada',
       daysOpen: '{n} dia(s)', fOpen: 'Abertas', fAll: 'Todas', fsChip: 'Segurança alimentar', voidIt: 'Anular registo', voidReason: 'Motivo da anulação', closedOn: 'Fechada em', recBy: 'Registada por',
@@ -42,7 +51,16 @@ window.FsscUI = function (C) {
     },
     en: {
       t_training: 'Training', trTitle: 'Training and skills', trNew: 'New planned training', trDate: 'Date', trTime: 'Time', trTopic: 'Topic', trTrainer: 'Trainer', trAudience: 'For whom (role, crew, section)', trExpected: 'Expected number of participants', trNotes: 'Notes', trUpcoming: 'Upcoming trainings', trOverdue: 'Planned, no attendance yet', trHeld: 'Trainings held', trAtt: 'Record attendance', trHeldOn: 'Held on', trAttendees: 'Present (one name per line)', trPresent: '{n} present', trOf: 'of {n} expected', trMonth: 'This month: {p} planned · {h} held · {n} attendance(s){a}', trPct: ' · attendance {p} %', w_training_overdue: 'Training with no attendance recorded — {t} ({d})', 
-      title: 'FSSC 22000 compliance', t_month: 'Monthly check', t_docs: 'Documents', t_actions: 'Actions', t_hist: 'History',
+      // v2.21.0 (Zhax, 26-11-2026)
+      planned: 'Planned', done: 'Done', t_mtd: 'MTD', t_actions: 'Open Actions', t_complaints: 'Customer Complaints', t_training: 'Training', ytdTitle: 'Year to date', ytdAvg: 'Average of closed months', monthsClosed: 'Months closed', monthNow: 'Current month',
+      planDone: 'Planned and done this month', pd_reqs: 'Requirements graded', pd_actions: 'Actions due this month', pd_training: 'Trainings', pd_daily: '% done (daily logouts)', partial: 'partial',
+      oaLogin: 'Day login', oaLogout: 'Day logout', oaLoginBtn: 'Log in', oaLogoutBtn: 'Log out', oaPlanned: 'Planned for the day', oaAddItem: 'One more task', oaPickActions: 'Open actions to work on today',
+      oaNeeds: 'Requirements', manpower: 'Manpower (no. of people)', supSupport: 'Supervisor support', supYes: 'Yes', supNo: 'No', consumables: 'Consumables',
+      cleanMat: 'Cleaning materials in stock', material: 'Material', unit: 'Unit', inStock: 'In stock', minStock: 'Minimum', adequacy: '% adequacy', matAdd: 'One more material',
+      pctDone: '% done', comments: 'Comments', readOnly: 'Read only.', noItems: 'Nothing planned at login.', loginSaved: 'Login saved', logoutSaved: 'Logout saved',
+      kOpen: 'Open', kOverdue: 'Overdue', kFs: 'Food safety', kClosedM: 'Closed this month', trPlannedM: 'Planned this month', trHeldM: 'Held this month', trPeople: 'People trained', trAttPct: 'Attendance',
+      docsMore: 'Documents (review and coverage)',
+      title: 'FSSC 22000 compliance', t_month: 'Monthly check', t_docs: 'Documents', t_hist: 'History',
       month: 'Month', score: 'Score', docs: 'Documentation', graded: 'graded', closed: 'Month closed', open: 'Month open', closeMonth: 'Close month',
       reopen: 'Reopen month', needAll: 'Grade every applicable requirement before closing the month.', pin: 'Supervisor PIN', name: 'Name', reason: 'Reason',
       save: 'Save', cancel: 'Cancel', saved: 'Saved.', fail: 'Could not save.', fill: 'Missing or invalid', loading: 'Loading…', none: 'No records.',
@@ -58,7 +76,7 @@ window.FsscUI = function (C) {
       histNone: 'No closed months yet.', counts: 'C {c} · minor {mi} · major {ma} · critical {cr} · N/A {na}',
       w_month_open: 'FSSC: {m} check not closed', w_action_overdue: 'FSSC: action overdue — {r} ({g}, due {d})', w_doc_review: 'FSSC: review overdue — {c} {t}', w_month_critical: 'FSSC: {n} critical NC(s) in {m}',
       reqDoc: 'needs a document', naHint: 'May be N/A',
-      t_complaints: 'Complaints', newComplaint: 'New customer complaint', received: 'Received on', customer: 'Customer', ref: 'Customer reference / contact', product: 'Product', lot: 'Lot no.',
+      newComplaint: 'New customer complaint', received: 'Received on', customer: 'Customer', ref: 'Customer reference / contact', product: 'Product', lot: 'Lot no.',
       reason: 'Reason', description: 'Complaint description', foodSafety: 'Affects food safety', remedy: 'Remedy (to the customer)', further: 'Further action (investigation, cause)',
       prevention: 'Prevention of recurrence', verification: 'Verification of effectiveness', followUp: 'Follow-up', closeIt: 'Close the complaint', c_open: 'Open', c_closed: 'Closed',
       daysOpen: '{n} day(s)', fOpen: 'Open', fAll: 'All', fsChip: 'Food safety', voidIt: 'Void record', voidReason: 'Reason for voiding', closedOn: 'Closed on', recBy: 'Recorded by',
@@ -109,11 +127,79 @@ window.FsscUI = function (C) {
   // ---------- vista ----------
   function view() {
     if (!st.loaded) { reload().then(C.render); return `<section class="card"><p>${esc(t('loading'))}</p></section>`; }
-    const tabs = ['month', 'docs', 'actions'].concat(C.complaints ? ['complaints'] : []).concat(C.training ? ['training'] : []).concat(['hist']);   // formação: só com C.training (Prodn-Mgt)
-    const head = `<section class="card"><h2>${esc(t('title'))}</h2><p class="fs-sub">${esc(t('area_' + C.area))} · ${esc(Q.SOURCE)}</p>
+    // v2.21.0 (Zhax, 26-11-2026): MTD | Acções em aberto | Reclamações de clientes | Formação (documentos e histórico dentro do MTD)
+    if (['month', 'docs', 'hist'].indexOf(st.tab) >= 0) st.tab = 'mtd';
+    const tabs = ['mtd', 'actions'].concat(C.complaints ? ['complaints'] : []).concat(C.training ? ['training'] : []);
+    // v2.25.0 (Zhax, 26-11-2026): sem a descrição da certificação no topo
+    const head = `<section class="card"><h2>${esc(t('title'))}</h2>
       <div class="fs-tabs">${tabs.map(k => `<button type="button" class="btn small ${st.tab === k ? 'primary' : ''}" data-fact="tab" data-v="${k}">${esc(t('t_' + k))}</button>`).join('')}</div></section>`;
     const bn = warnings().map(w => `<div class="fs-bn ${w.level === 'bad' ? 'fs-bad' : 'fs-warn'}">✔ ${esc(warnText(w))}</div>`).join('');
-    return bn + head + ({ month: vMonth, docs: vDocs, actions: vActions, complaints: vComplaints, training: vTraining, hist: vHist }[st.tab] || vMonth)();
+    return bn + head + ({ mtd: vMtd, actions: () => vOpen() + vActions(), complaints: vComplaints, training: vTraining }[st.tab] || vMtd)();
+  }
+
+  // ===== v2.21.0: layout igual nos quatro separadores — cartão com título, 4 indicadores e o botão (ou formulário), depois as listas =====
+  const kpi4 = list => `<div class="fs-kpi">${list.map(([v, lab, cls]) => `<div class="${cls || ''}"><b>${v === null || v === undefined ? '—' : esc(String(v))}</b><span>${esc(lab)}</span></div>`).join('')}</div>`;
+  const pc = v => v === null || v === undefined ? '—' : nf(v) + ' %';
+  const headCard = (title, kpis, body) => `<section class="card"><h3>${esc(title)}</h3>${kpi4(kpis)}${body || ''}</section>`;
+  // ----- MTD -----
+  function vMtd() {
+    const Y = F.ytd(st.entries, Q.REQS, C.area, today()), m = F.monthOf(today()), S = F.score(Q.REQS, C.area, F.grades(st.entries, m)), MS = F.monthState(st.entries, m);
+    const PD = F.monthPlan(st.entries, Q.REQS, C.area, m, today());
+    const ytd = `<section class="card"><h3>${esc(t('ytdTitle'))} · ${esc(m.slice(0, 4))}</h3>${kpi4([[pc(Y.avgClosed), t('ytdAvg')], [Y.nClosed + '/' + Y.months.length, t('monthsClosed')], [pc(S.score), t('monthNow')], [MS.closed ? '✔' : '…', MS.closed ? t('closed') : t('open')]])}
+      ${Y.months.map(x => `<div class="fs-hist"><b>${esc(x.month)}</b><div class="fs-bar"><div style="width:${Math.max(0, Math.min(100, x.score || 0))}%"></div></div><b>${pc(x.score)}${x.closed ? '' : ' *'}</b></div>`).join('')}
+      <p class="fs-sub">* ${esc(t('partial'))}</p></section>`;
+    const plan = `<section class="card"><h3>${esc(t('planDone'))} · ${esc(m)}</h3><table class="mt-t" style="width:100%"><tr><td></td><td><b>${esc(t('planned'))}</b></td><td><b>${esc(t('done'))}</b></td><td><b>%</b></td></tr>
+      ${[['pd_reqs', PD.reqs], ['pd_actions', PD.actions], ['pd_training', PD.training]].map(([k, x]) => `<tr><td>${esc(t(k))}</td><td>${x.planned}</td><td>${x.done}</td><td><b>${pc(x.pct)}</b></td></tr>`).join('')}
+      <tr><td>${esc(t('pd_daily'))}</td><td colspan="2">${PD.daily.days}</td><td><b>${pc(PD.daily.pct)}</b></td></tr></table></section>`;
+    return ytd + plan + vMonth() + `<details class="card"><summary><b>${esc(t('docsMore'))}</b></summary>${vDocs()}</details>`;
+  }
+  // ----- Acções em aberto: login / logout do dia -----
+  function vOpen() {
+    const d = today(), D = F.oaDay(st.entries, d), f = st.form, A = F.actions(st.entries, d).filter(a => !a.done);
+    const items = li => (li.items || []).map(x => x.label);
+    const matTbl = (rows, edit) => `<table class="mt-t" style="width:100%"><tr><td><b>${esc(t('material'))}</b></td><td><b>${esc(t('unit'))}</b></td><td><b>${esc(t('inStock'))}</b></td><td><b>${esc(t('minStock'))}</b></td><td><b>${esc(t('adequacy'))}</b></td></tr>
+      ${rows.map((r, i) => { const ad = F.adequacy(r.stock, r.min); return edit ? `<tr><td><input data-fmat="${i}|name" value="${esc(r.name)}"></td><td><input data-fmat="${i}|unit" value="${esc(r.unit)}" style="max-width:60px"></td>
+        <td><input data-fmat="${i}|stock" inputmode="decimal" value="${esc(r.stock)}" style="max-width:70px"></td><td><input data-fmat="${i}|min" inputmode="decimal" value="${esc(r.min)}" style="max-width:70px"></td><td id="fsad_${i}">${pc(ad)}</td></tr>`
+        : `<tr><td>${esc(r.name)}</td><td>${esc(r.unit || '')}</td><td>${esc(nf(r.stock))}</td><td>${esc(nf(r.min))}</td><td class="${ad !== null && ad < 100 ? 'fs-warn' : ''}"><b>${pc(ad)}</b></td></tr>`; }).join('') || `<tr><td colspan="5">—</td></tr>`}</table>`;
+    let body;
+    if (!D.login) {
+      body = f && f.kind === 'oaLogin' ? `<div class="fs-box"><h4>${esc(t('oaLogin'))}</h4><div class="fs-req">${esc(t('oaPlanned'))}</div>
+          ${f.items.map((x, i) => `<input data-fitem="${i}" value="${esc(x)}" style="width:100%;margin:3px 0">`).join('')}<button type="button" class="btn small" data-fact="oaitem">＋ ${esc(t('oaAddItem'))}</button>
+          ${A.length ? `<div class="fs-req">${esc(t('oaPickActions'))}</div>${A.map(a => `<label class="fs-chk"><input type="checkbox" data-fpick="${esc(a.grade.uid)}" ${f.acts.indexOf(a.grade.uid) >= 0 ? 'checked' : ''}> ${esc(a.grade.ref || a.grade.reqId)} → ${esc(a.grade.action)}</label>`).join('')}` : ''}
+          <h4>${esc(t('oaNeeds'))}</h4><div class="grid2">${fld(t('manpower'), inp('manpower', f.manpower, 'inputmode="numeric"'))}
+          ${fld(t('supSupport'), `<select data-ff="sup"><option value="">—</option>${opt('yes', f.sup, t('supYes'))}${opt('no', f.sup, t('supNo'))}</select>`)}</div>
+          ${fld(t('consumables'), area('consumables', f.consumables))}
+          <h4>${esc(t('cleanMat'))}</h4><div style="overflow-x:auto">${matTbl(f.mats, true)}</div><button type="button" class="btn small" data-fact="oamat">＋ ${esc(t('matAdd'))}</button>
+          ${byF(f)}<div class="row"><button type="button" class="btn primary" data-fact="oainsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
+        : (st.form ? '' : `<button type="button" class="btn primary" data-fact="oain">${esc(t('oaLoginBtn'))}</button>`);
+    } else {
+      const li = D.login, lo = D.logout;
+      body = `<div class="fs-box"><h4>${esc(t('oaLogin'))} · ${esc(li.time || '')} · ${esc(li.by || '')}</h4><div><b>${esc(t('oaPlanned'))}:</b> ${esc(items(li).join(' | ') || '—')}</div>
+          <div class="fs-sub">${esc(t('manpower'))}: ${esc(nf(li.manpower))} · ${esc(t('supSupport'))}: ${esc(li.sup === 'yes' ? t('supYes') : li.sup === 'no' ? t('supNo') : '—')}${li.consumables ? ' · ' + esc(t('consumables')) + ': ' + esc(li.consumables) : ''}</div>
+          <h4>${esc(t('cleanMat'))}</h4><div style="overflow-x:auto">${matTbl(li.mats || [], false)}</div></div>` +
+        (lo ? `<div class="fs-box"><h4>${esc(t('oaLogout'))} · ${esc(lo.time || '')} · ${esc(lo.by || '')}</h4>${(lo.items || []).map(x => `<div>${esc(x.label)}: <b>${esc(nf(x.pct))} %</b></div>`).join('') || `<p class="fs-sub">${esc(t('noItems'))}</p>`}${lo.comments ? `<div>${esc(lo.comments)}</div>` : ''}<p class="fs-sub">${esc(t('readOnly'))}</p></div>`
+          : f && f.kind === 'oaLogout' ? `<div class="fs-box"><h4>${esc(t('oaLogout'))}</h4>${items(li).map((x, i) => `<div class="row" style="justify-content:space-between"><span>${esc(x)}</span><input data-fpct="${i}" inputmode="decimal" placeholder="0–100" style="max-width:80px" value="${esc(f.pcts[i] || '')}"></div>`).join('') || `<p class="fs-sub">${esc(t('noItems'))}</p>`}
+              ${fld(t('comments'), area('comments', f.comments))}${byF(f)}<div class="row"><button type="button" class="btn primary" data-fact="oaoutsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
+          : (st.form ? '' : `<button type="button" class="btn" data-fact="oaout">${esc(t('oaLogoutBtn'))}</button>`));
+    }
+    const ov = A.filter(a => a.overdue).length;
+    return headCard(t('t_actions') + ' · ' + ddmm(d), [[A.length, t('kOpen')], [ov, t('kOverdue'), ov ? 'fs-bad' : ''], [D.login ? '✔' : '…', t('oaLogin')], [D.logout ? '✔' : '…', t('oaLogout')]], body);
+  }
+  async function oaInSave() {
+    const f = st.form, A = F.actions(st.entries, today());
+    const picked = A.filter(a => f.acts.indexOf(a.grade.uid) >= 0).map(a => ({ label: (a.grade.ref || a.grade.reqId) + ' → ' + a.grade.action, gradeUid: a.grade.uid }));
+    const items = f.items.map(x => String(x || '').trim()).filter(Boolean).map(x => ({ label: x })).concat(picked);
+    const mp = String(f.manpower || '').trim() === '' ? null : Number(f.manpower);
+    if (mp !== null && (!isFinite(mp) || mp < 0 || Math.round(mp) !== mp)) return errs(['manpower']);
+    const mats = f.mats.filter(r => String(r.name || '').trim()).map(r => ({ name: String(r.name).trim(), unit: String(r.unit || '').trim(), stock: r.stock, min: r.min, pct: F.adequacy(r.stock, r.min) }));
+    return save({ kind: 'oaLogin', day: today(), items, manpower: mp, sup: f.sup || '', consumables: String(f.consumables || '').trim(), mats, by: f.by }, t('loginSaved'));
+  }
+  async function oaOutSave() {
+    const f = st.form, D = F.oaDay(st.entries, today());
+    if (!D.login) return;
+    const L0 = D.login.items || [], pcts = L0.map((x, i) => f.pcts[i]);
+    if (pcts.some(p => { const v = Number(String(p || '').replace(',', '.')); return String(p || '').trim() === '' || !isFinite(v) || v < 0 || v > 100; })) return errs(['pctDone']);
+    return save({ kind: 'oaLogout', day: today(), loginUid: D.login.uid, items: L0.map((x, i) => ({ label: x.label, pct: Number(String(pcts[i]).replace(',', '.')) })), comments: String(f.comments || '').trim(), by: f.by }, t('logoutSaved'));
   }
 
   // ----- avaliação mensal -----
@@ -233,7 +319,7 @@ window.FsscUI = function (C) {
         <div class="grid2">${ownerF(nf_)}${fld(t('due'), inp('due', nf_.due, 'type="date"'), 1)}</div>${byF(nf_)}
         <datalist id="fsLots">${lots.map(x => `<option value="${esc(x)}">`).join('')}</datalist><datalist id="fsProds">${prods.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
         <div class="row"><button type="button" class="btn primary" data-fact="ccsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>`
-      : `<button type="button" class="btn primary" data-fact="ccnew">＋ ${esc(t('newComplaint'))}</button>`;
+      : (st.form ? '' : `<button type="button" class="btn primary" data-fact="ccnew">＋ ${esc(t('newComplaint'))}</button>`);
     const show = st.ccFilter === 'all' ? L : L.filter(x => x.open);
     const item = x => {
       const c = x.complaint, up = f && f.kind === 'complaintUpd' && f.complaintUid === x.uid, vd = f && f.kind === 'ccvoid' && f.uid === x.uid;
@@ -250,7 +336,9 @@ window.FsscUI = function (C) {
         ${vd ? `<div class="fs-box">${fld(t('voidReason'), area('reason', f.reason), 1)}${byF(f, 'name')}<div class="row"><button type="button" class="btn primary" data-fact="ccvoidsave">${esc(t('save'))}</button><button type="button" class="btn" data-fact="cancel">${esc(t('cancel'))}</button></div></div>` : ''}
         ${st.form ? '' : `<div class="row">${x.open ? `<button type="button" class="btn small primary" data-fact="ccup" data-v="${esc(x.uid)}">${esc(t('followUp'))}</button>` : ''}<button type="button" class="btn small" data-fact="ccvoid" data-v="${esc(x.uid)}">${esc(t('voidIt'))}</button></div>`}</div>`;
     };
-    return `<section class="card">${form}</section>
+    const mo = today().slice(0, 7), op = L.filter(x => x.open);
+    return headCard(t('t_complaints'), [[op.length, t('kOpen')], [op.filter(x => x.overdue).length, t('kOverdue'), op.some(x => x.overdue) ? 'fs-bad' : ''], [op.filter(x => x.complaint.foodSafety).length, t('kFs'), op.some(x => x.complaint.foodSafety) ? 'fs-bad' : ''],
+        [L.filter(x => !x.open && String(x.closedOn || '').slice(0, 7) === mo).length, t('kClosedM')]], form) + `
       <section class="card"><div class="fs-tabs"><button type="button" class="btn small ${st.ccFilter !== 'all' ? 'primary' : ''}" data-fact="ccfilter" data-v="open">${esc(t('fOpen'))} (${L.filter(x => x.open).length})</button>
         <button type="button" class="btn small ${st.ccFilter === 'all' ? 'primary' : ''}" data-fact="ccfilter" data-v="all">${esc(t('fAll'))} (${L.length})</button></div>
         ${show.map(item).join('') || `<p class="fs-sub">${esc(t('none'))}</p>`}</section>`;
@@ -303,7 +391,7 @@ window.FsscUI = function (C) {
       : (st.form ? '' : `<button type="button" class="btn small" data-fact="tratt" data-v="${esc(x.training.uid)}">${esc(t('trAtt'))}</button>`);
     const sec = (ttl, xs, body) => xs.length ? `<section class="card"><h3>${esc(ttl)}</h3>${xs.map(x => `<div class="fs-item">${head(x)}${body(x)}</div>`).join('')}</section>` : '';
     const up = L.filter(x => x.state === 'upcoming'), od = L.filter(x => x.state === 'overdue'), held = L.filter(x => x.state === 'held').reverse();
-    return `<section class="card"><h3>${esc(t('trTitle'))}</h3><p class="fs-sub">${esc(t('trMonth', { p: M.planned, h: M.held, n: M.people, a: M.attendancePct == null ? '' : t('trPct', { p: nf(M.attendancePct) }) }))}</p>${newForm}</section>
+    return headCard(t('t_training'), [[M.planned, t('trPlannedM')], [M.held, t('trHeldM')], [M.people, t('trPeople')], [pc(M.attendancePct), t('trAttPct')]], newForm) + `
       ${sec(t('trOverdue'), od, attForm)}${sec(t('trUpcoming'), up, attForm)}
       ${sec(t('trHeld'), held, x => `<div class="fs-sub">${esc(t('trHeldOn'))} ${esc(ddmm(x.att.heldOn))} · ${esc(t('trPresent', { n: x.present }))}${x.training.expected ? ' ' + esc(t('trOf', { n: x.training.expected })) : ''}${x.attendancePct == null ? '' : ' (' + esc(nf(x.attendancePct)) + ' %)'} · ${esc(x.att.by)}</div>
         <div class="fs-sub">${(x.att.attendees || []).map(esc).join(', ')}</div>${x.att.notes ? `<div class="fs-sub">${esc(x.att.notes)}</div>` : ''}`)}
@@ -329,6 +417,13 @@ window.FsscUI = function (C) {
     }
     if (a === 'tab') { st.tab = v; st.form = null; keep(); return; }
     if (a === 'cancel') { st.form = null; keep(); return; }
+    if (a === 'oain') { const D = F.effective(st.entries).filter(e => e.kind === 'oaLogin').sort((x, y) => y.t - x.t)[0];
+      st.form = { kind: 'oaLogin', items: [''], acts: [], manpower: '', sup: '', consumables: '', mats: D && (D.mats || []).length ? D.mats.map(r => ({ name: r.name, unit: r.unit, stock: '', min: r.min })) : [{ name: '', unit: '', stock: '', min: '' }], by: op() }; keep(); return; }
+    if (a === 'oaitem' && st.form && st.form.items) { st.form.items.push(''); keep(); return; }
+    if (a === 'oamat' && st.form && st.form.mats) { st.form.mats.push({ name: '', unit: '', stock: '', min: '' }); keep(); return; }
+    if (a === 'oainsave') return oaInSave();
+    if (a === 'oaout') { st.form = { kind: 'oaLogout', pcts: [], comments: '', by: op() }; keep(); return; }
+    if (a === 'oaoutsave') return oaOutSave();
     if (a === 'trnew') { st.form = { kind: 'training', date: today(), time: '', topic: '', trainer: '', audience: '', expected: '', notes: '', by: op() }; keep(); return; }
     if (a === 'trsave') return trSave();
     if (a === 'tratt') { st.form = { kind: 'trainingAtt', trainingUid: v, heldOn: today(), attendees: '', notes: '', by: op() }; keep(); return; }
@@ -357,10 +452,14 @@ window.FsscUI = function (C) {
     if (a === 'ccvoidsave') { const f = st.form; if (!String(f.reason).trim() || !String(f.by).trim()) return C.toast(t('fill') + ': ' + t('voidReason') + ', ' + t('name')); return save({ kind: 'void', voids: f.uid, reason: f.reason.trim(), by: f.by.trim() }); }
     if (a === 'donesave') { const f = st.form; if (!String(f.note).trim() || !String(f.by).trim()) return C.toast(t('fill') + ': ' + t('note') + ', ' + t('name')); return save({ kind: 'actionDone', gradeUid: f.gradeUid, note: f.note.trim(), by: f.by.trim() }); }
   });
-  document.addEventListener('input', e => { const el = e.target; if (el.dataset && el.dataset.ff !== undefined && st.form && el.type !== 'checkbox') st.form[el.dataset.ff] = el.value; });
+  document.addEventListener('input', e => { const el = e.target; if (el.dataset && el.dataset.ff !== undefined && st.form && el.type !== 'checkbox') st.form[el.dataset.ff] = el.value;
+    if (el.dataset && el.dataset.fitem !== undefined && st.form && st.form.items) st.form.items[+el.dataset.fitem] = el.value;
+    if (el.dataset && el.dataset.fpct !== undefined && st.form && st.form.pcts) st.form.pcts[+el.dataset.fpct] = el.value;
+    if (el.dataset && el.dataset.fmat && st.form && st.form.mats) { const [i, k] = el.dataset.fmat.split('|'); if (st.form.mats[+i]) { st.form.mats[+i][k] = el.value; const o = document.getElementById('fsad_' + i), r = st.form.mats[+i]; if (o) o.textContent = pc(F.adequacy(r.stock, r.min)); } } });
   document.addEventListener('change', e => {
     const el = e.target;
     if (el.dataset && el.dataset.ff !== undefined && st.form) { st.form[el.dataset.ff] = el.type === 'checkbox' ? el.checked : el.value; if (el.tagName === 'SELECT' || el.dataset.ff === 'close') keep(); return; }
+    if (el.dataset && el.dataset.fpick && st.form && st.form.acts) { const id = el.dataset.fpick, i = st.form.acts.indexOf(id); if (el.checked && i < 0) st.form.acts.push(id); if (!el.checked && i >= 0) st.form.acts.splice(i, 1); return; }
     if (el.dataset && el.dataset.freq && st.form && st.form.reqIds) { const id = el.dataset.freq, i = st.form.reqIds.indexOf(id); if (el.checked && i < 0) st.form.reqIds.push(id); if (!el.checked && i >= 0) st.form.reqIds.splice(i, 1); return; }
     if (el.id === 'fsMonth' && /^\d{4}-\d{2}$/.test(el.value)) { st.month = el.value; st.form = null; keep(); }
   });

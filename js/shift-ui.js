@@ -7,7 +7,7 @@
   const T = {
     pt: {
       title: 'Turno — login e logout (secção de silos)', day: 'Dia', shift: 'Turno', sD: 'Dia 07–19', sN: 'Noite 19–07',
-      login: 'Login de turno', loginHelp: 'Início do turno: chefe de turno (com PIN), trabalhos a fazer, estado, leituras iniciais das balanças e comentários. O stock dos silos é registado sozinho.',
+      login: 'Login de turno', loginHelp: 'Início do turno: trabalhos a fazer, estado e comentários; grava com o PIN do chefe de turno. Depois de gravado, o login fica só de leitura. O stock dos silos é registado sozinho.',
       leaderPin: 'PIN do chefe de turno', leaderPinBad: 'PIN do chefe de turno errado', leaderPinNone: 'aviso: este chefe ainda não tem PIN (o supervisor define-o em Definições)', ldTitle: 'Chefes de turno (secção de silos)', ldNote: 'Um por turma. Cada chefe entra e sai do turno com o seu PIN. Escreva um PIN só para o criar ou mudar; vazio = fica como está. Mudar o nome apaga o PIN. Fica só neste telemóvel.', ldPin: 'PIN (4 a 8 algarismos)', ldSet: '(definido)', ldNotSet: '(sem PIN)', ldSave: 'Gravar chefes de turno', ldSaved: 'Chefes de turno gravados', ldFormat: 'O PIN tem 4 a 8 algarismos', 
       outMissing: 'Turno de {s} de {d} ({l}) com login e sem logout: faça o logout no separador Turno.', outGo: 'Ir para esse turno',
       leader: 'Chefe de turno (secção de silos)', ops: 'Operadores de serviço', jobs: 'Trabalhos a fazer', jobsAuto: 'Da app (hoje)', jobsList: 'Lista (editável)',
@@ -28,11 +28,12 @@
       trucksRec: 'Camiões recebidos', sentKg: 'Enviado para B01–B04', recKg: 'Recebido', transfers: 'Transferências entre silos', empties: 'Silos esvaziados',
       stops: 'Paragens (Manut.)', monit: 'Registos de monitorização',
       crew: 'Turma', saveFail: 'Erro ao gravar', xDate: 'Data', xTime: 'Hora', xLot: 'Lote', xGuia: 'Guia', xSupplier: 'Fornecedor', xPlate: 'Matrícula', xCereal: 'Cereal', xColour: 'Cor', xBin: 'Bin', xLine: 'Linha', xOperator: 'Operador', xWarnings: 'Avisos', xFrom: 'De', xTo: 'Para', xKind: 'Tipo', xSilo: 'Silo', xBy: 'Por', xType: 'Tipo', xCode: 'Código', xDur: 'Duração (min)', xFault: 'Falha', xAction: 'Acção', xStock: 'Stock dos silos',
-      jobsEdit: 'A lista edita-se em Definições (com PIN de supervisor).', jobPick: 'Escolha o trabalho', jobOther: 'Outro', jobOtherText: 'Texto (para «Outro»)', jobPickAdd: 'Juntar trabalho', jobOtherNeed: 'Escreva o trabalho «Outro»'
+      pin: 'PIN', pct: '% feito', pctHelp: 'Para cada trabalho do login, quanto ficou feito (0–100 %).', pctNeed: 'Indique o % feito de cada trabalho (0–100)', handover: 'Notas de passagem de turno', pctAvg: 'Média feita',
+      jobsEdit: 'A lista edita-se em Definições (PIN dos quatro de cima).', jobPick: 'Escolha o trabalho', jobOther: 'Outro', jobOtherText: 'Texto (para «Outro»)', jobPickAdd: 'Juntar trabalho', jobOtherNeed: 'Escreva o trabalho «Outro»'
     },
     en: {
       title: 'Shift — login and logout (silo section)', day: 'Day', shift: 'Shift', sD: 'Day 07–19', sN: 'Night 19–07',
-      login: 'Shift login', loginHelp: 'Start of the shift: shift leader (with PIN), jobs to be done, state, initial scale readings and comments. The silo stock is recorded automatically.',
+      login: 'Shift login', loginHelp: 'Start of the shift: jobs to be done, state and comments; saved with the shift leader PIN. Once saved, the login is read-only. The silo stock is recorded automatically.',
       leaderPin: 'Shift leader PIN', leaderPinBad: 'Wrong shift leader PIN', leaderPinNone: 'warning: this leader has no PIN yet (the supervisor sets it in Settings)', ldTitle: 'Shift leaders (silo section)', ldNote: 'One per crew. Each leader logs in and out of the shift with their own PIN. Type a PIN only to create or change it; blank = unchanged. Changing the name clears the PIN. Stays on this phone only.', ldPin: 'PIN (4 to 8 digits)', ldSet: '(set)', ldNotSet: '(no PIN)', ldSave: 'Save shift leaders', ldSaved: 'Shift leaders saved', ldFormat: 'The PIN has 4 to 8 digits', 
       outMissing: '{s} shift of {d} ({l}) has a login and no logout: log it out in the Shift tab.', outGo: 'Go to that shift',
       leader: 'Shift leader (silo section)', ops: 'Operators on duty', jobs: 'Jobs to be done', jobsAuto: 'From the app (today)', jobsList: 'List (editable)',
@@ -53,7 +54,8 @@
       trucksRec: 'Trucks received', sentKg: 'Sent to B01–B04', recKg: 'Received', transfers: 'Silo transfers', empties: 'Silos emptied',
       stops: 'Stoppages (Maint.)', monit: 'Monitoring records',
       crew: 'Crew', saveFail: 'Save failed', xDate: 'Date', xTime: 'Time', xLot: 'Lot', xGuia: 'Waybill', xSupplier: 'Supplier', xPlate: 'Plate', xCereal: 'Cereal', xColour: 'Colour', xBin: 'Bin', xLine: 'Line', xOperator: 'Operator', xWarnings: 'Warnings', xFrom: 'From', xTo: 'To', xKind: 'Kind', xSilo: 'Silo', xBy: 'By', xType: 'Type', xCode: 'Code', xDur: 'Duration (min)', xFault: 'Fault', xAction: 'Action', xStock: 'Silo stock',
-      jobsEdit: 'The list is edited in Settings (with the supervisor PIN).', jobPick: 'Pick the job', jobOther: 'Other', jobOtherText: 'Text (for "Other")', jobPickAdd: 'Add job', jobOtherNeed: 'Write the "Other" job'
+      pin: 'PIN', pct: '% done', pctHelp: 'For each login job, how much was done (0–100 %).', pctNeed: 'Enter the % done of each job (0–100)', handover: 'Shift handover notes', pctAvg: 'Average done',
+      jobsEdit: 'The list is edited in Settings (top-four PIN).', jobPick: 'Pick the job', jobOther: 'Other', jobOtherText: 'Text (for "Other")', jobPickAdd: 'Add job', jobOtherNeed: 'Write the "Other" job'
     }
   };
   root.ShiftUI = function (C) {
@@ -94,26 +96,8 @@
       const pm = C.pmDue ? C.pmDue() : 0; if (pm) out.push(both('a_pm', { n: pm }));
       return out;
     }
-    // 0.15.0 (Zhax, 14-11-2026): chefe de turno da secção de silos por turma A–D, com PIN definido pelo supervisor (Definições,
-    // parte protegida). Fica só neste telemóvel (settings.leaders = {A: {name, pin: {salt, hash, setAt}}}), nunca nos registos.
-    const CREWS = ['A', 'B', 'C', 'D'];
-    const leaders = () => (C.S.settings.leaders = C.S.settings.leaders || {});
-    const leaderList = () => CREWS.filter(k => leaders()[k] && leaders()[k].name).map(k => ({ crew: k, name: leaders()[k].name }));
-    const hex = b => Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
-    const pinHash = async (salt, pin) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin)));
-    async function leaderPinCheck(name, pin) {   // 'ok' | 'bad' | 'none' (sem PIN: grava com aviso)
-      const k = CREWS.find(c => leaders()[c] && leaders()[c].name === name), p = k && leaders()[k].pin;
-      if (!p) return 'none';
-      return (await pinHash(p.salt, String(pin || ''))) === p.hash ? 'ok' : 'bad';
-    }
-    function leaderField(id, value) {
-      const list = leaderList();
-      if (!list.length) return '<input id="' + id + '" value="' + esc(value || '') + '">';
-      const known = list.some(x => x.name === value);
-      return '<select id="' + id + '"><option value="">—</option>' + list.map(x => '<option value="' + esc(x.name) + '"' + (x.name === value ? ' selected' : '') + '>' + esc(x.name) + ' (' + esc(t('crew')) + ' ' + x.crew + ')</option>').join('') +
-        (value && !known ? '<option value="' + esc(value) + '" selected>' + esc(value) + '</option>' : '') + '</select>';
-    }
-    const pinField = id => '<label>' + esc(t('leaderPin')) + ' *<input type="password" inputmode="numeric" autocomplete="off" id="' + id + '"></label>';
+    // v0.21.0 (Zhax, 27-11-2026): sem nomes nem PIN por chefe guardado aqui — o PIN é o da função (js/roles.js), como na Moagem de Milho
+    const pinField = id => '<label>' + esc(t('pin')) + ' *<input type="password" maxlength="4" autocomplete="off" id="' + id + '"></label>';
     const stock = () => (C.S.settings.silos || []).map(s => ({ silo: s.id, kg: C.L.siloContents(s.id, C.S.events).kg }));
     const chips = () => (st.picked || []).map((j, i) => '<span class="chip on">' + esc(jt(j)) + ' <button type="button" class="btn small" data-sact="unpick" data-i="' + i + '">✕</button></span>').join(' ');
     function pickJob() {
@@ -139,7 +123,6 @@
         const auto = autoJobs(s.day);
         st.offer = auto.concat(jobsList());
         h += '<div class="card stack"><h2>' + esc(t('login')) + '</h2><p class="small muted">' + esc(t('loginHelp')) + '</p>' +
-          '<div class="grid2"><label>' + esc(t('leader')) + ' *' + leaderField('sh_leader', (leaders()[C.L.crewOf(s.day, s.win === 'N' ? '20:00' : '08:00')] || {}).name || C.S.settings.operator || '') + '</label>' + pinField('sh_pin') + '</div>' +
           '<div class="lbl strong">' + esc(t('jobs')) + '</div>' +
           (auto.length ? '<div class="small muted">' + esc(t('jobsAuto')) + '</div>' + auto.map((j, i) => '<label class="check"><input type="checkbox" class="sh_job" data-i="' + i + '" checked> ' + esc(jt(j)) + '</label>').join('') : '') +
           // 0.14.1: como na Prodn-Mgt — escolher na lista e juntar (fica como etiqueta, retira-se com ✕); «Outro» leva texto
@@ -149,7 +132,7 @@
           '<p class="small muted">' + esc(t('jobsEdit')) + '</p>' +
           '<label>' + esc(t('trucks')) + '<input inputmode="numeric" id="sh_trucks"></label>' +
           '<div class="lbl strong">' + esc(t('state')) + '</div><div class="grid2">' + onOff('rec1', 'on') + onOff('rec2', 'on') + onOff('feed', 'on') + '</div>' +
-          '<label>' + esc(t('comments')) + '<textarea id="sh_comments" rows="2"></textarea></label>' +
+          '<label>' + esc(t('comments')) + '<textarea id="sh_comments" rows="2"></textarea></label>' + pinField('sh_pin') +
           '<button type="button" class="btn primary block" data-sact="login">' + esc(t('saveLogin')) + '</button></div>';
         return h;
       }
@@ -163,9 +146,11 @@
         const pre = [];   // 0.20.0: os totais estão no cartão acima (sem repetir aqui)
         const stops = st.recs.filter(x => x.kind === 'stop' && x.shift === sid(s)); if (stops.length) pre.push(t('stops') + ': ' + stops.map(x => (x.code || '') + ' ' + (x.durationMin || '') + ' min').join(', '));
         h += totalsCard(r) + '<div class="card stack"><h2>' + esc(t('logout')) + '</h2><div class="grid2">' + onOff('rec1', li.state.rec1) + onOff('rec2', li.state.rec2) + onOff('feed', li.state.feed) + '</div>' +
-          '<label>' + esc(t('acts')) + ' *<textarea id="sh_acts" rows="4">' + esc(pre.join('\n')) + '</textarea></label>' +
-          '<label>' + esc(t('comments')) + '<textarea id="sh_comments" rows="2"></textarea></label>' +
-          '<div class="grid2"><label>' + esc(t('leader')) + ' *' + leaderField('sh_by', li.leader) + '</label>' + pinField('sh_pin') + '</div>' +
+          '<div class="lbl strong">' + esc(t('pct')) + ' *</div><p class="small muted">' + esc(t('pctHelp')) + '</p>' +
+          ((li.jobs || []).length ? '<table class="tbl">' + li.jobs.map((j, i) => '<tr><td>' + esc(jt(j)) + '</td><td class="n"><input class="sh_pct" data-i="' + i + '" inputmode="numeric" maxlength="3" style="width:4.5em;display:inline-block"> %</td></tr>').join('') + '</table>' : '<p class="small muted">—</p>') +
+          '<label>' + esc(t('acts')) + '<textarea id="sh_acts" rows="3">' + esc(pre.join('\n')) + '</textarea></label>' +
+          '<label>' + esc(t('handover')) + '<textarea id="sh_handover" rows="2"></textarea></label>' +
+          '<label>' + esc(t('comments')) + '<textarea id="sh_comments" rows="2"></textarea></label>' + pinField('sh_pin') +
           '<button type="button" class="btn primary block" data-sact="logout">' + esc(t('saveLogout')) + '</button></div>';
         return h;
       }
@@ -173,7 +158,9 @@
       h += totalsCard(r) + '<div class="card stack"><h2>' + esc(t('logout')) + ' · ' + esc(lo.date + ' ' + lo.time) + '</h2>' +
         '<div class="lbl strong">' + esc(t('targets')) + '</div><p class="small">' + esc(t('tFeed')) + ': ' + (tg.feed.planKg === null ? esc(tg.feed.note === 'off' ? t('planOff') : tg.feed.note === 'none' ? t('planNone') : tg.feed.note) : fmtKg(tg.feed.daySentKg) + ' / ' + fmtKg(tg.feed.planKg) + ' kg = ' + (tg.feed.pct === null ? '—' : String(tg.feed.pct).replace('.', ',') + ' %')) + '</p>' +
         '<p class="small">' + esc(t('tTrucks')) + ': ' + tg.trucks.received + ' / ' + (tg.trucks.expected === null ? '—' : tg.trucks.expected) + (tg.trucks.pct === null ? '' : ' = ' + String(tg.trucks.pct).replace('.', ',') + ' %') + '</p>' +
-        '<p class="small"><b>' + esc(t('acts')) + ':</b><br>' + esc(lo.activities).replace(/\n/g, '<br>') + '</p>' + (lo.comments ? '<p class="small">' + esc(lo.comments) + '</p>' : '') +
+        (lo.jobPct && lo.jobPct.length ? '<table class="tbl small">' + lo.jobPct.map(x => '<tr><td>' + esc(jt(x.job)) + '</td><td class="n">' + x.pct + ' %</td></tr>').join('') + '<tr><td><b>' + esc(t('pctAvg')) + '</b></td><td class="n"><b>' + (lo.pctDone === null || lo.pctDone === undefined ? '—' : String(lo.pctDone).replace('.', ',') + ' %') + '</b></td></tr></table>' : '') +
+        '<p class="small"><b>' + esc(t('acts')) + ':</b><br>' + esc(lo.activities || '—').replace(/\n/g, '<br>') + '</p>' + (lo.handover ? '<p class="small"><b>' + esc(t('handover')) + ':</b> ' + esc(lo.handover) + '</p>' : '') + (lo.comments ? '<p class="small">' + esc(lo.comments) + '</p>' : '') +
+        '<p class="small muted">' + esc(lo.by || '') + '</p>' +
         '<button type="button" class="btn block" data-sact="xlsx">' + esc(t('report')) + '</button></div>';
       return h;
     }
@@ -190,38 +177,41 @@
       if (r.bad.length) { C.toast(t('bad') + ': ' + r.bad.join(', ')); return null; }
       return r.values;
     }
-    async function add(rec) { try { await C.DB.add('maint', rec); } catch (e) { C.toast(t('saveFail')); return false; } await reload(); C.toast(t('saved') + (rec.leaderPin === 'notSet' ? ' · ' + t('leaderPinNone') : '')); C.render(); return true; }
+    async function add(rec) { try { await C.DB.add('maint', rec); } catch (e) { C.toast(t('saveFail')); return false; } await reload(); C.toast(t('saved')); C.render(); return true; }
     async function login() {
-      const s = sel(), leader = ($('#sh_leader') || {}).value || '';
-      if (!leader.trim()) { C.toast(t('need') + ': ' + t('leader')); return; }
-      const pinR = await leaderPinCheck(leader.trim(), ($('#sh_pin') || {}).value);
-      if (pinR === 'bad') { C.toast(t('leaderPinBad')); return; }
+      const s = sel();
       const tr = R().num($('#sh_trucks').value);
       if (tr !== null && (isNaN(tr) || tr < 0)) { C.toast(t('bad') + ': ' + t('trucks')); return; }
+      const w = await C.who(($('#sh_pin') || {}).value); if (!w) return;   // v0.21.0: PIN do chefe de turno (ou dos quatro de cima); grava o título da função
+      const leader = w.title;
       const jobs = [...document.querySelectorAll('.sh_job')].filter(x => x.checked).map(x => (st.offer || [])[Number(x.dataset.i)]).filter(Boolean)
         .concat(st.picked || []);   // escolhidos na lista ({pt, en}) e «Outro» escrito à mão (fica como foi escrito)
       const now = new Date(); st.picked = [];
       await add({ kind: 'shiftIn', shift: sid(s), prodDay: s.day, period: s.win, crew: C.L.crewOf(s.day, s.win === 'N' ? '20:00' : '08:00'), date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(),
-        leader: leader.trim(), leaderPin: pinR === 'ok' ? 'ok' : 'notSet', jobs, trucksExpected: tr, planKg: R().planKg(st.plan, s.day),
-        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, stockStart: stock(), comments: $('#sh_comments').value.trim(), by: leader.trim() });
+        leader, role: w.role, leaderPin: 'ok', jobs, trucksExpected: tr, planKg: R().planKg(st.plan, s.day),
+        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, stockStart: stock(), comments: $('#sh_comments').value.trim(), by: leader });
     }
     async function logout() {
       const s = sel(), li = rec('shiftIn', s); if (!li) return;
-      const by = $('#sh_by').value.trim(), acts = $('#sh_acts').value.trim();
-      if (!by || !acts) { C.toast(t('need') + ': ' + t('acts') + ', ' + t('leader')); return; }
-      const pinR = await leaderPinCheck(by, ($('#sh_pin') || {}).value);
-      if (pinR === 'bad') { C.toast(t('leaderPinBad')); return; }
+      const acts = $('#sh_acts').value.trim(), handover = (($('#sh_handover') || {}).value || '').trim();
+      // v0.21.0 (Zhax, 27-11-2026): % feito de cada trabalho do login, como na Moagem de Milho
+      const jobPct = [...document.querySelectorAll('.sh_pct')].map(x => ({ job: (li.jobs || [])[Number(x.dataset.i)], pct: String(x.value || '').trim() === '' ? null : Number(String(x.value).replace(',', '.')) }));
+      if (jobPct.some(x => x.pct === null || !isFinite(x.pct) || x.pct < 0 || x.pct > 100)) { C.toast(t('pctNeed')); return; }
+      const pctDone = jobPct.length ? Math.round(jobPct.reduce((a, x) => a + x.pct, 0) / jobPct.length * 10) / 10 : null;
+      const w = await C.who(($('#sh_pin') || {}).value); if (!w) return;
+      const by = w.title;
+      const actsTxt = jobPct.map(x => jt(x.job) + ': ' + x.pct + ' %').concat(acts ? [acts] : []).join('\n');
       const r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
       // enviado no dia de produção até agora: turno de dia + (no turno da noite) este turno, pelos registos de descarga
       const daySent = s.win === 'N' ? Math.round((R().shiftRecords(s.day + '/D', C.S, C.L.shiftOf).sentKg + r.sentKg) * 1000) / 1000 : r.sentKg;
       const plan = R().planKg(st.plan, s.day) !== null ? R().planKg(st.plan, s.day) : li.planKg;
       const now = new Date();
       await add({ kind: 'shiftOut', shift: sid(s), prodDay: s.day, period: s.win, crew: li.crew, date: C.L.today(now), time: C.L.nowTime(now), t: now.getTime(), inUid: li.uid,
-        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, activities: acts,
+        state: { rec1: $('#sh_rec1').value, rec2: $('#sh_rec2').value, feed: $('#sh_feed').value }, activities: actsTxt, jobPct, pctDone, handover, role: w.role,
         receivedKg: r.receivedKg, sentKg: r.sentKg, trucks: r.trucks, transferKg: r.transferKg, outKg: r.outKg, byPlace: r.byPlace,
         targets: { feed: { planKg: plan, daySentKg: daySent, pct: R().pct(daySent, plan), note: plan === null ? (st.planErr === 'off' ? 'off' : 'none') : '' },   // código; o texto sai na língua de quem lê
           trucks: { expected: li.trucksExpected, received: r.trucks, pct: R().pct(r.trucks, li.trucksExpected) } },
-        stockEnd: stock(), comments: $('#sh_comments').value.trim(), by, leaderPin: pinR === 'ok' ? 'ok' : 'notSet' });
+        stockEnd: stock(), comments: $('#sh_comments').value.trim(), by, leaderPin: 'ok' });
     }
     function xlsx() {
       const X = root.XLSX, s = sel(), li = rec('shiftIn', s), lo = rec('shiftOut', s), r = R().shiftRecords(sid(s), C.S, C.L.shiftOf);
@@ -255,7 +245,6 @@
       if (a === 'login') login(); else if (a === 'logout') logout(); else if (a === 'xlsx') xlsx();
       else if (a === 'pickjob') pickJob();
       else if (a === 'goopen') { const o = openShift(); if (o) { st.sel = { day: o.prodDay, win: o.period }; C.render(); } }
-      else if (a === 'ldsave') leadersSave();
       else if (a === 'unpick') { (st.picked || []).splice(Number(el.dataset.i), 1); const c = $('#sh_jobs'); if (c) c.innerHTML = chips(); }
       else if (a === 'jobadd' && C.unlocked()) {
         const pt = (($('#sj_pt') || {}).value || '').trim(), en = (($('#sj_en') || {}).value || '').trim();
@@ -276,26 +265,6 @@
         '<div class="grid2"><label>' + esc(C.t('sj_pt')) + '<input id="sj_pt"></label><label>' + esc(C.t('sj_en')) + '<input id="sj_en"></label></div>' +
         '<button type="button" class="btn small" data-sact="jobadd">' + esc(C.t('sj_add')) + '</button></div>';
     }
-    function leadersEditor() {
-      return '<div class="card stack"><h2>' + esc(t('ldTitle')) + '</h2><p class="small muted">' + esc(t('ldNote')) + '</p><div class="grid2">' +
-        CREWS.map(k => '<label>' + esc(t('crew')) + ' ' + k + '<input id="ld_n_' + k + '" maxlength="60" value="' + esc((leaders()[k] || {}).name || '') + '"></label>' +
-          '<label>' + esc(t('ldPin')) + ' <span class="small muted">' + esc((leaders()[k] || {}).pin ? t('ldSet') : t('ldNotSet')) + '</span><input id="ld_p_' + k + '" type="password" inputmode="numeric" autocomplete="off"></label>').join('') +
-        '</div><button type="button" class="btn small" data-sact="ldsave">' + esc(t('ldSave')) + '</button></div>';
-    }
-    async function leadersSave() {
-      if (!C.unlocked()) return;
-      const pins = CREWS.map(k => (($('#ld_p_' + k) || {}).value || '').trim());
-      if (pins.some(p => p && !/^\d{4,8}$/.test(p))) { C.toast(t('ldFormat')); return; }
-      for (let i = 0; i < CREWS.length; i++) {
-        const k = CREWS[i], name = (($('#ld_n_' + k) || {}).value || '').trim().replace(/\s+/g, ' '), o = leaders()[k] || {};
-        if (!name) { delete leaders()[k]; continue; }
-        const n = { name: name, pin: name === o.name ? o.pin : null };   // novo nome = PIN novo
-        if (pins[i]) { const salt = hex(crypto.getRandomValues(new Uint8Array(16))); n.pin = { salt, hash: await pinHash(salt, pins[i]), setAt: new Date().toISOString() }; }
-        if (!n.pin) delete n.pin;
-        leaders()[k] = n;
-      }
-      await C.saveSettings(); C.toast(t('ldSaved')); C.render();
-    }
-    return { view, issue, issueOut, reload, refreshPlan, jobsEditor, leadersEditor, recs: () => st.recs };
+    return { view, issue, issueOut, reload, refreshPlan, jobsEditor, recs: () => st.recs };
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -39,7 +39,7 @@
       grading: { Milho: clone(SOP_MAIZE), Trigo: blankG(), Arroz: blankG() },
       myco: { Milho: blankM(), Trigo: blankM(), Arroz: blankM() },
       st: clone(SOP_STORE),
-      pin: null, lastBackup: null, schema: 4
+      pin: null, rolePins: {}, lastBackup: null, schema: 4
     };
   }
   // Migração das definições v0.1 / migrate v0.1 settings
@@ -64,7 +64,7 @@
     return s;
   }
 
-  const S = { tab: 'intake', settings: null, lots: [], events: [], mon: [], sev: [], form: null, sheet: null, unlocked: false, q: '' };
+  const S = { tab: 'prod', sub: { prod: 'shift', qc: 'monit', report: 'prod' }, settings: null, lots: [], events: [], mon: [], sev: [], form: null, sheet: null, unlocked: false, q: '' };
 
   // ---------------- carregar / load ----------------
   function load() {
@@ -86,6 +86,8 @@
       });
       if (Object.keys(lotMap).length) lotItems.unshift({ store: 'settings', obj: { key: 'pre_lot_uuid_snapshot', value: { takenAt: new Date().toISOString(), lots: origLots, events: origEvents } }, put: true });
       let needSave = false;
+      // v0.21.0 (Zhax, 27-11-2026): PIN por função; o PIN de supervisor e os PIN dos chefes (com nome) são apagados uma vez
+      if (!S.settings.pinReset021) { S.settings.pin = null; delete S.settings.leaders; S.settings.rolePins = {}; S.settings.pinReset021 = true; needSave = true; }
       if (!S.settings.deviceId) { S.settings.deviceId = L.newUid().replace(/-/g, '').slice(0, 12); needSave = true; }
       DB.setDevice(S.settings.deviceId); syncCtx();
       // Migração por registo: renomeia silos (S1→S01) e atribui uid/deviceId a registos antigos; tudo numa transacção
@@ -112,48 +114,49 @@
     clearTimeout(toast._t); toast._t = setTimeout(function () { el.classList.remove('show'); }, 3200);
   }
 
-  // ---------------- PIN do supervisor / supervisor PIN ----------------
-  // Nota: o PIN fica (em resumo SHA-256) neste telemóvel. Impede alterações casuais; não é segurança forte.
-  let pinFails = 0, pinLockUntil = 0;
-  function hashPin(pin, salt) {
+  // ---------------- PIN por função (v0.21.0, Zhax 27-11-2026) ----------------
+  // O mesmo modelo da FMO - Moagem de Milho v2.27.0 (js/roles.js): sem PIN é só leitura; cada gravação pede o PIN de uma função
+  // com direito nessa secção; o registo grava o título da função (sem nomes). Os PIN antigos (supervisor e chefes com nome) foram
+  // apagados uma vez (pinReset021). Nota: o PIN fica (em resumo SHA-256) neste telemóvel. Impede alterações casuais; não é segurança forte.
+  const LOCK_KEY = 'grain-mgt.pinLock.v1';
+  function sha256(str) {
     if (!(window.crypto && crypto.subtle)) return Promise.reject(new Error('nocrypto'));
-    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin)).then(function (b) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)).then(function (b) {
       return Array.from(new Uint8Array(b)).map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
     });
   }
-  function checkPin(pin) {
-    if (!S.settings.pin) return Promise.resolve('nopin');
-    if (Date.now() < pinLockUntil) return Promise.resolve('locked');
-    return hashPin(String(pin || ''), S.settings.pin.salt).then(function (h) {
-      if (h === S.settings.pin.hash) { pinFails = 0; return 'ok'; }
-      pinFails++; if (pinFails >= 5) { pinFails = 0; pinLockUntil = Date.now() + 60000; }
-      return 'bad';
-    }, function () { return 'nocrypto'; });
-  }
-  function pinMsg(r) { return { nopin: t('pin_not_set'), locked: t('pin_locked'), bad: t('pin_wrong'), nocrypto: t('pin_nocrypto') }[r]; }
-  function setPin(pin) {
-    const salt = Array.from(crypto.getRandomValues(new Uint8Array(8))).map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
-    return hashPin(pin, salt).then(function (h) { S.settings.pin = { salt: salt, hash: h, setAt: new Date().toISOString() }; return saveSettings(); });
-  }
-  // Bloco de autorização (PIN + nome + motivo) / authorization block
+  let pinLock = (function () { try { return JSON.parse(localStorage.getItem(LOCK_KEY) || 'null') || { fails: 0, until: 0 }; } catch (e) { return { fails: 0, until: 0 }; } })();
+  const RP = window.Roles.make({ sha: sha256, pins: function () { return (S.settings && S.settings.rolePins) || {}; }, lock: function () { return pinLock; },
+    setLock: function (l) { pinLock = l; try { localStorage.setItem(LOCK_KEY, JSON.stringify(l)); } catch (e) { /* só em memória */ } }, lang: function () { return I18n.lang; } });
+  // → Promise<{role, title} | null>; mostra a mensagem quando o PIN não serve
+  function gate(scope, pin) { return RP.who(pin, scope).then(function (w) { if (w.err) { toast(w.err); return null; } S.settings.operator = w.title; return w; }); }
+  const topPinSet = function () { return window.Roles.TOP.some(function (k) { return S.settings.rolePins && S.settings.rolePins[k]; }); };
+  const pinLabel = function (name, lab) { return '<label>' + esc(lab || t('pin')) + ' *<input name="' + name + '" type="password" maxlength="4" autocomplete="off"></label>'; };
+  const roleName = function (k) { return window.Roles.ALL.indexOf(k) >= 0 ? window.Roles.title(k, I18n.lang) : t('role_' + k); };
+  // Bloco de autorização (fora do grau, prioridade, silo de outro grau): PIN de Supervisor ou acima + motivo
   function authBlock(needs, v) {
     v = v || {};
     return '<div class="authbox stack"><div class="strong">⚠ ' + esc(t('auth_needed')) + '</div><ul class="small">' + needs.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' +
-      (S.settings.pin ? '' : '<p class="warn">' + esc(t('pin_not_set')) + '</p>') +
-      '<div class="grid2"><label>' + esc(t('auth_by')) + '<input name="auth_by" value="' + esc(v.auth_by) + '" autocomplete="off"></label>' +
-      '<label>' + esc(t('pin')) + '<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off" value="' + esc(v.auth_pin) + '"></label></div>' +
-      '<label>' + esc(t('auth_reason')) + '<input name="auth_reason" value="' + esc(v.auth_reason) + '" autocomplete="off"></label></div>';
+      (topPinSet() ? '' : '<p class="warn">' + esc(t('pin_not_set')) + '</p>') +
+      '<label>' + esc(t('auth_reason')) + '<input name="auth_reason" value="' + esc(v.auth_reason) + '" autocomplete="off"></label>' +
+      '<label>' + esc(t('auth_pin')) + '<input name="auth_pin" type="password" maxlength="4" autocomplete="off" value="' + esc(v.auth_pin) + '"></label></div>';
   }
-  function verifyAuth(v) {
-    if (!(v.auth_by || '').trim() || !(v.auth_reason || '').trim()) return Promise.resolve(t('auth_fill'));
-    return checkPin(v.auth_pin).then(function (r) { return r === 'ok' ? null : pinMsg(r); });
+  // → Promise<{at, by, role, reason, items} | null>
+  function verifyAuth(v, needs) {
+    if (!(v.auth_reason || '').trim()) { toast(t('auth_fill')); return Promise.resolve(null); }
+    return gate('top', v.auth_pin).then(function (w) { return w ? { at: new Date().toISOString(), by: w.title, role: w.role, reason: v.auth_reason.trim(), items: needs } : null; });
   }
 
   // ---------------- casca / shell ----------------
   // Linhas de moagem e bins de milho sujo (B01–B04, mestre na app de Registos de QC) / mill lines and dirty-maize bins
   // 0.14.0 (Zhax, 14-11-2026): linha SG01 junto com C e D. Para SG01 a bin B01–B04 é opcional (assumido: não passa pelas bins da moagem)
   const LINES = ['C', 'D', 'SG01'], DIRTY_BINS = ['B01', 'B02', 'B03', 'B04'], NO_BIN_LINES = ['SG01'];
-  const TITLES = { shift: 'shift_title', intake: 'intake_title', silos: 'silos_title', insp: 'insp_title', maint: 'maint_title', fssc: 'fssc_title', export: 'export_title', settings: 'settings_title' };
+  // v0.21.0 (Zhax, 27-11-2026): separadores como na Moagem de Milho — Produção, Controlo de Qualidade, Manutenção, FSSC, Relatórios, Definições
+  const TITLES = { prod: 'prod_title', qc: 'qc_title', maint: 'maint_title', fssc: 'fssc_title', report: 'rp_title', settings: 'settings_title' };
+  const SUBS = { prod: ['shift', 'stops', 'intake', 'silos'], qc: ['monit', 'sensors', 'samples'], report: ['prod', 'qc', 'maint', 'fssc'] };
+  function subNav(tab) {
+    return '<div class="card"><div class="chips">' + SUBS[tab].map(function (k) { return '<button type="button" class="btn small' + (S.sub[tab] === k ? ' primary' : '') + '" data-action="sub" data-tab="' + tab + '" data-sub="' + k + '" aria-pressed="' + (S.sub[tab] === k) + '">' + esc(t('sb_' + tab + '_' + k)) + '</button>'; }).join('') + '</div></div>';
+  }
   function renderShell() {
     document.title = t('app_name');
     $('#title').textContent = t(TITLES[S.tab]);
@@ -178,11 +181,11 @@
     MU.warnings().forEach(function (w) { add('maint', '🔧', MU.warnText(w), 'data-tab="maint"'); });
     FU.warnings().forEach(function (w) { add('fssc', '✔', FU.warnText(w), 'data-tab="fssc"'); });
     const sw = sensorWarnings().filter(function (w) { return !w.ack; });
-    if (sw.length) add('maint', '🌡', t('sn_banner').replace('{n}', sw.filter(function (w) { return !w.suspect; }).length).replace('{m}', sw.filter(function (w) { return w.suspect; }).length), 'data-tab="maint" data-mact="tab" data-v="sensors"');
+    if (sw.length) add('qc', '🌡', t('sn_banner').replace('{n}', sw.filter(function (w) { return !w.suspect; }).length).replace('{m}', sw.filter(function (w) { return w.suspect; }).length), 'data-tab="qc" data-sub="sensors"');
     const so = window.__shiftUI && window.__shiftUI.issueOut ? window.__shiftUI.issueOut() : null;   // 0.17.0: até ao logout, não se limpa
-    if (so) out.push({ key: null, sticky: true, tab: 'shift', text: so, html: '<div class="banner b-warn" role="status" data-action="tab" data-tab="shift">👷 ' + esc(so) + '</div>' });
+    if (so) out.push({ key: null, sticky: true, tab: 'prod', text: so, html: '<div class="banner b-warn" role="status" data-action="tab" data-tab="prod" data-sub="shift">👷 ' + esc(so) + '</div>' });
     const sl = window.__shiftUI ? window.__shiftUI.issue() : null;
-    if (sl) add('shift', '👷', sl, 'data-tab="shift"', true);
+    if (sl) add('prod', '👷', sl, 'data-tab="prod" data-sub="shift"', true);
     const up = window.RecSync && window.RecSync.issue ? window.RecSync.issue() : null;
     if (up) add('settings', '☁', t('up_' + up.kind).replace('{e}', up.error || '').replace('{d}', up.day || ''), 'data-tab="settings"', true);
     if (all) return out;
@@ -193,32 +196,38 @@
     const list = warnList().filter(function (w) { return !w.sticky; });
     return '<div class="card stack"><h2>' + esc(t('wa_title')) + '</h2>' + (list.length ? '<p class="small muted">' + esc(t('wa_note')) + '</p>' +
       list.map(function (w) { return '<div class="small">• ' + esc(w.text) + '</div>'; }).join('') +
-      '<label>' + esc(t('wa_by')) + '<input id="wa_by" value="' + esc(S.settings.operator || '') + '"></label><label>' + esc(t('wa_reason')) + '<textarea id="wa_reason" rows="2"></textarea></label>' +
+      '<label>' + esc(t('wa_reason')) + '<textarea id="wa_reason" rows="2"></textarea></label><label>' + esc(t('pin')) + ' *<input id="wa_pin" type="password" maxlength="4" autocomplete="off"></label>' +
       '<button type="button" class="btn primary" data-action="warn-clear">' + esc(t('wa_btn').replace('{n}', list.length)) + '</button>' : '<p class="small muted">' + esc(t('wa_none')) + '</p>') + '</div>';
   }
   function clearWarnings() {
-    const list = warnList().filter(function (w) { return !w.sticky; }), by = ($('#wa_by') || {}).value || '', reason = ($('#wa_reason') || {}).value || '';
+    const list = warnList().filter(function (w) { return !w.sticky; }), reason = ($('#wa_reason') || {}).value || '';
     if (!S.unlocked) { toast(t('pin')); return; }
-    if (!by.trim() || !reason.trim()) { toast(t('wa_need')); return; }
-    const now = new Date();
-    DB.add('maint', { kind: 'warnAck', keys: list.map(function (w) { return w.key; }), texts: list.map(function (w) { return w.text; }), by: by.trim(), reason: reason.trim(),
-      date: L.today(now), time: L.nowTime(now), t: now.getTime() }).then(function () { return window.__shiftUI.reload(); }).then(function () { toast(t('wa_done').replace('{n}', list.length)); render(); });
+    if (!reason.trim()) { toast(t('wa_need')); return; }
+    gate('top', ($('#wa_pin') || {}).value).then(function (w) {
+      if (!w) return;
+      const now = new Date();
+      return DB.add('maint', { kind: 'warnAck', keys: list.map(function (x) { return x.key; }), texts: list.map(function (x) { return x.text; }), by: w.title, role: w.role, reason: reason.trim(),
+        date: L.today(now), time: L.nowTime(now), t: now.getTime() }).then(function () { return window.__shiftUI.reload(); }).then(function () { toast(t('wa_done').replace('{n}', list.length)); render(); });
+    });
   }
   function render() {
     renderShell();
     const main = $('#main');
-    if (S.tab === 'shift') main.innerHTML = SU.view();
-    if (S.tab === 'intake') main.innerHTML = S.form ? intakeForm() : intakeList();
-    if (S.tab === 'silos') main.innerHTML = silosView();
-    if (S.tab === 'insp') main.innerHTML = inspView();
+    if (S.tab === 'prod') {
+      const k = S.sub.prod;
+      main.innerHTML = subNav('prod') + (k === 'shift' ? SU.view() : k === 'stops' ? PS.view() : k === 'intake' ? (S.form && S.formAt === 'prod' ? intakeForm() : intakeList()) : silosView());
+    }
+    if (S.tab === 'qc') {
+      const k = S.sub.qc;
+      main.innerHTML = subNav('qc') + (S.form && S.formAt === 'qc' && k === 'samples' ? intakeForm() : k === 'monit' ? inspView() : k === 'sensors' ? sensorsView() : samplesView());
+    }
     if (S.tab === 'maint') main.innerHTML = MU.view();
     if (S.tab === 'fssc') main.innerHTML = FU.view();
-    if (S.tab === 'export') main.innerHTML = recordsView();
-    if (S.tab === 'report') main.innerHTML = reportView();
+    if (S.tab === 'report') main.innerHTML = subNav('report') + reportView();
     // 0.14.1: avisos no topo a partir de uma só lista, com chave, para poderem ser limpos (Definições → Avisos, com PIN)
     warnList().filter(function (w) { return w.tab !== S.tab; }).reverse().forEach(function (w) { main.insertAdjacentHTML('afterbegin', w.html); });
     if (S.tab === 'settings') main.innerHTML = settingsView();
-    if (S.tab === 'intake' && S.form) updateDyn();
+    if (S.form && $('#lotform')) updateDyn();
     // Aviso permanente enquanto o modo de teste estiver ligado (os registos novos ficam marcados test:true)
 
     if (S.settings && S.settings.testMode) main.insertAdjacentHTML('afterbegin', '<div class="banner b-warn" role="status"><b>' + esc(t('test_banner')) + '</b></div>');
@@ -248,7 +257,7 @@
     const dest = (l.dest && l.dest.length) ? ' · ' + l.dest.map(function (d) { return esc(d.silo); }).join('+') : (l.silo ? ' · ' + esc(l.silo) : '');
     let act = l.status === 'HELD' ? '<button class="btn small" data-action="release" data-id="' + esc(l.id) + '">' + esc(t('decide_held')) + '</button>' : '';
     if (S.cycleLot === l.id) act += '<div class="grid2"><label>' + esc(t('pit_start')) + '<input type="time" id="cy_a" value="' + esc(l.pitStart || '') + '"></label><label>' + esc(t('silo_end')) + '<input type="time" id="cy_b" value="' + esc(l.siloEnd || '') + '"></label></div>' +
-      '<button class="btn small primary" data-action="cycle-save" data-id="' + esc(l.id) + '">' + esc(t('save')) + '</button> <button class="btn small" data-action="cycle-cancel">' + esc(t('cancel')) + '</button>';
+      '<label>' + esc(t('pin')) + ' *<input id="cy_pin" type="password" maxlength="4" autocomplete="off"></label><button class="btn small primary" data-action="cycle-save" data-id="' + esc(l.id) + '">' + esc(t('save')) + '</button> <button class="btn small" data-action="cycle-cancel">' + esc(t('cancel')) + '</button>';
     else if (!l.cancelled) act += ' <button class="btn small" data-action="cycle" data-id="' + esc(l.id) + '">⏱ ' + esc(typeof l.cycleMin === 'number' ? t('cycle_n', { m: l.cycleMin }) : t('cycle_add')) + '</button>';
     return '<div class="card row"><div class="grow"><div class="mono">' + esc(l.code || l.id) + '</div><div class="muted small">' +
       esc(cerName(l.cereal)) + (l.colour ? ' ' + esc(l.colour) : '') + ' · ' + esc(l.supplier) + ' · ' + fmtKg(L.num(l.kg, 'kg')) + dest + '</div>' + act + '</div>' +
@@ -283,7 +292,7 @@
   function newForm() {
     return { mode: 'new', date: L.today(), time: L.nowTime(), guia: '', supplier: '', origin: '', cereal: 'Milho', colour: '', plate: '', kg: '',
       hum: '', fat: '', fm: '', brk: '', dis: '', sw: '', ins: 'N', odor: 'Normal', afla: '', don: '', fum: '',
-      dest: [], responsible: S.settings.operator || '', notes: '', auth_by: '', auth_pin: '', auth_reason: '', pitStart: '', siloEnd: '' };
+      dest: [], notes: '', pin: '', auth_pin: '', auth_reason: '', pitStart: '', siloEnd: '' };
   }
   // 0.19.0 (Zhax, 17-11-2026): tempo de ciclo fosso → silo de cada camião (lote): hora de início da descarga no fosso e hora em que o grão fica no silo
   function cycleMin(a, b) {
@@ -296,7 +305,7 @@
     return v.length ? { n: v.length, avg: Math.round(v.reduce(function (s, x) { return s + x; }, 0) / v.length), max: Math.max.apply(null, v) } : null;
   }
   function releaseForm(lot) {
-    return Object.assign(clone(lot), { mode: 'release', qcGrade: '', qcName: S.settings.operator || '', qcReason: '', dest: [], auth_by: '', auth_pin: '', auth_reason: '' });
+    return Object.assign(clone(lot), { mode: 'release', qcGrade: '', qcReason: '', dest: [], pin: '', auth_pin: '', auth_reason: '' });
   }
   function field(name, label, extra, mode) {
     const f = S.form, v = f[name];
@@ -321,8 +330,8 @@
         return '<option value="' + g + '"' + (f.qcGrade === g ? ' selected' : '') + '>' + esc(g === 'REJ' ? t('st_REJECTED') : t('release_as') + ' ' + gradeName(g)) + '</option>';
       }).join('') + '<option value="HELD"' + (f.qcGrade === 'HELD' ? ' selected' : '') + '>' + esc(t('keep_held')) + '</option></select></label>';
       h += '<p class="small muted">' + esc(r.matrix ? t('release_note') : t('release_note_none')) + '</p>';
-      h += '<div class="grid2">' + field('qcName', t('qc_name')) + field('qcReason', t('qc_reason')) + '</div>';
-      h += '<div id="dyn"></div>';
+      h += field('qcReason', t('qc_reason'));
+      h += '<div id="dyn"></div>' + pinLabel('pin', t('pin_top'));   // v0.21.0: decisão do CQ sobre lote retido — Supervisor ou acima
     } else {
       h += '<h2>' + esc(t('new_lot')) + ' · <span class="mono">' + esc(L.newLotCode(f.date || L.today(), S.lots, S.settings.deviceId).code) + '</span></h2>';
       h += '<label>' + esc(t('cereal')) + '<select name="cereal">' + CEREALS.map(function (c) { return '<option value="' + c + '"' + (f.cereal === c ? ' selected' : '') + '>' + esc(cerName(c)) + '</option>'; }).join('') + '</select></label>';
@@ -343,7 +352,7 @@
       h += '<details' + (f.afla || f.don || f.fum ? ' open' : '') + '><summary class="lbl">' + esc(t('myco_optional')) + '</summary><div class="grid3">' +
         field('afla', t('afla'), DEC) + field('don', t('don'), DEC) + field('fum', t('fum'), DEC) + '</div></details>';
       h += '<div id="dyn"></div>';
-      h += '<div class="grid2">' + field('responsible', t('responsible') + ' *') + field('notes', t('notes')) + '</div>';
+      h += field('notes', t('notes')) + pinLabel('pin');   // v0.21.0: grava com o PIN (chefe de turno ou os quatro de cima); o responsável é o título da função
     }
     h += '<div class="grid2"><button type="button" class="btn" data-action="cancel-lot">' + esc(t('cancel')) + '</button><button type="submit" class="btn primary">' + esc(f.mode === 'release' ? t('confirm') : t('save_lot')) + '</button></div>';
     return h + '</form>';
@@ -493,11 +502,15 @@
     const f = S.form;
     if (f.mode === 'release') return saveRelease();
     const kg = roundKg(L.num(f.kg, 'kg'));
-    if (!f.date || !f.supplier.trim() || !f.cereal || kg === null || isNaN(kg) || kg <= 0 || !f.responsible.trim()) { toast(t('need_fields')); return; }
+    if (!f.date || !f.supplier.trim() || !f.cereal || kg === null || isNaN(kg) || kg <= 0) { toast(t('need_fields')); return; }
     if (f.cereal === 'Milho' && !f.colour) { toast(t('need_colour')); return; }
     const d = formDecision(), r = d.r;
     if (r.code === 'INVALID') { toast(t('check_values')); return; }
     if (r.code === 'INCOMPLETE') { toast(t('enter_values') + ': ' + r.missing.map(function (k) { return t(PLABEL[k]); }).join(', ')); return; }
+    gate('prod', f.pin).then(function (w) { if (w) saveLotAs(f, d, r, kg, w); });
+  }
+  function saveLotAs(f, d, r, kg, w) {
+    f.responsible = w.title;
     const now = new Date().toISOString();
     const lot = {
       id: newId(), uid: '', date: f.date, time: f.time, guia: f.guia, supplier: f.supplier.trim(), origin: f.origin, cereal: f.cereal, colour: f.cereal === 'Milho' ? f.colour : '',
@@ -505,8 +518,8 @@
       ins: f.ins, odor: f.odor, afla: L.num(f.afla), don: L.num(f.don), fum: L.num(f.fum),
       pitStart: f.pitStart || '', siloEnd: f.siloEnd || '', cycleMin: cycleMin(f.pitStart, f.siloEnd),
       matrix: r.matrix, auto: r.code, reasons: r.reasons, holdReasons: r.hold, gradeNotes: r.notes, grade: d.grade, status: d.status,
-      dest: [], auth: [], responsible: f.responsible.trim(), notes: f.notes, createdAt: now,
-      history: [{ at: now, status: d.status, grade: d.grade, by: f.responsible.trim() }]
+      dest: [], auth: [], responsible: w.title, role: w.role, notes: f.notes, createdAt: now,
+      history: [{ at: now, status: d.status, grade: d.grade, by: w.title }]
     };
     lot.uid = lot.id;
     finishAccept(lot, d, f, function (lot2, evs) {
@@ -527,9 +540,8 @@
     const needs = authNeeds(d.grade, plan);
     const badIn = L.binCheck(plan.parts.map(function (p) { return { silo: p.silo, type: 'IN', kg: p.kg }; }), S.events);
     if (badIn.length) { toast(binMsg(badIn[0])); return; }
-    const go = function () {
+    const go = function (auth) {
       const by = (f.mode === 'release' ? f.qcName : f.responsible) || '';
-      const auth = needs.length ? { at: new Date().toISOString(), by: f.auth_by.trim(), reason: f.auth_reason.trim(), items: needs } : null;
       if (auth) lot.auth = (lot.auth || []).concat([auth]);
       lot.dest = plan.parts;
       const evs = plan.parts.map(function (p) {
@@ -539,16 +551,19 @@
       if (f.mode === 'new') evs.forEach(function (e) { e.date = f.date; e.time = f.time; });
       done(lot, evs);
     };
-    if (!needs.length) { go(); return; }
-    verifyAuth(f).then(function (err) { if (err) { toast(err); return; } f.auth_pin = ''; go(); });
+    if (!needs.length) { go(null); return; }
+    verifyAuth(f, needs).then(function (auth) { if (!auth) return; f.auth_pin = ''; go(auth); });
   }
   function saveRelease() {
     const f = S.form;
     if (!f.qcGrade) { toast(t('need_qc_decision')); return; }
-    if (!(f.qcName || '').trim() || !(f.qcReason || '').trim()) { toast(t('need_qc_fields')); return; }
+    if (!(f.qcReason || '').trim()) { toast(t('need_qc_fields')); return; }
     const d = formDecision();
     const lot = S.lots.find(function (l) { return l.id === f.id; });
     if (!lot || lot.status !== 'HELD') { toast(t('save_failed')); return; }
+    gate('top', f.pin).then(function (w) { if (!w) return; f.qcName = w.title; saveReleaseAs(f, d, lot); });
+  }
+  function saveReleaseAs(f, d, lot) {
     const now = new Date().toISOString();
     const upd = clone(lot);
     upd.status = d.status; upd.grade = d.grade;
@@ -562,7 +577,6 @@
     });
   }
   function after(person, supplier) {
-    if (person && person.trim()) S.settings.operator = person.trim();
     if (supplier && S.settings.suppliers.indexOf(supplier) < 0) S.settings.suppliers.push(supplier);
     return saveSettings().then(load);
   }
@@ -662,7 +676,7 @@
     S.recon = { loading: true }; render();
     window.FeedSync.fetchStatus().then(function (st) { S.recon = { status: st }; })
       .catch(function (e) { S.recon = { error: e.message, last: window.FeedSync.lastStatus() }; })
-      .then(function () { if (S.tab === 'silos') render(); });
+      .then(function () { if (S.tab === 'prod') render(); });
   }
   // ---------------- FIFO (0.15.0) ----------------
   const fifoKg = function (id) { return siloSt(siloById(id)).kg; };
@@ -769,7 +783,7 @@
     } else if (r.kind === 'TREAT') body = r.provider + ' · ' + t('cert') + ' ' + r.cert + (r.method ? ' · ' + r.method : '');
     else if (r.kind === 'DISP') body = t('disp_' + r.decision) + ' — ' + r.basis;
     else if (r.kind === 'SENSOR') { const th = L.storeTh(S.settings.st).t; lv = th && r.maxT !== null && r.maxT !== undefined ? L.bandTemp(r.maxT, th) : null; body = 'Ø ' + fmt1(r.avgT) + ' · ' + t('sn_max') + ' ' + fmt1(r.maxT) + ' °C'; }
-    else if (r.kind === 'OVERRIDE') body = (r.status === 'HELD' ? t('corr_hold') : t('corr_clear')) + (r.role ? ' · ' + t('role_' + r.role) : '') + ' — ' + (r.reason || '');
+    else if (r.kind === 'OVERRIDE') body = (r.status === 'HELD' ? t('corr_hold') : t('corr_clear')) + (r.role ? ' · ' + roleName(r.role) : '') + ' — ' + (r.reason || '');
     return '<div class="card small"><div class="row"><b class="grow">' + esc(t('k_' + r.kind)) + ' · ' + esc(r.silo) + ' · ' + esc(r.date) + ' ' + esc(r.time) + '</b>' + (lv !== null ? '<span class="badge lv' + lv + '">' + esc(t('lv_' + lv)) + '</span>' : '') + '</div><div class="muted">' + esc(body) + ' · ' + esc(r.by) + '</div>' + (r.notes ? '<div>' + esc(r.notes) + '</div>' : '') + '</div>';
   }
   // Abre ou actualiza o evento Âmbar/Vermelho do silo (passo 10) / open or update the silo event
@@ -796,7 +810,7 @@
   }
   function sInput(name, label, extra, dflt) { return '<label>' + esc(label) + '<input name="' + name + '" value="' + esc(sv(name, dflt)) + '"' + (extra || '') + '></label>'; }
   function openSheet(kind, data) {
-    S.sheet = Object.assign({ kind: kind, v: { date: L.today(), time: L.nowTime(), operator: S.settings.operator || '' } }, data || {}); renderSheet();
+    S.sheet = Object.assign({ kind: kind, v: { date: L.today(), time: L.nowTime() } }, data || {}); renderSheet();
     if (kind === 'out') refreshFeed();
   }
   // Estado das bins (Mill-QC) para a descarga. Sem ficheiro válido => a passagem pede confirmação ao operador.
@@ -826,7 +840,10 @@
     return '<p class="warn small">⚠ ' + esc(t('feed_warn') + ': ' + msgs.join('; ')) + '</p>';   // 0.12.0: aviso, não paragem
   }
   function sh_bin() { return S.sheet && S.sheet.v.bin ? S.sheet.v.bin : ''; }
-  const PERSON = { round: ['operator', 'operator'], weekly: ['operator', 'qc_name'], treat: ['operator', 'recorded_by'], disp: ['operator', 'qc_name'], event: ['operator', 'decided_by'], adjust: ['operator', 'corr_by'], override: ['operator', 'corr_by'] };
+  // v0.21.0 (Zhax, 27-11-2026): cada folha grava com um PIN; quem tem direito: Produção (descargas, transferências, vazio, abertura),
+  // CQ (inspecção semanal, tratamento, eventos) — chefes de turno A–D e os quatro de cima; disposição, correcções de stock e de estado
+  // (libertar um silo retido) — só Supervisor ou acima
+  const SHEET_SCOPE = { out: 'prod', transfer: 'prod', empty: 'prod', opening: 'prod', weekly: 'qc', treat: 'qc', event: 'qc', disp: 'top', adjust: 'top', override: 'top' };
   function renderSheet() {
     const el = $('#sheet');
     if (!S.sheet) { el.hidden = true; el.innerHTML = ''; return; }
@@ -882,17 +899,15 @@
     }
     if (sh.kind === 'disp') {
       h += '<p class="small muted">' + esc(t('disp_note')) + '</p><label>' + esc(t('disp_decision')) + ' *<select name="decision"><option value="">—</option>' + DISPS.map(function (d) { return '<option value="' + d + '"' + (sv('decision') === d ? ' selected' : '') + '>' + esc(t('disp_' + d)) + '</option>'; }).join('') + '</select></label>' +
-        sInput('basis', t('disp_basis') + ' *') + '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
+        sInput('basis', t('disp_basis') + ' *');
     }
     if (sh.kind === 'adjust') {
       const book = L.siloContents(sh.silo, S.events).kg;
-      h += '<p class="small">' + esc(t('corr_book')) + ': <b>' + fmtKg(book) + '</b></p>' + sInput('kg', t('corr_new_kg') + ' *', DEC) + sInput('reason', t('corr_reason') + ' *') +
-        '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
+      h += '<p class="small">' + esc(t('corr_book')) + ': <b>' + fmtKg(book) + '</b></p>' + sInput('kg', t('corr_new_kg') + ' *', DEC) + sInput('reason', t('corr_reason') + ' *');
     }
     if (sh.kind === 'override') {
-      h += '<label>' + esc(t('corr_role')) + ' *<select name="role"><option value="">—</option>' + ['QC_SUP', 'PROD_MGR'].map(function (r) { return '<option value="' + r + '"' + (sv('role') === r ? ' selected' : '') + '>' + esc(t('role_' + r)) + '</option>'; }).join('') + '</select></label>' +
-        '<label>' + esc(t('corr_status')) + ' *<select name="status"><option value="">—</option><option value="HELD"' + (sv('status') === 'HELD' ? ' selected' : '') + '>' + esc(t('corr_hold')) + '</option><option value="CLEAR"' + (sv('status') === 'CLEAR' ? ' selected' : '') + '>' + esc(t('corr_clear')) + '</option></select></label>' +
-        sInput('reason', t('corr_reason') + ' *') + '<label>' + esc(t('pin')) + ' *<input name="auth_pin" type="password" inputmode="numeric" autocomplete="off"></label>';
+      h += '<label>' + esc(t('corr_status')) + ' *<select name="status"><option value="">—</option><option value="HELD"' + (sv('status') === 'HELD' ? ' selected' : '') + '>' + esc(t('corr_hold')) + '</option><option value="CLEAR"' + (sv('status') === 'CLEAR' ? ' selected' : '') + '>' + esc(t('corr_clear')) + '</option></select></label>' +
+        sInput('reason', t('corr_reason') + ' *');
     }
     if (sh.kind === 'event') {
       const ev = S.sev.find(function (e) { return e.id === sh.id; });
@@ -903,9 +918,7 @@
         '<div class="authbox stack"><span class="check"><input type="checkbox" name="closeIt"' + (sv('closeIt') ? ' checked' : '') + '> ' + esc(t('event_close')) + '</span>' + sInput('cause', t('cause')) +
         '<span class="check"><input type="checkbox" name="unknown"' + (sv('unknown') ? ' checked' : '') + '> ' + esc(t('cause_unknown')) + '</span></div>';
     }
-    const pn = PERSON[sh.kind] || ['operator', 'operator'];
-    h += sInput(pn[0], t(pn[1]) + ' *', '', S.settings.operator || '');
-    h += '<div id="sheetdyn"></div>';
+    h += '<div id="sheetdyn"></div>' + pinLabel('pin', SHEET_SCOPE[sh.kind] === 'top' ? t('pin_top') : t('pin'));
     h += '<div class="grid2"><button type="button" class="btn" data-action="close-sheet">' + esc(t('cancel')) + '</button><button type="submit" class="btn primary">' + esc(t('confirm')) + '</button></div></form>';
     el.innerHTML = h;
     updateSheetDyn();
@@ -1013,11 +1026,12 @@
     box.innerHTML = h;
   }
   function submitSheet() {
-    const sh = S.sheet, v = sh.v;
-    const pn = (PERSON[sh.kind] || ['operator'])[0];
-    const who = sv(pn, S.settings.operator).trim();
-    if (!who) { toast(t('need_person')); return; }
+    const sh = S.sheet;
     if (sh.kind !== 'event' && !sv('date')) { toast(t('need_fields')); return; }
+    gate(SHEET_SCOPE[sh.kind] || 'prod', sv('pin')).then(function (w) { if (w && S.sheet === sh) { sh.v.pin = ''; submitSheetAs(w); } });
+  }
+  function submitSheetAs(w) {
+    const sh = S.sheet, v = sh.v, who = w.title;
     const base = { date: sv('date'), time: sv('time'), silo: sh.silo, operator: who, notes: '' };
     const monBase = { date: sv('date'), time: sv('time'), silo: sh.silo, by: who, notes: sv('notes').trim(), createdAt: new Date().toISOString() };
     let p;
@@ -1055,10 +1069,7 @@
       const fw = fifoWarns([sh.silo]); if (fw.length) { ev.warnings = fw; ev.notes = t('warn_prefix') + ' ' + fw.join(' · '); toast(fw[0]); }   // 0.15.0: aviso FIFO
       const go = function (auth) { if (auth) { ev.auth = auth; ev.notes = t('auth_mismatch') + ' — ' + auth.by + ': ' + auth.reason; } return DB.add('events', ev); };
       if (c.needs.length) {
-        verifyAuth(v).then(function (err) {
-          if (err) { toast(err); return; }
-          finishSheet(go({ at: new Date().toISOString(), by: v.auth_by.trim(), reason: v.auth_reason.trim(), items: c.needs }), who);
-        });
+        verifyAuth(v, c.needs).then(function (auth) { if (auth) finishSheet(go(auth), who); });
         return;
       }
       p = go(null);
@@ -1089,10 +1100,7 @@
     }
     if (sh.kind === 'disp') {
       if (!sv('decision') || !sv('basis').trim()) { toast(t('need_disp')); return; }
-      checkPin(sv('auth_pin')).then(function (r) {
-        if (r !== 'ok') { toast(pinMsg(r)); return; }
-        finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'DISP', decision: sv('decision'), basis: sv('basis').trim() })), who);
-      });
+      finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'DISP', decision: sv('decision'), basis: sv('basis').trim(), role: w.role })), who);
       return;
     }
     if (sh.kind === 'adjust') {
@@ -1100,20 +1108,14 @@
       if (nv === null || isNaN(nv) || nv < 0) { toast(t('need_kg')); return; }
       if (!reason) { toast(t('need_reason')); return; }
       if (nv === book) { toast(t('corr_no_change')); return; }
-      checkPin(sv('auth_pin')).then(function (r) {
-        if (r !== 'ok') { toast(pinMsg(r)); return; }
-        finishSheet(DB.add('events', Object.assign({}, base, { type: 'ADJUST', kg: Math.round((nv - book) * 1000) / 1000, from: book, to: nv, reason: reason, notes: reason })), who);
-      });
+      finishSheet(DB.add('events', Object.assign({}, base, { type: 'ADJUST', kg: Math.round((nv - book) * 1000) / 1000, from: book, to: nv, reason: reason, notes: reason, role: w.role })), who);
       return;
     }
     if (sh.kind === 'override') {
-      const st = sv('status'), reason = sv('reason').trim(), role = sv('role');
-      if (!st || ['QC_SUP', 'PROD_MGR'].indexOf(role) < 0) { toast(t('need_role')); return; }
+      const st = sv('status'), reason = sv('reason').trim();
+      if (!st) { toast(t('need_status')); return; }
       if (!reason) { toast(t('need_reason')); return; }
-      checkPin(sv('auth_pin')).then(function (r) {
-        if (r !== 'ok') { toast(pinMsg(r)); return; }
-        finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'OVERRIDE', status: st, reason: reason, role: role })), who);
-      });
+      finishSheet(DB.add('monitor', Object.assign({}, monBase, { kind: 'OVERRIDE', status: st, reason: reason, role: w.role })), who);   // v0.21.0: Supervisor ou acima, pelo PIN
       return;
     }
     if (sh.kind === 'event') {
@@ -1129,18 +1131,18 @@
     finishSheet(p, who);
   }
   function finishSheet(p, who) {
-    p.then(function () { S.settings.operator = who; return saveSettings(); }).then(load).then(function () { S.sheet = null; render(); toast(t('saved')); })
+    p.then(function () { return saveSettings(); }).then(load).then(function () { S.sheet = null; render(); toast(t('saved')); })
       .catch(function () { toast(t('save_failed')); });
   }
 
   // ---------------- exportar / export ----------------
   // 0.14.0: Registos do dia (js/grain-book.js), como na Prodn-Mgt; a exportação e a cópia de segurança ficam por baixo
   function recordsView() {
-    const day = S.recDay || L.shiftOf(L.today(), L.nowTime()).date, cat = S.recCat || '';
+    const day = S.repDay || L.shiftOf(L.today(), L.nowTime()).date, cat = S.recCat || '';   // v0.21.0: o mesmo dia do relatório
     const all = window.GrainBook.items({ lots: S.lots, events: S.events, mon: S.mon, maint: (window.__shiftUI && window.__shiftUI.recs ? window.__shiftUI.recs() : []) }, day, L.shiftOf);
     const counts = {}; all.forEach(function (x) { counts[x.cat] = (counts[x.cat] || 0) + 1; });
     const list = all.filter(function (x) { return !cat || x.cat === cat; }).slice().reverse();
-    return '<div class="card stack"><h2>' + esc(t('rec_title')) + '</h2><label>' + esc(t('rec_day')) + '<input type="date" id="recday" value="' + esc(day) + '"></label><p class="small muted">' + esc(t('rec_note')) + '</p>' +
+    return '<div class="card stack"><h2>' + esc(t('rec_title')) + ' · ' + esc(day) + '</h2><p class="small muted">' + esc(t('rec_note')) + '</p>' +
       '<div class="chips">' + [''].concat(window.GrainBook.CATS).filter(function (c) { return !c || counts[c]; }).map(function (c) {
         return '<button type="button" class="chip' + (cat === c ? ' on' : '') + '" data-action="reccat" data-cat="' + c + '">' + esc(c ? window.GrainBook.catName(c, I18n.lang) : t('rec_all')) + ' ' + (c ? counts[c] : all.length) + '</button>'; }).join('') + '</div></div>' +
       '<div class="card stack">' + (list.length ? list.map(function (x) { return '<div class="row small"><span class="mono">' + esc(L.nowTime(new Date(x.t))) + '</span><span class="grow">' + esc(window.GrainBook.text(x, I18n.lang, fmtKg)) + '</span><span class="muted">' + esc(window.GrainBook.catName(x.cat, I18n.lang)) + '</span></div>'; }).join('') : '<p class="small muted">' + esc(t('rec_none')) + '</p>') + '</div>' + exportView();
@@ -1151,7 +1153,7 @@
     const items = window.GrainBook.items({ lots: S.lots, events: S.events, mon: S.mon, maint: (window.__shiftUI && window.__shiftUI.recs ? window.__shiftUI.recs() : []) }, day, L.shiftOf);
     return { day: day, win: win, r: window.GrainReport.summary(items, win, L.shiftOf) };
   }
-  function reportView() {
+  function prodReport() {
     const x = repData(), r = x.r, kpi = function (v, l) { return '<div class="kpi"><div class="big2">' + v + '</div><div class="small muted">' + esc(l) + '</div></div>'; };
     return '<div class="card stack"><h2>' + esc(t('rp_title')) + '</h2><div class="grid2"><label>' + esc(t('rec_day')) + '<input type="date" id="repday" value="' + esc(x.day) + '"></label>' +
       '<label>' + esc(t('rp_shift')) + '<select id="repwin"><option value="">' + esc(t('rp_whole')) + '</option><option value="D"' + (x.win === 'D' ? ' selected' : '') + '>' + esc(t('rp_D')) + '</option><option value="N"' + (x.win === 'N' ? ' selected' : '') + '>' + esc(t('rp_N')) + '</option></select></label></div>' +
@@ -1163,6 +1165,99 @@
         (r.discharge.warned ? '<p class="small warn">' + esc(t('rp_warned').replace('{n}', r.discharge.warned)) + '</p>' : '') + '</div>' +
       '<div class="card stack"><h2>' + esc(t('rp_shifts')) + '</h2>' + (r.shifts.length ? r.shifts.map(function (s) { return '<div class="small">' + esc((s.period === 'N' ? t('rp_N') : t('rp_D')) + ' · ' + s.leader + (s.pin === 'ok' ? ' 🔒' : s.pin ? ' · ' + t('rp_nopin') : '') + ' · ' + t('rp_in') + ' ' + s.at + ' · ' + (s.out ? t('rp_outsh') + ' ' + s.out.date + ' ' + s.out.time : t('rp_noout'))) + '</div>'; }).join('') : '<p class="small muted">—</p>') + '</div>' +
       '<div class="card stack"><h2>' + esc(t('rp_stock')) + '</h2>' + (r.stockEnd ? '<table class="tbl small">' + r.stockEnd.map(function (s) { return '<tr><td>' + esc(s.silo) + '</td><td>' + fmtKg(s.kg) + '</td></tr>'; }).join('') + '</table>' : '<p class="small muted">' + esc(t('rp_nostock')) + '</p>') + '</div>';
+  }
+  // v0.21.0 (Zhax, 27-11-2026): Relatórios por secção (Produção, CQ, Manutenção, FSSC), só de leitura, cada um com o resumo dos
+  // últimos 7 dias de produção até ao dia escolhido — como na Moagem de Milho v2.27.0
+  function reportView() {
+    const k = S.sub.report;
+    if (k === 'prod') return prodReport() + week7('prod') + recordsView() + exportView();
+    const day = S.repDay || L.shiftOf(L.today(), L.nowTime()).date, win = S.repWin || '';
+    const head = '<div class="card stack"><h2>' + esc(t('rp_title')) + ' · ' + esc(t('sb_report_' + k)) + '</h2><div class="grid2"><label>' + esc(t('rec_day')) + '<input type="date" id="repday" value="' + esc(day) + '"></label>' +
+      (k === 'fssc' ? '' : '<label>' + esc(t('rp_shift')) + '<select id="repwin"><option value="">' + esc(t('rp_whole')) + '</option><option value="D"' + (win === 'D' ? ' selected' : '') + '>' + esc(t('rp_D')) + '</option><option value="N"' + (win === 'N' ? ' selected' : '') + '>' + esc(t('rp_N')) + '</option></select></label>') + '</div></div>';
+    return head + (k === 'qc' ? qcReport(day, win) : k === 'maint' ? maintReport(day, win) : fsscReport(day)) + week7(k);
+  }
+  const kpiBox = function (v, l) { return '<div class="kpi"><div class="big2">' + v + '</div><div class="small muted">' + esc(l) + '</div></div>'; };
+  const pct1 = function (v) { return typeof v === 'number' && isFinite(v) ? String(Math.round(v * 10) / 10).replace('.', ',') + ' %' : '—'; };
+  const inWin = function (r, day, win) { const sh = L.shiftOf(r.date, r.time); return sh.date === day && (!win || sh.window === win); };
+  function qcDay(day, win) {
+    const lots = S.lots.filter(function (l) { return !l.cancelled && l.date && inWin(l, day, win); });
+    const mon = S.mon.filter(function (r) { return r.date && inWin(r, day, win); });
+    const of = function (k) { return mon.filter(function (r) { return r.kind === k; }).length; };
+    return { lots: lots, acc: lots.filter(function (l) { return l.status === 'ACCEPTED'; }).length, held: lots.filter(function (l) { return l.status === 'HELD'; }).length, rej: lots.filter(function (l) { return l.status === 'REJECTED'; }).length,
+      weekly: of('WEEKLY'), treat: of('TREAT'), disp: of('DISP'), override: of('OVERRIDE'), events: S.sev.filter(function (e) { return e.date && inWin(e, day, win); }).length };
+  }
+  function qcReport(day, win) {
+    const q = qcDay(day, win), byG = {};
+    q.lots.filter(function (l) { return l.grade; }).forEach(function (l) { byG[l.grade] = (byG[l.grade] || 0) + 1; });
+    const held = S.settings.silos.filter(function (x) { const ss = siloSt(x); return ss.holdWarn || ss.rejectWarn; }).map(function (x) { return x.id; });
+    return '<div class="card stack"><div class="grid2">' + kpiBox(q.lots.length, t('rp_q_lots')) + kpiBox(q.acc + ' / ' + q.held + ' / ' + q.rej, t('rp_q_ahr')) +
+      kpiBox(q.weekly, t('k_WEEKLY')) + kpiBox(q.treat, t('k_TREAT')) + kpiBox(q.disp + q.override, t('rp_q_disp')) + kpiBox(q.events, t('rp_q_events')) + '</div>' +
+      '<p class="small"><b>' + esc(t('rp_q_grades')) + ':</b> ' + (Object.keys(byG).length ? Object.keys(byG).map(function (g) { return esc(gradeName(g)) + ' ' + byG[g]; }).join(' · ') : '—') + '</p>' +
+      '<p class="small"><b>' + esc(t('rp_q_heldnow')) + ':</b> ' + esc(held.join(', ') || '—') + '</p></div>';
+  }
+  function maintReport(day, win) {
+    const E = window.Maint.effective(MU.entries()).filter(function (e) { return e.prodDay === day && (!win || e.period === win); });
+    const of = function (x) { return E.filter(function (e) { return e.kind === x; }); }, mt = MU.t;
+    const stopMin = of('stop').reduce(function (a, e) { return a + (Number(e.durationMin) || 0); }, 0);
+    return '<div class="card stack"><div class="grid2">' + kpiBox(of('stop').length + ' · ' + stopMin + ' min', mt('t_stops')) + kpiBox(of('work').length, mt('t_work')) +
+      kpiBox(of('pmJob').length + ' / ' + of('pmUpdate').filter(function (e) { return e.status === 'done'; }).length, mt('t_pm')) + kpiBox(of('consumable').length, mt('t_cons')) + '</div>' +
+      of('mLogin').map(function (e) { return '<div class="small"><b>' + esc(mt('slogin')) + ' · ' + esc(e.period === 'N' ? t('rp_N') : t('rp_D')) + '</b> · ' + esc(e.by || '') + '<br>' + esc((e.pm || []).map(function (x) { return x.label; }).concat((e.bds || []).map(function (b) { return b.description; })).join(' | ') || '—') + '</div>'; }).join('') +
+      of('mLogout').map(function (e) { return '<div class="small"><b>' + esc(mt('slogout')) + ' · ' + esc(e.period === 'N' ? t('rp_N') : t('rp_D')) + '</b><br>' + esc((e.items || []).map(function (x) { return x.label + ': ' + x.pct + ' %'; }).join(' | ') || '—') + '</div>'; }).join('') +
+      of('stop').map(function (e) { return '<div class="small">' + esc((e.code || '') + ' · ' + (e.durationMin || '') + ' min · ' + (e.description || '') + (e.action ? ' · ' + e.action : '') + ' · ' + (e.by || '')) + '</div>'; }).join('') + '</div>';
+  }
+  function fsscReport(day) {
+    const F = window.Fssc, R = (window.FsscReqs || {}).REQS || [], E = FU.entries(), mo = day.slice(0, 7), today = L.shiftOf(L.today(), L.nowTime()).date;
+    const sc = F.score(R, 'grain', F.grades(E, mo)), tr = F.trainingMonth(F.trainings(E, today), mo);
+    return '<div class="card stack"><h3>' + esc(mo) + '</h3><div class="grid2">' + kpiBox(pct1(sc.score), t('fs_score')) + kpiBox(sc.graded + '/' + sc.applicable, t('fs_graded')) +
+      kpiBox(F.monthState(E, mo).closed ? t('yes') : t('no'), t('fs_closed')) + kpiBox(F.actions(E, today).filter(function (a) { return !a.done; }).length, t('fs_actions')) +
+      kpiBox(F.complaints(E, today).filter(function (c) { return c.open; }).length, t('fs_complaints')) + kpiBox(tr.held + '/' + tr.planned, t('fs_training')) + '</div></div>';
+  }
+  function week7(ty) {
+    const day = S.repDay || L.shiftOf(L.today(), L.nowTime()).date, days = [];
+    for (let i = 6; i >= 0; i--) days.push(new Date(Date.parse(day + 'T12:00:00Z') - i * 86400000).toISOString().slice(0, 10));
+    const dd = function (d) { return d.slice(8, 10) + '/' + d.slice(5, 7); };
+    const tot = function (rows, i) { return rows.reduce(function (a, r) { return a + (typeof r[i] === 'number' ? r[i] : 0); }, 0); };
+    const tbl = function (head, rows, foot) {
+      return '<div class="tablewrap"><table class="tbl small"><tr>' + head.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (c, i) { return '<td' + (i ? ' class="n"' : '') + '>' + (typeof c === 'number' ? fmtNum(c, 0) : esc(c)) + '</td>'; }).join('') + '</tr>'; }).join('') +
+        (foot ? '<tr>' + foot.map(function (c, i) { return '<td' + (i ? ' class="n"' : '') + '><b>' + (typeof c === 'number' ? fmtNum(c, 0) : esc(c)) + '</b></td>'; }).join('') + '</tr>' : '') + '</table></div>';
+    };
+    const title = '<h2>' + esc(t('wk7Title')) + ' · ' + dd(days[0]) + '–' + dd(days[6]) + '</h2>';
+    let body = '';
+    if (ty === 'prod') {
+      const maint = window.__shiftUI && window.__shiftUI.recs ? window.__shiftUI.recs() : [];
+      const R = days.map(function (d) { const r = window.GrainReport.summary(window.GrainBook.items({ lots: S.lots, events: S.events, mon: S.mon, maint: maint }, d, L.shiftOf), '', L.shiftOf);
+        const outs = maint.filter(function (x) { return x.kind === 'shiftOut' && x.prodDay === d && typeof x.pctDone === 'number'; });
+        return [dd(d), r.intake.trucks, r.intake.kg, r.discharge.kg, r.transfer.kg, r.stops.min, outs.length ? pct1(outs.reduce(function (a, x) { return a + x.pctDone; }, 0) / outs.length) : '—']; });
+      body = tbl([t('rec_day'), t('wk_trucks'), t('rp_intake') + ' (kg)', t('rp_out') + ' (kg)', t('rp_tr') + ' (kg)', t('rp_stops') + ' (min)', t('wk_done')], R, [t('wk_total'), tot(R, 1), tot(R, 2), tot(R, 3), tot(R, 4), tot(R, 5), '']);
+    } else if (ty === 'qc') {
+      const R = days.map(function (d) { const q = qcDay(d, ''); return [dd(d), q.lots.length, q.acc, q.held, q.rej, q.weekly, q.treat, q.events]; });
+      body = tbl([t('rec_day'), t('rp_q_lots'), t('st_ACCEPTED'), t('st_HELD'), t('st_REJECTED'), t('k_WEEKLY'), t('k_TREAT'), t('rp_q_events')], R, [t('wk_total'), tot(R, 1), tot(R, 2), tot(R, 3), tot(R, 4), tot(R, 5), tot(R, 6), tot(R, 7)]);
+    } else if (ty === 'maint') {
+      const E = window.Maint.effective(MU.entries()), mt = MU.t;
+      const R = days.map(function (d) { const x = E.filter(function (e) { return e.prodDay === d; }), of = function (k) { return x.filter(function (e) { return e.kind === k; }); };
+        return [dd(d), of('stop').length, of('stop').reduce(function (a, e) { return a + (Number(e.durationMin) || 0); }, 0), of('pmUpdate').filter(function (e) { return e.status === 'done'; }).length, of('consumable').length]; });
+      body = tbl([t('rec_day'), mt('t_stops'), 'min', mt('t_pm') + ' ✔', mt('t_cons')], R, [t('wk_total'), tot(R, 1), tot(R, 2), tot(R, 3), tot(R, 4)]);
+    } else if (ty === 'fssc') {
+      const E = window.Fssc.effective(FU.entries());
+      const R = days.map(function (d) { const outs = E.filter(function (e) { return e.kind === 'oaLogout' && e.day === d; }), ps = [].concat.apply([], outs.map(function (o) { return (o.items || []).map(function (i) { return Number(i.pct); }).filter(isFinite); }));
+        return [dd(d), E.some(function (e) { return e.kind === 'oaLogin' && e.day === d; }) ? '✔' : '—', ps.length ? pct1(ps.reduce(function (a, v) { return a + v; }, 0) / ps.length) : '—',
+          E.filter(function (e) { return e.kind === 'actionDone' && String(e.date || e.prodDay || '').slice(0, 10) === d; }).length, E.filter(function (e) { return e.kind === 'complaint' && e.received === d; }).length, E.filter(function (e) { return e.kind === 'trainingAtt' && e.heldOn === d; }).length]; });
+      body = tbl([t('rec_day'), t('wk_login'), t('wk_done'), t('fs_actions') + ' ✔', t('fs_complaints'), t('fs_training')], R, [t('wk_total'), '', '', tot(R, 3), tot(R, 4), tot(R, 5)]);
+    }
+    return '<div class="card stack">' + title + body + '</div>';
+  }
+  // CQ → Amostras de recepção: resultado da classificação de cada lote (só leitura); os lotes retidos decidem-se aqui (Supervisor ou acima)
+  function samplesView() {
+    const held = S.lots.filter(function (l) { return l.status === 'HELD'; });
+    const recent = S.lots.filter(function (l) { return !l.cancelled; }).slice(0, 40);
+    const row = function (l) {
+      const v = [['moisture', l.hum], ['foreign', l.fm], ['broken', l.brk], ['diseased', l.dis], ['sw', l.sw]].filter(function (x) { return x[1] !== null && x[1] !== undefined && x[1] !== ''; });
+      return '<div class="card stack"><div class="row"><div class="grow"><div class="mono">' + esc(l.code || l.id) + '</div><div class="small muted">' + esc(l.date + ' ' + l.time) + ' · ' + esc(cerName(l.cereal)) + (l.colour ? ' ' + esc(l.colour) : '') + ' · ' + esc(l.supplier) + ' · ' + fmtKg(L.num(l.kg, 'kg')) + '</div></div>' +
+        '<div class="stack right">' + statusBadge(l.status) + gradeBadge(l.grade) + '</div></div><div class="small">' + v.map(function (x) { return esc(t(x[0])) + ' ' + esc(fmtNum(x[1])); }).join(' · ') + '</div>' +
+        (l.status === 'HELD' ? '<button class="btn small" data-action="release" data-id="' + esc(l.id) + '">' + esc(t('decide_held')) + '</button>' : '') + '</div>';
+    };
+    return (held.length ? '<h2>' + esc(t('lots_held')) + ' (' + held.length + ')</h2>' + held.map(row).join('') : '') +
+      '<h2>' + esc(t('sm_recent')) + '</h2>' + (recent.length ? recent.filter(function (l) { return l.status !== 'HELD'; }).map(row).join('') : '<p class="muted">' + esc(t('no_lots')) + '</p>');
   }
   function reportXlsx() {
     const X = window.XLSX, x = repData(), r = x.r; if (!X) return;
@@ -1180,12 +1275,7 @@
   function exportView() {
     const d = L.today();
     return '<div class="card stack"><div class="grid2"><label>' + esc(t('export_from')) + '<input id="exfrom" type="date" value="' + d.slice(0, 8) + '01"></label><label>' + esc(t('export_to')) + '<input id="exto" type="date" value="' + d + '"></label></div>' +
-      '<button class="btn primary block" data-action="export-xlsx">' + esc(t('export_xlsx')) + '</button><p class="muted small">' + esc(t('export_note')) + '</p></div>' +
-      '<div class="card stack"><h2>' + esc(t('backup')) + '</h2>' + (backupDue() ? '<p class="warn">' + esc(t('backup_due')) + '</p>' : '') + '<p>' + esc(t('backup_note')) + '</p><p class="small muted">' + esc(t('last_backup')) + ': ' + esc(S.settings.lastBackup ? lt(S.settings.lastBackup) : t('never')) + '</p>' +
-      '<button class="btn block" data-action="backup">' + esc(t('backup_save')) + '</button>' +
-      '<div class="stack restorebox"><div class="lbl strong">' + esc(t('backup_restore')) + '</div><p class="small muted">' + esc(t('restore_note')) + '</p>' +
-      (S.settings.pin ? '<label>' + esc(t('pin')) + '<input id="restorepin" type="password" inputmode="numeric" autocomplete="off"></label>' : '') +
-      '<label class="btn block filebtn">' + esc(t('choose_file')) + '<input type="file" id="restore" accept="application/json,.json" hidden></label></div></div>';
+      '<button class="btn primary block" data-action="export-xlsx">' + esc(t('export_xlsx')) + '</button><p class="muted small">' + esc(t('export_note')) + '</p></div>';
   }
   function download(blob, name) {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
@@ -1267,8 +1357,8 @@
     if (!file) return;
     const pinEl = $('#restorepin');
     const reset = function () { if (input) input.value = ''; };
-    checkPin(pinEl ? pinEl.value : '').then(function (r) {
-      if (r !== 'ok' && r !== 'nopin') { toast(pinMsg(r)); reset(); return; }
+    gate('top', pinEl ? pinEl.value : '').then(function (w) {
+      if (!w) { reset(); return; }
       return file.text().then(function (txt) {
         let data; try { data = JSON.parse(txt); } catch (e) { throw new Error('bad'); }
         if (!L.validBackup(data)) throw new Error('bad');
@@ -1298,38 +1388,74 @@
   }
 
   // ---------------- definições / settings ----------------
+  // v0.21.0 (Zhax, 27-11-2026): Definições só com o PIN dos quatro de cima (PM, Head Miller, Chief Miller, Supervisor).
+  // Fora do bloqueio ficam só a língua e o quadro dos PIN (um PIN ainda não definido grava-se livremente; mudar um já definido pede o do Chief Miller).
   function settingsView() {
     const s = S.settings;
-    let h = '<div class="card stack"><h2>' + esc(t('dx_feed_title')) + '</h2><p class="small muted">' + esc(window.FeedSync && window.FeedSync.configured() ? (window.FeedSync.signedIn() ? t('dx_feed_on') : t('dx_feed_off')) : t('dx_feed_nokey')) + '</p>' +
-      (window.FeedSync && window.FeedSync.configured() ? '<div class="grid2"><button type="button" class="btn" data-action="feed-in">' + esc(t('dx_connect')) + '</button><button type="button" class="btn" data-action="feed-out">' + esc(t('dx_disconnect')) + '</button></div>' : '') + '</div>' +
-      recSyncCard() +
-      '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
-      '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
-      '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label>' +
-      '<label>' + esc(t('language')) + '<select name="lang"><option value="pt" ' + (s.lang === 'pt' ? 'selected' : '') + '>Português</option><option value="en" ' + (s.lang === 'en' ? 'selected' : '') + '>English</option></select></label></div>';
-    h += '<p class="small muted">' + esc(t('version_line')) + ' ' + esc(L.APP_VERSION) + ' · ' + esc(t('master_line')) + ' ' + esc(L.MASTER_VERSION) + '</p>';
-    h += '<div class="card stack"><h2>' + esc(t('suppliers_cfg')) + '</h2>' + s.suppliers.map(function (x, i) {
-      return '<div class="grid2b"><input name="sup_' + i + '" value="' + esc(x) + '" aria-label="' + esc(t('supplier')) + '"><button type="button" class="btn small" data-action="rm-sup" data-i="' + i + '">' + esc(t('remove')) + '</button></div>';
-    }).join('') + '<button type="button" class="btn small" data-action="add-sup">+ ' + esc(t('add_supplier')) + '</button><button class="btn primary" type="submit">' + esc(t('save')) + '</button></div></form>';
-    // PIN
-    h += '<form id="pinform" class="card stack" novalidate><h2>' + esc(t('pin_title')) + '</h2>';
-    if (!s.pin) h += '<p class="warn small">' + esc(t('pin_create_note')) + '</p><div class="grid2"><label>' + esc(t('pin_new')) + '<input name="p1" type="password" inputmode="numeric" autocomplete="new-password"></label><label>' + esc(t('pin_repeat')) + '<input name="p2" type="password" inputmode="numeric" autocomplete="new-password"></label></div><button class="btn primary" type="submit">' + esc(t('pin_create')) + '</button>';
-    else h += '<p class="small muted">' + esc(t('pin_is_set')) + ' ' + esc(s.pin.setAt ? s.pin.setAt.slice(0, 10) : '') + '. ' + esc(t('pin_limits')) + '</p><details><summary class="small">' + esc(t('pin_change')) + '</summary><div class="stack"><label>' + esc(t('pin_current')) + '<input name="p0" type="password" inputmode="numeric" autocomplete="off"></label><div class="grid2"><label>' + esc(t('pin_new')) + '<input name="p1" type="password" inputmode="numeric" autocomplete="new-password"></label><label>' + esc(t('pin_repeat')) + '<input name="p2" type="password" inputmode="numeric" autocomplete="new-password"></label></div><button class="btn" type="submit">' + esc(t('pin_change')) + '</button></div></details>';
-    h += '</form>';
-    // Protegido / protected
-    h += '<form id="protform" class="stack" novalidate>';
+    let h = '<form id="langform" class="card stack" novalidate><h2>' + esc(t('language')) + '</h2><select name="lang"><option value="pt" ' + (s.lang === 'pt' ? 'selected' : '') + '>Português</option><option value="en" ' + (s.lang === 'en' ? 'selected' : '') + '>English</option></select></form>';
+    h += rolePinCard();
     if (!S.unlocked) {
-      h += '<div class="card stack"><h2>🔒 ' + esc(t('protected')) + '</h2><p class="small muted">' + esc(t('protected_note')) + '</p>' + protSummary();
-      if (s.pin) h += '<div class="grid2b"><input name="unlockpin" type="password" inputmode="numeric" autocomplete="off" aria-label="' + esc(t('pin')) + '" placeholder="' + esc(t('pin')) + '"><button class="btn primary" type="submit">' + esc(t('unlock')) + '</button></div>';
-      else h += '<p class="warn small">' + esc(t('pin_first')) + '</p>';
-      h += '</div>';
-    } else h += protEditor() + SU.jobsEditor() + SU.leadersEditor() + warnCard();   // 0.14.1: limpar avisos (parte protegida por PIN)   // 0.12.1: lista de trabalhos do turno só com o PIN de supervisor
-    h += '</form><p class="small muted" id="storage"></p><p class="small muted">' + esc(t('install_hint')) + '</p>';
+      h += '<form id="unlockform" class="card stack" novalidate><h2>🔒 ' + esc(t('protected')) + '</h2><p class="small muted">' + esc(t('protected_note')) + '</p>' + protSummary();
+      h += topPinSet() ? '<div class="grid2b"><input name="unlockpin" type="password" maxlength="4" autocomplete="off" aria-label="' + esc(t('pin')) + '" placeholder="' + esc(t('pin')) + '"><button class="btn primary" type="submit">' + esc(t('unlock')) + '</button></div>'
+        : '<p class="warn small">' + esc(t('pin_first')) + '</p>';
+      h += '</form>';
+    } else {
+      h += '<div class="card stack"><h2>' + esc(t('dx_feed_title')) + '</h2><p class="small muted">' + esc(window.FeedSync && window.FeedSync.configured() ? (window.FeedSync.signedIn() ? t('dx_feed_on') : t('dx_feed_off')) : t('dx_feed_nokey')) + '</p>' +
+        (window.FeedSync && window.FeedSync.configured() ? '<div class="grid2"><button type="button" class="btn" data-action="feed-in">' + esc(t('dx_connect')) + '</button><button type="button" class="btn" data-action="feed-out">' + esc(t('dx_disconnect')) + '</button></div>' : '') + '</div>' +
+        recSyncCard() +
+        '<form id="generalform" class="stack" novalidate><div class="card stack"><h2>' + esc(t('general')) + '</h2><label>' + esc(t('mill_name')) + '<input name="millName" value="' + esc(s.millName) + '"></label><label>' + esc(t('site')) + '<input name="site" value="' + esc(s.site) + '"></label>' +
+        '<label>' + esc(t('operator_id')) + '<input name="operatorId" value="' + esc(s.operatorId || '') + '"></label>' +
+        '<label class="row"><input type="checkbox" name="testMode"' + (s.testMode ? ' checked' : '') + '> ' + esc(t('test_mode')) + '</label></div>' +
+        '<div class="card stack"><h2>' + esc(t('suppliers_cfg')) + '</h2>' + s.suppliers.map(function (x, i) {
+          return '<div class="grid2b"><input name="sup_' + i + '" value="' + esc(x) + '" aria-label="' + esc(t('supplier')) + '"><button type="button" class="btn small" data-action="rm-sup" data-i="' + i + '">' + esc(t('remove')) + '</button></div>';
+        }).join('') + '<button type="button" class="btn small" data-action="add-sup">+ ' + esc(t('add_supplier')) + '</button><button class="btn primary" type="submit">' + esc(t('save')) + '</button></div></form>';
+      h += '<form id="protform" class="stack" novalidate>' + protEditor() + '</form>' + SU.jobsEditor() + warnCard() + backupCard();
+    }
+    h += '<p class="small muted">' + esc(t('version_line')) + ' ' + esc(L.APP_VERSION) + ' · ' + esc(t('master_line')) + ' ' + esc(L.MASTER_VERSION) + '</p>';
+    h += '<p class="small muted" id="storage"></p><p class="small muted">' + esc(t('install_hint')) + '</p>';
     setTimeout(function () {
       const el = $('#storage');
       if (el && navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(function (p) { el.textContent = p ? t('storage_ok') : t('storage_maybe'); });
     }, 0);
     return h;
+  }
+  // Quadro dos PIN por função (como na Moagem de Milho): estado e PIN novo de cada função
+  function rolePinCard() {
+    const rp = S.settings.rolePins || {}, any = window.Roles.ALL.some(function (k) { return rp[k]; });
+    return '<div class="card stack"><h2>' + esc(t('pin_title')) + '</h2><p class="small muted">' + esc(t('pin_roles_note')) + '</p><div class="tablewrap"><table class="tbl"><tr><th></th><th>' + esc(t('status')) + '</th><th>' + esc(t('pin_new')) + '</th></tr>' +
+      window.Roles.ALL.map(function (k) {
+        return '<tr><td>' + esc(roleName(k)) + '</td><td><span class="badge ' + (rp[k] ? 'b-ACCEPTED' : 'b-HELD') + '">' + esc(rp[k] ? t('pin_is_set_short') : t('pin_not_set_short')) + '</span></td>' +
+          '<td><input data-rpin="' + k + '" type="password" maxlength="4" autocomplete="new-password" style="width:6em"></td></tr>';
+      }).join('') + '</table></div>' +
+      (any ? '<label>' + esc(t('pin_chief_change')) + '<input id="pinChief" type="password" maxlength="4" autocomplete="off"></label>' : '') +
+      '<button type="button" class="btn primary" data-action="rpin-save">' + esc(t('pin_save')) + '</button></div>';
+  }
+  async function rolePinSave() {
+    const R = window.Roles, rp = Object.assign({}, S.settings.rolePins || {});
+    const nw = Array.prototype.slice.call(document.querySelectorAll('[data-rpin]')).filter(function (el) { return el.value !== ''; }).map(function (el) { return { role: el.dataset.rpin, pin: el.value }; });
+    if (!nw.length) { toast(t('pin_none_typed')); return; }
+    if (nw.some(function (x) { return !R.PIN_RE.test(x.pin); })) { toast(t('pin_format')); return; }
+    // um PIN por função — o mesmo PIN em duas funções daria direitos errados
+    if (nw.some(function (x, i) { return nw.some(function (y, j) { return j !== i && y.pin === x.pin; }); })) { toast(t('pin_dup')); return; }
+    try {
+      for (const x of nw) for (const k of R.ALL) if (k !== x.role && !nw.some(function (y) { return y.role === k; }) && await RP.ok(rp[k], x.pin)) { toast(t('pin_dup')); return; }
+      if (nw.some(function (x) { return rp[x.role]; })) {   // mudar um PIN já definido: PIN do Chief Miller (sem Chief Miller definido: um dos quatro de cima)
+        const w = await RP.who(($('#pinChief') || {}).value, 'top');
+        if (w.err) { toast(w.err); return; }
+        if (rp.chief && w.role !== 'chief') { toast(t('pin_chief_only')); return; }
+      }
+      for (const x of nw) rp[x.role] = await RP.makePin(x.pin, Array.from(crypto.getRandomValues(new Uint8Array(16))).map(function (b) { return b.toString(16).padStart(2, '0'); }).join(''));
+    } catch (e) { toast(t('pin_nocrypto')); return; }
+    S.settings.rolePins = rp;
+    await saveSettings(); render(); toast(t('pin_saved'));
+  }
+  function backupCard() {
+    return '<div class="card stack"><h2>' + esc(t('backup')) + '</h2>' + (backupDue() ? '<p class="warn">' + esc(t('backup_due')) + '</p>' : '') + '<p>' + esc(t('backup_note')) + '</p><p class="small muted">' + esc(t('last_backup')) + ': ' + esc(S.settings.lastBackup ? lt(S.settings.lastBackup) : t('never')) + '</p>' +
+      '<button class="btn block" data-action="backup">' + esc(t('backup_save')) + '</button>' +
+      '<div class="stack restorebox"><div class="lbl strong">' + esc(t('backup_restore')) + '</div><p class="small muted">' + esc(t('restore_note')) + '</p>' +
+      '<label>' + esc(t('pin')) + '<input id="restorepin" type="password" maxlength="4" autocomplete="off"></label>' +
+      '<label class="btn block filebtn">' + esc(t('choose_file')) + '<input type="file" id="restore" accept="application/json,.json" hidden></label></div>' +
+      '<button type="button" class="btn" data-action="lock">' + esc(t('lock')) + '</button></div>';
   }
   function protSummary() {
     const s = S.settings;
@@ -1438,24 +1564,16 @@
   function readGeneral(form) {
     const v = Object.fromEntries(new FormData(form).entries());
     const s = S.settings;
-    s.millName = v.millName || ''; s.site = v.site || ''; s.lang = v.lang || 'pt';
+    s.millName = v.millName || ''; s.site = v.site || '';
     s.operatorId = (v.operatorId || '').trim() || null; s.testMode = v.testMode === 'on';
     s.suppliers = s.suppliers.map(function (x, i) { return (v['sup_' + i] || '').trim(); }).filter(Boolean);
   }
-  function pinSubmit(form) {
-    const v = Object.fromEntries(new FormData(form).entries());
-    if (!/^\d{4,8}$/.test(v.p1 || '')) { toast(t('pin_format')); return; }
-    if (v.p1 !== v.p2) { toast(t('pin_mismatch')); return; }
-    const go = function () { setPin(v.p1).then(function () { S.unlocked = !S.settings.pin || S.unlocked; render(); toast(t('pin_saved')); }, function () { toast(t('pin_nocrypto')); }); };
-    if (!S.settings.pin) { go(); return; }
-    checkPin(v.p0).then(function (r) { if (r !== 'ok') { toast(pinMsg(r)); return; } go(); });
+  function unlockSubmit(form) {
+    const pin = form.querySelector('[name=unlockpin]');
+    gate('settings', pin ? pin.value : '').then(function (w) { if (w) { S.unlocked = true; render(); } });
   }
   function protSubmit(form) {
-    if (!S.unlocked) {
-      const pin = form.querySelector('[name=unlockpin]');
-      checkPin(pin ? pin.value : '').then(function (r) { if (r !== 'ok') { toast(pinMsg(r)); return; } S.unlocked = true; render(); });
-      return;
-    }
+    if (!S.unlocked) return;
     const r = readProt(form);
     if (r.errors.length) { toast(r.errors[0]); return; }
     r.s.silos.forEach(function (x) { delete x._new; });
@@ -1467,8 +1585,9 @@
   document.addEventListener('click', function (e) {
     const b = e.target.closest('[data-action]'); if (!b || b.disabled) return;
     const a = b.dataset.action;
-    if (a === 'tab') { if (S.tab === 'settings' && b.dataset.tab !== 'settings') { S.unlocked = false; } S.tab = b.dataset.tab; S.sheet = null; render(); window.scrollTo(0, 0); }
-    if (a === 'new-lot') { S.form = newForm(); render(); window.scrollTo(0, 0); }
+    if (a === 'tab') { if (S.tab === 'settings' && b.dataset.tab !== 'settings') { S.unlocked = false; } S.tab = b.dataset.tab; if (b.dataset.sub) S.sub[S.tab] = b.dataset.sub; S.sheet = null; render(); window.scrollTo(0, 0); }
+    if (a === 'sub') { S.sub[b.dataset.tab] = b.dataset.sub; S.sheet = null; render(); window.scrollTo(0, 0); return; }
+    if (a === 'new-lot') { S.form = newForm(); S.formAt = 'prod'; render(); window.scrollTo(0, 0); }
     if (a === 'cycle') { S.cycleLot = b.dataset.id; render(); return; }
     if (a === 'cycle-cancel') { S.cycleLot = null; render(); return; }
     if (a === 'cycle-save') {
@@ -1476,11 +1595,14 @@
       if (!l) return;
       const m = cycleMin(pa, pb);
       if (m === null) { toast(t('need_fields')); return; }
-      const upd = Object.assign({}, l, { pitStart: pa, siloEnd: pb, cycleMin: m, history: (l.history || []).concat([{ at: new Date().toISOString(), cycleMin: m, by: S.settings.operator || '' }]) });
-      DB.addMany([{ store: 'lots', obj: upd, put: true }]).then(load).then(function () { S.cycleLot = null; render(); toast(t('saved')); }).catch(function () { toast(t('save_failed')); });
+      gate('prod', ($('#cy_pin') || {}).value).then(function (w) {
+        if (!w) return;
+        const upd = Object.assign({}, l, { pitStart: pa, siloEnd: pb, cycleMin: m, history: (l.history || []).concat([{ at: new Date().toISOString(), cycleMin: m, by: w.title }]) });
+        return DB.addMany([{ store: 'lots', obj: upd, put: true }]).then(load).then(function () { S.cycleLot = null; render(); toast(t('saved')); });
+      }).catch(function () { toast(t('save_failed')); });
       return;
     }
-    if (a === 'release') { const l = S.lots.find(function (x) { return x.id === b.dataset.id; }); if (l) { S.form = releaseForm(l); render(); window.scrollTo(0, 0); } }
+    if (a === 'release') { const l = S.lots.find(function (x) { return x.id === b.dataset.id; }); if (l) { S.form = releaseForm(l); S.formAt = S.tab === 'qc' ? 'qc' : 'prod'; render(); window.scrollTo(0, 0); } }
     if (a === 'cancel-lot') { S.form = null; render(); }
     if (a === 'seg') {
       const form = b.closest('form'), name = b.dataset.name, val = b.dataset.value;
@@ -1503,6 +1625,7 @@
     if (a === 'feed-out') { window.FeedSync.signOut(); S.feed = null; S.recon = null; render(); toast(t('dx_feed_off_toast')); return; }
     if (a === 'recon-refresh') { refreshRecon(); return; }
     if (a === 'warn-clear') { clearWarnings(); return; }
+    if (a === 'rpin-save') { rolePinSave(); return; }
     if (a === 'rep-xlsx') { reportXlsx(); return; }
     if (a === 'reccat') { S.recCat = b.dataset.cat || ''; render(); return; }
     if (a === 'out-add') { // alterna: seleciona / desseleciona (ordem de descarga = ordem de seleção)
@@ -1561,8 +1684,8 @@
     if (el.id === 'repday' && el.value) { S.repDay = el.value; render(); return; }   // 0.15.0: Relatório
     if (el.id === 'repwin') { S.repWin = el.value; render(); return; }
     if (el.id === 'restore') restore(el.files[0], el);
-    if (el.name === 'lang' && el.form && el.form.id === 'generalform') {
-      readGeneral(el.form); I18n.set(S.settings.lang);
+    if (el.name === 'lang' && el.form && el.form.id === 'langform') {
+      S.settings.lang = el.value === 'en' ? 'en' : 'pt'; I18n.set(S.settings.lang);
       saveSettings().then(function () { render(); toast(t('settings_saved')); });
     }
   });
@@ -1571,8 +1694,8 @@
     const id = e.target.id;
     if (id === 'lotform') saveLot();
     if (id === 'sheetform') submitSheet();
-    if (id === 'generalform') { readGeneral(e.target); I18n.set(S.settings.lang); saveSettings().then(function () { render(); toast(t('settings_saved')); }); }
-    if (id === 'pinform') pinSubmit(e.target);
+    if (id === 'generalform' && S.unlocked) { readGeneral(e.target); saveSettings().then(function () { render(); toast(t('settings_saved')); }); }
+    if (id === 'unlockform') unlockSubmit(e.target);
     if (id === 'protform') protSubmit(e.target);
   });
 
@@ -1678,7 +1801,7 @@
       const form = S.ackForm && S.ackForm.key === f.key;
       return '<div class="card small ' + (f.ack ? 'muted' : '') + '"><div class="row"><span class="grow">' + (f.suspect ? '⚠ ' : '✖ ') + esc(sensorText(f)) + '</span>' +
         (f.ack ? '<span class="badge b-none">' + esc(t('sn_acked')) + '</span>' : (form ? '' : '<button type="button" class="btn small" data-action="temps-ack" data-key="' + esc(f.key) + '" data-silo="' + esc(f.silo) + '">' + esc(t('sn_ack')) + '</button>')) + '</div>' +
-        (form ? '<div class="stack"><label>' + esc(t('corr_reason')) + ' *<input id="ack_reason" value="' + esc(S.ackForm.reason) + '"></label><label>' + esc(t('corr_by')) + ' *<input id="ack_by" value="' + esc(S.ackForm.by) + '"></label>' +
+        (form ? '<div class="stack"><label>' + esc(t('corr_reason')) + ' *<input id="ack_reason" value="' + esc(S.ackForm.reason) + '"></label><label>' + esc(t('pin')) + ' *<input id="ack_pin" type="password" maxlength="4" autocomplete="off"></label>' +
           '<div class="grid2"><button type="button" class="btn" data-action="temps-ack-cancel">' + esc(t('cancel')) + '</button><button type="button" class="btn primary" data-action="temps-ack-save">' + esc(t('save')) + '</button></div></div>' : '') + '</div>';
     };
     const open = ws.filter(function (f) { return !f.ack; }), acked = ws.filter(function (f) { return f.ack; });
@@ -1704,16 +1827,19 @@
   }
   function ackSave() {
     const f = S.ackForm; if (!f) return;
-    const reason = ($('#ack_reason') || {}).value || '', by = ($('#ack_by') || {}).value || '';
-    if (!reason.trim() || !by.trim()) { toast(t('need_reason_by')); return; }
-    S.ackForm = null;
-    MU.add({ kind: 'sensorAck', key: f.key, silo: f.silo, reason: reason.trim(), by: by.trim() });
+    const reason = ($('#ack_reason') || {}).value || '';
+    if (!reason.trim()) { toast(t('need_reason')); return; }
+    gate('qc', ($('#ack_pin') || {}).value).then(function (w) {
+      if (!w) return;
+      S.ackForm = null;
+      MU.add({ kind: 'sensorAck', key: f.key, silo: f.silo, reason: reason.trim(), by: w.title, role: w.role });
+    });
   }
   document.addEventListener('click', function (ev) {
     const b = ev.target.closest('[data-action^="temps-"]'); if (!b) return;
     const a = b.dataset.action;
     if (a === 'temps-refresh') refreshTemps(true);
-    if (a === 'temps-ack') { S.ackForm = { key: b.dataset.key, silo: b.dataset.silo, reason: '', by: (S.settings && S.settings.operator) || '' }; render(); }
+    if (a === 'temps-ack') { S.ackForm = { key: b.dataset.key, silo: b.dataset.silo, reason: '' }; render(); }
     if (a === 'temps-ack-cancel') { S.ackForm = null; render(); }
     if (a === 'temps-ack-save') ackSave();
   });
@@ -1729,14 +1855,19 @@
     crewOf: function (day, period) { return L.crewOf(day, period === 'N' ? '20:00' : '08:00'); },
     operator: function () { return (S.settings && S.settings.operator) || ''; },
     setOperator: function (n) { if (S.settings && S.settings.operator !== n) { S.settings.operator = n; saveSettings(); } },
-    extraTabs: [{ id: 'sensors', label: function () { return t('sn_tab'); }, view: sensorsView }] });
+    // v0.21.0 (Zhax, 27-11-2026): o módulo da Moagem de Milho v2.27.0 — só PIN (chefes de turno da manutenção A–D e os quatro de cima)
+    who: function (pin) { return RP.who(pin, 'maint'); },
+    checkPin: function (pin) { return RP.who(pin, 'maint').then(function (w) { return w.err ? { ok: false, msg: w.err } : { ok: true }; }); },
+    pinMsg: function (r) { return (r && r.msg) || t('pin'); } });
 
   // ---------------- conformidade FSSC 22000 (js/fssc-ui.js, igual na Prodn-Mgt) ----------------
   // Área: recepção e silos; pontuação separada da Prodn-Mgt (Zhax, 28-10-2026). PIN de supervisor desta app.
   const FU = window.FsscUI({ lang: function () { return I18n.lang; }, esc: esc, toast: toast, render: render, area: 'grain',
     load: function () { return DB.all('fssc'); }, add: function (rec) { return DB.add('fssc', rec); },
     operator: function () { return (S.settings && S.settings.operator) || ''; },
-    pin: function (pin) { return checkPin(pin).then(function (r) { return { ok: r === 'ok', msg: r === 'ok' ? '' : pinMsg(r) }; }); },
+    // v0.21.0: só PIN (FSSC 1 e 2 e os quatro de cima); formação ligada, como na Moagem de Milho
+    pin: function (pin) { return RP.who(pin, 'fssc').then(function (w) { return { ok: !w.err, msg: w.err || '' }; }); },
+    who: function (pin) { return RP.who(pin, 'fssc'); }, training: true, roleTitles: function () { return window.Roles.ALL.map(function (k) { return window.Roles.title(k, I18n.lang); }); },
     // Reclamações (Zhax, 28-10-2026): cliente interno — FMO (moagem) ou FRA (fábrica de rações) — ou externo (outras moagens)
     complaints: true,
     customers: [{ id: 'FMO', label: 'FMO — Moagem' }, { id: 'FRA', label: 'FRA — Fábrica de rações' }],
@@ -1745,17 +1876,22 @@
 
   // ---------------- turno: login e logout da secção de silos (js/shift-ui.js, 0.12.0) ----------------
   const SU = window.ShiftUI({ S: S, L: L, DB: DB, esc: esc, fmtKg: function (n) { return fmtNum(n, 0); }, toast: toast, render: render, saveSettings: saveSettings, siloSt: siloSt,
-    lang: function () { return I18n.lang; }, t: t, unlocked: function () { return !!S.unlocked; },
+    lang: function () { return I18n.lang; }, t: t, unlocked: function () { return !!S.unlocked; }, who: function (pin) { return gate('prod', pin); },
     pmDue: function () { const w = MU.warnings().find(function (x) { return x.type === 'pm_tasks_overdue'; }); return w ? w.n : 0; } });
   window.__shiftUI = SU;
+  // Produção → Paragens (v0.21.0): registadas pelo chefe de turno; mesmo registo 'stop' que a Manutenção mostra em Avarias
+  const PS = window.ProdStops({ lang: function () { return I18n.lang; }, esc: esc, toast: toast, render: render, DB: DB, L: L,
+    who: function (pin) { return gate('prod', pin); }, codes: function () { return window.MaintCodes.CODES; }, codesSource: function () { return window.MaintCodes.SOURCE; },
+    shiftNow: function () { const sh = L.shiftOf(L.today(), L.nowTime()); return { day: sh.date, period: sh.window }; },
+    crewOf: function (day, period) { return L.crewOf(day, period === 'N' ? '20:00' : '08:00'); }, lines: function () { return MAINT_LINES; } });
   window.__tempTrend = window.TempTrend ? window.TempTrend({ esc: esc, lang: function () { return I18n.lang; }, render: render, temps: function () { return S.temps; } }) : null;
 
   // ---------------- arranque / start ----------------
   // O retorno do Dropbox pode ser da sessão de envio (RecSync) ou da de leitura (FeedSync): cada uma só trata o seu.
-  load().then(MU.reload).then(FU.reload).then(SU.reload).then(function () {
+  load().then(MU.reload).then(FU.reload).then(SU.reload).then(PS.reload).then(function () {
     render(); DB.persist();
-    DB.onWrite(function () { SU.reload().then(function () { if (S.tab === 'shift') render(); }); });
-    SU.refreshPlan().then(function () { if (S.tab === 'shift') render(); }); setInterval(function () { SU.refreshPlan(); }, 3600000);
+    DB.onWrite(function () { Promise.all([SU.reload(), PS.reload()]).then(function () { if (S.tab === 'prod') render(); }); });
+    SU.refreshPlan().then(function () { if (S.tab === 'prod') render(); }); setInterval(function () { SU.refreshPlan(); }, 3600000);
     refreshTemps(false); setInterval(function () { refreshTemps(false); }, 3600000);
     const R = window.RecSync;
     if (R) { R.setContext({ deviceId: S.settings.deviceId, site: S.settings.site || '' }); DB.onWrite(R.schedule); }

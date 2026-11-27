@@ -14,7 +14,7 @@
  * Prodn-Mgt e Grain-Mgt avaliam a sua área; as pontuações ficam separadas (Zhax, 28-10-2026). */
 (function (root) {
   'use strict';
-  const KINDS = ['doc', 'grade', 'actionDone', 'close', 'reopen', 'complaint', 'complaintUpd', 'void', 'training', 'trainingAtt'];
+  const KINDS = ['doc', 'grade', 'actionDone', 'close', 'reopen', 'complaint', 'complaintUpd', 'void', 'training', 'trainingAtt', 'oaLogin', 'oaLogout'];   // v2.21.0: login/logout do dia (Acções em aberto)
   // Motivos de reclamação (lista FMIP para farinha de milho; 'other' com descrição)
   const COMPLAINT_REASONS = ['foreign', 'infestation', 'quality', 'moisture', 'mixed', 'weight', 'packaging', 'labelling', 'allergen', 'taste', 'other'];
   // Cliente interno (Grain-Mgt: FMO moagem, FRA fábrica de rações) ou externo (outras moagens) — Zhax, 28-10-2026
@@ -252,7 +252,49 @@
       topics: held.map(x => x.training.topic) };
   }
 
-  const api = { validateTraining, validateAttendance, namesOf, trainings, trainingMonth, KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, COMPLAINT_REASONS, CUSTOMER_TYPES, monthOf, addMonths, addMonthsDay, effective, applicable,
+  // ---------- v2.21.0 (Zhax, 26-11-2026): MTD e Acções em aberto ----------
+  // Pontuação de cada mês do ano até ao mês actual: mês fechado = pontuação do fecho; mês aberto = pontuação calculada (parcial)
+  function ytd(entries, reqs, area, today) {
+    const y = String(today).slice(0, 4), cur = String(today).slice(0, 7), out = [];
+    for (let m = 1; m <= 12; m++) {
+      const mo = y + '-' + String(m).padStart(2, '0');
+      if (mo > cur) break;
+      const st = monthState(entries, mo), sc = st.closed ? { score: st.close.score } : score(reqs, area, grades(entries, mo));
+      out.push({ month: mo, score: isFinite(sc.score) && sc.score !== null ? sc.score : null, closed: st.closed });
+    }
+    const cl = out.filter(x => x.closed && x.score !== null);
+    return { months: out, avgClosed: cl.length ? Math.round(cl.reduce((a, x) => a + x.score, 0) / cl.length * 10) / 10 : null, nClosed: cl.length };
+  }
+  // Planeado vs feito no mês (%): requisitos avaliados, acções com prazo no mês concluídas, formações dadas, % feito dos logouts do dia
+  const pctOf = (a, b) => b ? Math.round(a / b * 1000) / 10 : null;
+  function monthPlan(entries, reqs, area, month, today) {
+    const sc = score(reqs, area, grades(entries, month));
+    const A = actions(entries, today).filter(a => String(a.grade.due || '').slice(0, 7) === month);
+    const T = trainingMonth(trainings(entries, today), month);
+    const outs = effective(entries).filter(e => e.kind === 'oaLogout' && String(e.day || '').slice(0, 7) === month);
+    const pcts = [].concat(...outs.map(o => (o.items || []).map(x => Number(x.pct)).filter(x => isFinite(x))));
+    return {
+      reqs: { planned: sc.applicable, done: sc.graded, pct: pctOf(sc.graded, sc.applicable) },
+      actions: { planned: A.length, done: A.filter(a => a.done).length, pct: pctOf(A.filter(a => a.done).length, A.length) },
+      training: { planned: T.planned, done: T.held, pct: pctOf(T.held, T.planned) },
+      daily: { days: outs.length, pct: pcts.length ? Math.round(pcts.reduce((a, x) => a + x, 0) / pcts.length * 10) / 10 : null }
+    };
+  }
+  // Login / logout do dia (Acções em aberto): o último login do dia e o seu logout
+  function oaDay(entries, day) {
+    const E = effective(entries).filter(e => e.day === day);
+    const login = E.filter(e => e.kind === 'oaLogin').sort((a, b) => b.t - a.t)[0] || null;
+    const logout = login ? E.filter(e => e.kind === 'oaLogout' && e.loginUid === login.uid).sort((a, b) => b.t - a.t)[0] || null : null;
+    return { login, logout };
+  }
+  // % de adequação de um material de limpeza = stock ÷ mínimo × 100 (dono: «Formula correct»); sem mínimo → null
+  function adequacy(stock, min) {
+    const a = Number(String(stock).replace(',', '.')), b = Number(String(min).replace(',', '.'));
+    if (String(stock).trim() === '' || String(min).trim() === '' || !isFinite(a) || !isFinite(b) || b <= 0 || a < 0) return null;
+    return Math.round(a / b * 1000) / 10;
+  }
+
+  const api = { ytd, monthPlan, oaDay, adequacy, validateTraining, validateAttendance, namesOf, trainings, trainingMonth, KINDS, GRADES, POINTS, CAP, DOC_STATUS, CLOSE_BY_DAY, COMPLAINT_REASONS, CUSTOMER_TYPES, monthOf, addMonths, addMonthsDay, effective, applicable,
     validateGrade, validateDoc, docs, docCoverage, grades, score, bandOf, monthState, actions, complaintId, validateComplaint, validateComplaintUpd, complaints, warnings };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Fssc = api;
 })(typeof window !== 'undefined' ? window : this);
