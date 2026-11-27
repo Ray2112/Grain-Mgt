@@ -19,7 +19,11 @@
  * os minutos aqui NÃO entram no indicador de paragens de 72 min/dia. */
 (function (root) {
   'use strict';
-  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'consItem', 'note', 'void'];
+  const KINDS = ['shift', 'stop', 'work', 'pmJob', 'pmUpdate', 'rollCheck', 'rollChange', 'rollMeasure', 'brushCheck', 'rollConfig', 'sensorAck', 'consumable', 'consItem', 'note', 'void',
+    // v2.20.0 (Zhax, 26-11-2026): login/logout do turno de manutenção, da reestriagem e da troca de rolos; fluxo dos rolos
+    'mLogin', 'mLogout', 'rfLogin', 'rfLogout', 'rcLogin', 'rcLogout', 'rollAwait', 'rollFlute', 'rollFluteEnd', 'rollCare', 'rcPlan', 'rcWork', 'rcDone',
+    // v2.24.0 (Zhax, 26-11-2026): stock dos consumíveis (entradas e saídas) e encomendas
+    'stockMove', 'consOrder'];
   // v2.15.0 / v0.18.0 (Zhax, 16-11-2026): o turno de manutenção regista as tarefas (avarias a atender com descrição; preventiva)
   // v2.16.0 / v0.19.0 (Zhax, 17-11-2026): lista de tarefas de manutenção; preventiva escolhida da lista de preventiva (várias, «juntar trabalho»)
   const SHIFT_TASKS = ['breakdown', 'inspection', 'cleaning', 'lubrication', 'preventive', 'other'];
@@ -28,8 +32,12 @@
   // como no diário de turno. Códigos sem P/A/O ficam em Other.
   const CATEGORIES = ['Process', 'Breakdown', 'Other'];
   // v2.8.3 / v0.12.0 (Zhax, 13-11-2026): paragem como na Prodn-Mgt — tipo (mecânica e eléctrica são avarias), código v3, início e fim
-  const STOP_KINDS = ['mechanical', 'electrical', 'process', 'other'];
-  const KIND_CAT = { mechanical: 'Breakdown', electrical: 'Breakdown', process: 'Process', other: 'Other' };
+  // v2.20.0 (Zhax, 26-11-2026): como nas paragens da Produção — Pxx Processo, Oxx Planeada, Axx Mecânica/Eléctrica; «Outra» = P50, A50, O50 (Assumido)
+  const STOP_KINDS = ['mechanical', 'electrical', 'process', 'planned', 'other'];
+  const KIND_CAT = { mechanical: 'Breakdown', electrical: 'Breakdown', process: 'Process', planned: 'Other', other: 'Other' };
+  const KIND_PREFIX = { mechanical: 'A', electrical: 'A', process: 'P', planned: 'O' };
+  const codeInKind = (code, kind) => kind === 'other' ? /^[APO]50$/.test(String(code || '')) : !!KIND_PREFIX[kind] && String(code || '').charAt(0) === KIND_PREFIX[kind];
+  const codesForKind = (kind, codes) => (codes || []).filter(c => c.active !== false && codeInKind(c.code, kind));
   const PREFIX_CAT = { P: 'Process', A: 'Breakdown', O: 'Other' };
   const WORK_TYPES = ['corrective', 'preventive', 'inspection', 'other'];
   const PM_STATUS = ['planned', 'in_progress', 'done', 'postponed', 'cancelled'];
@@ -113,10 +121,10 @@
   function validateStop(o, codes) {
     const e = [];
     if (o.stopKind !== undefined && STOP_KINDS.indexOf(o.stopKind) < 0) e.push('stopKind');
-    const cat = o.stopKind !== undefined ? KIND_CAT[o.stopKind] : o.category;
+    const cat = o.category;
     if (o.stopKind === undefined && CATEGORIES.indexOf(o.category) < 0) e.push('category');
     const c = o.code ? findCode(o.code, codes) : null;
-    if (!c || c.active === false || catOfCode(c.code) !== cat) e.push('code');
+    if (!c || c.active === false || (o.stopKind !== undefined ? !codeInKind(c.code, o.stopKind) : catOfCode(c.code) !== cat)) e.push('code');
     const d = o.endTime !== undefined ? minsBetween(o.startTime, o.endTime) : num(o.durationMin);
     if (o.endTime !== undefined && !o.startTime) e.push('startTime');
     if (d === null || isNaN(d) || d <= 0 || d > 24 * 60) e.push(o.endTime !== undefined ? 'endTime' : 'durationMin');
@@ -461,7 +469,101 @@
     return out;
   }
 
-  const api = { validatePmDone, pmDoneRecords, KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
+  // ---------- v2.20.0: login / logout de secção (turno de manutenção, reestriagem, troca de rolos) ----------
+  const SEC_KINDS = { shift: ['mLogin', 'mLogout'], flute: ['rfLogin', 'rfLogout'], change: ['rcLogin', 'rcLogout'] };
+  function secLog(entries, sec, day, period) {
+    const K = SEC_KINDS[sec], eff = effective(entries).filter(e => e.prodDay === day && e.period === period);
+    const last = k => eff.filter(e => e.kind === k).sort((a, b) => b.t - a.t)[0] || null;
+    const login = last(K[0]), logout = login ? eff.filter(e => e.kind === K[1] && e.loginUid === login.uid).sort((a, b) => b.t - a.t)[0] || null : null;
+    return { login, logout };
+  }
+  // % feito no logout: 0–100 por item (todos obrigatórios)
+  function validateLogout(pcts, n) {
+    const e = [];
+    if ((pcts || []).length !== n || (pcts || []).some(p => { const v = num(p); return v === null || isNaN(v) || v < 0 || v > 100; })) e.push('pctDone');
+    return e;
+  }
+  // ---------- v2.20.0: reestriagem — à espera → em reestriagem → teste (excelente / ok / mau / refazer; refazer volta à espera) ----------
+  const ROLL_STATE = ['normal', 'bad', 'discard'];
+  const CARE_RESULTS = ['excellent', 'ok', 'bad', 'redo'];
+  function validateRollAwait(o) {
+    const e = [];
+    if (!txt(o.rollId)) e.push('rollId');
+    if (ROLL_STATE.indexOf(o.state) < 0) e.push('rollState');
+    const d = num(o.diameter); if (txt(o.diameter) && (d === null || isNaN(d) || d <= 0)) e.push('diameter');
+    return e;
+  }
+  function rollFlow(entries) {
+    const eff = effective(entries).slice().sort(byTime);
+    const flutes = eff.filter(e => e.kind === 'rollFlute'), ends = eff.filter(e => e.kind === 'rollFluteEnd'), cares = eff.filter(e => e.kind === 'rollCare');
+    const awaiting = [], fluting = [], toTest = [], done = [];
+    eff.filter(e => e.kind === 'rollAwait').forEach(a => {
+      const fl = flutes.filter(f => f.awaitUid === a.uid);
+      const lastF = fl[fl.length - 1];
+      if (!lastF) { awaiting.push(a); return; }
+      const end = ends.find(x => x.fluteUid === lastF.uid);
+      if (!end) { fluting.push(Object.assign({}, lastF, { roll: a })); return; }
+      const care = cares.filter(c => c.fluteUid === lastF.uid).pop();
+      if (!care) { toTest.push(Object.assign({}, lastF, { roll: a, endT: end.endT })); return; }
+      if (care.result === 'redo') { awaiting.push(Object.assign({}, a, { redo: true })); return; }
+      done.push(Object.assign({}, lastF, { roll: a, endT: end.endT, result: care.result, careT: care.t }));
+    });
+    return { awaiting, fluting, toTest, done: done.sort((x, y) => y.careT - x.careT) };
+  }
+  // ---------- v2.20.0: troca de rolos — planeadas (até resolvidas) → em troca → feita ----------
+  function changeFlow(entries) {
+    const eff = effective(entries).slice().sort(byTime);
+    const works = eff.filter(e => e.kind === 'rcWork'), dones = eff.filter(e => e.kind === 'rcDone');
+    const planned = [], working = [], resolved = [];
+    eff.filter(e => e.kind === 'rcPlan').forEach(p => {
+      const w = works.filter(x => x.planUid === p.uid).pop();
+      if (!w) { planned.push(p); return; }
+      const d = dones.find(x => x.workUid === w.uid);
+      if (!d) working.push(Object.assign({}, w, { plan: p })); else resolved.push(Object.assign({}, w, { plan: p, doneT: d.t }));
+    });
+    return { planned, working, resolved: resolved.sort((a, b) => b.doneT - a.doneT) };
+  }
+
+  // ---------- v2.24.0: preventiva até hoje — % em atraso do que estava planeado até hoje ----------
+  function pmToDate(entries, today) {
+    const S = pmState(entries, today).filter(s => s.status !== 'cancelled' && String(s.due || '') <= String(today));
+    const done = S.filter(s => s.status === 'done').length, overdue = S.filter(s => s.overdue).length, n = S.length;
+    const p = x => n ? Math.round(x / n * 1000) / 10 : null;
+    return { planned: n, done, overdue, donePct: p(done), overduePct: p(overdue) };
+  }
+  // ---------- v2.24.0: inventário de consumíveis — stock = soma das entradas (+) e saídas (−); % do stock sobre o necessário ----------
+  function validateStockMove(o) {
+    const e = [], d = num(o.delta);
+    if (!txt(o.itemId)) e.push('item');
+    if (d === null || isNaN(d) || d === 0) e.push('qty');
+    return e;
+  }
+  // v2.26.0 (Zhax, 26-11-2026, "Automatic"): o consumo registado (registo de consumível e material usado num trabalho) sai do stock sozinho.
+  // Liga ao artigo do catálogo pelo itemId ou, no material de um trabalho, pelo nome (sem maiúsculas/espaços). Só desconta se a unidade for a do catálogo (ou vazia).
+  // Um registo anulado deixa de contar, por isso o stock volta.
+  function consStock(entries) {
+    const st = {}, used = {}, cat = consCatalog(entries), key = x => txt(x).toLowerCase().replace(/\s+/g, ' ');
+    const byName = new Map(cat.map(c => [key(c.name), c])), byId = new Map(cat.map(c => [c.itemId, c]));
+    const add = (o, id, d) => { o[id] = Math.round(((o[id] || 0) + d) * 1000) / 1000; };
+    const use = (c, q, unit) => { if (!c || !isNum(q) || q <= 0 || (unit && c.unit && unit !== c.unit)) return; add(used, c.itemId, q); add(st, c.itemId, -q); };
+    const E = effective(entries);
+    E.filter(e => e.kind === 'stockMove' && e.itemId).forEach(e => { const d = num(e.delta); if (isNum(d)) add(st, e.itemId, d); });
+    E.filter(e => e.kind === 'consumable').forEach(e => use(e.itemId ? byId.get(e.itemId) : byName.get(key(e.item)), num(e.qty), e.unit));
+    E.filter(e => e.kind === 'work').forEach(e => cleanParts(e.parts).forEach(p => use(p.itemId ? byId.get(p.itemId) : byName.get(key(p.item)), num(p.qty), p.unit)));
+    return cat.map(c => {
+      const q = st[c.itemId] || 0, req = num(c.required);
+      return { item: c, itemId: c.itemId, stock: q, used: used[c.itemId] || 0, required: isNum(req) && req > 0 ? req : null, pct: isNum(req) && req > 0 ? Math.round(q / req * 1000) / 10 : null };
+    });
+  }
+  function validateOrder(o) {
+    const e = [], q = num(o.qty);
+    if (!txt(o.name)) e.push('item');
+    if (q === null || isNaN(q) || q <= 0) e.push('qty');
+    return e;
+  }
+  const orders = entries => effective(entries).filter(e => e.kind === 'consOrder').sort((a, b) => b.t - a.t);
+
+  const api = { pmToDate, validateStockMove, consStock, validateOrder, orders, secLog, validateLogout, ROLL_STATE, CARE_RESULTS, validateRollAwait, rollFlow, changeFlow, KIND_PREFIX, codeInKind, codesForKind, validatePmDone, pmDoneRecords, KINDS, CATEGORIES, WORK_TYPES, PM_STATUS, PM_UPDATES, ROLL_COND, ROLL_REASONS, BRUSH_STATES, NOTE_TOPICS, UNITS,
     num, addDays, daysBetween, weekOf, weekRange, validWeek, catOfCode, codesFor, findCode, effective, cleanParts,
     STOP_KINDS, KIND_CAT, SHIFT_TASKS, TASK_NEEDS_DESC, validateConsItem, consCatalog, minsBetween, validateShift, validateStop, validateWork, validatePmJob, validatePmUpdate, validateRollCheck, validateRollChange, validateRollMeasure,
     validateBrushCheck, validateRollConfig, validateNote, validateConsumable,

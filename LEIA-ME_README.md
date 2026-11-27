@@ -1,4 +1,9 @@
-# FMO - Silo Cereais (antes Grain-Mgt) · v0.20.0
+# FMO - Silo Cereais (antes Grain-Mgt) · v0.21.0
+
+> **v0.21.0 — Mesma estrutura da Moagem de Milho (Zhax, 27-11-2026).** Separadores: Produção (Turno · Paragens · Recepção · Silos), Controlo de Qualidade (Monitorização · Sensores · Amostras de recepção), Manutenção (Turno · Avarias · Consumíveis), FSSC (MTD · Acções em aberto · Reclamações · Formação), Relatórios (Produção · CQ · Manutenção · FSSC, com resumo de 7 dias; só leitura) e Definições (só os quatro de cima). Só leitura sem PIN; o PIN é pedido em cada gravação. PIN por função: PM, Head Miller, Chief Miller e Supervisor alteram tudo; chefes de turno A–D (silos) Produção e CQ; chefes de turno da manutenção A–D Manutenção; FSSC 1 e 2 FSSC. Os registos gravam o título da função, sem nomes. Logout com % feito por trabalho. Os PINs antigos (supervisor e chefes de turno) são apagados uma vez: defina os PINs novos em Definições em cada telemóvel. Manutenção e FSSC voltam a ser os mesmos ficheiros da Moagem de Milho v2.27.0 (sem Rolos).
+>
+> *EN:* same structure as FMO - Maize Mill: tabs Production, QC, Maintenance, FSSC, Reports, Settings; read-only without a PIN; role PINs; role titles instead of names; logout with % done; old PINs wiped once, set new PINs on each phone.
+>
 
 > **v0.20.0 — Bins D/M (Zhax, 17-11-2026).** O cartão das bins D/M mostra só tipo, grau, quantidade, % cheia e movimento do mês. O logout não repete os totais do turno. A janela já não traduz a app automaticamente.
 >

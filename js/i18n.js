@@ -150,7 +150,25 @@
       silo_points: 'Pontos de temperatura', storage_cfg: 'Armazenagem (SOP-OPS-002)', storage_src: 'Valores pré-carregados do SOP-OPS-002 Rev 0.1, tabelas 5.1–5.3 e 5.5.',
       stc_moist: 'Humidade do grão (%)', stc_moist_note: 'Acima do limite Laranja = Vermelho.', stc_temp: 'Temperatura do grão (°C)', stc_temp_note: 'Acima do limite Vermelho = Emergência.', stc_dt: 'ΔT no mesmo ponto desde a leitura anterior (°C)',
       stc_shifts: 'Turnos fixos: D 07:00–19:00 e N 19:00–07:00 (iguais na app de CQ)', stc_weekly: 'Inspecção do CQ a cada (dias)', stc_amber: 'Rondas por turno em Âmbar', stc_clear: 'Turnos Verdes seguidos para voltar a 1 ronda',
-      err_points: 'pontos de temperatura: 1 a 50', err_ascending: 'os valores têm de subir', err_shifts: 'use HH:MM separados por vírgula'
+      err_points: 'pontos de temperatura: 1 a 50', err_ascending: 'os valores têm de subir', err_shifts: 'use HH:MM separados por vírgula',
+      // v0.21.0 (Zhax, 27-11-2026): separadores e PIN por função, como na Moagem de Milho
+      tab_prod: 'Produção', tab_qc: 'CQ', tab_maint: 'Manut.', tab_fssc: 'FSSC', tab_report: 'Relatórios', tab_settings: 'Defin.',
+      prod_title: 'Produção', qc_title: 'Controlo de Qualidade', rp_title: 'Relatórios',
+      sb_prod_shift: 'Turno', sb_prod_stops: 'Paragens', sb_prod_intake: 'Recepção', sb_prod_silos: 'Silos',
+      sb_qc_monit: 'Monitorização', sb_qc_sensors: 'Sensores', sb_qc_samples: 'Amostras de recepção',
+      sb_report_prod: 'Produção', sb_report_qc: 'CQ', sb_report_maint: 'Manutenção', sb_report_fssc: 'FSSC',
+      pin: 'PIN', pin_top: 'PIN (Supervisor ou acima)', auth_pin: 'PIN de Supervisor, Chief Miller, Head Miller ou Production Manager', auth_needed: 'Autorização necessária (Supervisor ou acima)',
+      auth_fill: 'Indique o motivo e o PIN de quem autoriza.', pin_title: 'PIN por função',
+      pin_roles_note: 'Um PIN de 4 caracteres (letras ou algarismos) por função. Sem PIN tudo fica só de leitura. Um PIN ainda não definido grava-se livremente; mudar um PIN já definido pede o PIN do Chief Miller. Fica só neste telemóvel.',
+      pin_is_set_short: 'definido', pin_not_set_short: 'por definir', pin_new: 'PIN novo', pin_chief_change: 'PIN do Chief Miller (para mudar um PIN já definido)', pin_save: 'Gravar PIN',
+      pin_none_typed: 'Escreva pelo menos um PIN novo.', pin_format: 'O PIN tem 4 caracteres (letras ou algarismos).', pin_dup: 'Esse PIN já é de outra função: use um PIN diferente.', pin_chief_only: 'Só o PIN do Chief Miller muda um PIN já definido.',
+      pin_saved: 'PIN gravado.', pin_not_set: 'Ainda não há PIN definido (Definições → PIN por função).', pin_first: 'Defina primeiro o PIN de um dos quatro de cima (PM, Head Miller, Chief Miller, Supervisor).',
+      protected_note: 'Silos, limites, fornecedores, lista de trabalhos do turno, avisos, Dropbox e cópia de segurança: só com o PIN de PM, Head Miller, Chief Miller ou Supervisor.',
+      need_status: 'Indique o estado.', need_qc_fields: 'Indique o motivo da decisão.',
+      wk7Title: 'Últimos 7 dias', wk_total: 'Total', wk_trucks: 'Camiões', wk_done: '% feito', wk_login: 'Login do dia',
+      rp_q_lots: 'Lotes recebidos', rp_q_ahr: 'Aceites / retidos / rejeitados', rp_q_disp: 'Disposições e correcções', rp_q_events: 'Eventos abertos', rp_q_grades: 'Por grau', rp_q_heldnow: 'Silos retidos agora',
+      fs_score: 'Pontuação do mês', fs_graded: 'Requisitos avaliados', fs_closed: 'Mês fechado', fs_actions: 'Acções em aberto', fs_complaints: 'Reclamações em aberto', fs_training: 'Formação (feita / prevista)',
+      sm_recent: 'Lotes recentes',
     },
     en: {
       app_name: 'FMO - Grain Silos', offline_badge: 'Works offline', footer: 'Data stored on this device only.',
@@ -300,7 +318,25 @@
       silo_points: 'Temperature points', storage_cfg: 'Storage (SOP-OPS-002)', storage_src: 'Values preloaded from SOP-OPS-002 Rev 0.1, tables 5.1–5.3 and 5.5.',
       stc_moist: 'Grain moisture (%)', stc_moist_note: 'Above the Orange limit = Red.', stc_temp: 'Grain temperature (°C)', stc_temp_note: 'Above the Red limit = Emergency.', stc_dt: 'ΔT at the same point since previous reading (°C)',
       stc_shifts: 'Fixed shifts: D 07:00–19:00 and N 19:00–07:00 (same as the QC app)', stc_weekly: 'QC inspection every (days)', stc_amber: 'Rounds per shift when Amber', stc_clear: 'Consecutive Green shifts to return to 1 round',
-      err_points: 'temperature points: 1 to 50', err_ascending: 'values must rise', err_shifts: 'use HH:MM separated by commas'
+      err_points: 'temperature points: 1 to 50', err_ascending: 'values must rise', err_shifts: 'use HH:MM separated by commas',
+      // v0.21.0 (Zhax, 27-11-2026): tabs and role PINs, as in the Maize Mill
+      tab_prod: 'Production', tab_qc: 'QC', tab_maint: 'Maint.', tab_fssc: 'FSSC', tab_report: 'Reports', tab_settings: 'Settings',
+      prod_title: 'Production', qc_title: 'Quality Control', rp_title: 'Reports',
+      sb_prod_shift: 'Shift', sb_prod_stops: 'Stoppages', sb_prod_intake: 'Intake', sb_prod_silos: 'Silos',
+      sb_qc_monit: 'Monitoring', sb_qc_sensors: 'Sensors', sb_qc_samples: 'Intake samples',
+      sb_report_prod: 'Production', sb_report_qc: 'QC', sb_report_maint: 'Maintenance', sb_report_fssc: 'FSSC',
+      pin: 'PIN', pin_top: 'PIN (Supervisor or above)', auth_pin: 'Supervisor, Chief Miller, Head Miller or Production Manager PIN', auth_needed: 'Authorization needed (Supervisor or above)',
+      auth_fill: 'Enter the reason and the authorizing PIN.', pin_title: 'Role PINs',
+      pin_roles_note: 'One 4-character PIN (letters or digits) per role. Without a PIN everything is read-only. A PIN not set yet saves freely; changing a PIN already set needs the Chief Miller PIN. Stays on this phone only.',
+      pin_is_set_short: 'set', pin_not_set_short: 'not set', pin_new: 'New PIN', pin_chief_change: 'Chief Miller PIN (to change a PIN already set)', pin_save: 'Save PINs',
+      pin_none_typed: 'Type at least one new PIN.', pin_format: 'The PIN has 4 characters (letters or digits).', pin_dup: 'That PIN already belongs to another role: use a different PIN.', pin_chief_only: 'Only the Chief Miller PIN changes a PIN already set.',
+      pin_saved: 'PIN saved.', pin_not_set: 'No PIN set yet (Settings → Role PINs).', pin_first: 'First set the PIN of one of the top four (PM, Head Miller, Chief Miller, Supervisor).',
+      protected_note: 'Silos, limits, suppliers, shift job list, warnings, Dropbox and backup: only with the PM, Head Miller, Chief Miller or Supervisor PIN.',
+      need_status: 'Enter the status.', need_qc_fields: 'Enter the reason for the decision.',
+      wk7Title: 'Last 7 days', wk_total: 'Total', wk_trucks: 'Trucks', wk_done: '% done', wk_login: 'Day login',
+      rp_q_lots: 'Lots received', rp_q_ahr: 'Accepted / held / rejected', rp_q_disp: 'Dispositions and corrections', rp_q_events: 'Events opened', rp_q_grades: 'By grade', rp_q_heldnow: 'Silos held now',
+      fs_score: 'Month score', fs_graded: 'Requirements graded', fs_closed: 'Month closed', fs_actions: 'Open actions', fs_complaints: 'Open complaints', fs_training: 'Training (held / planned)',
+      sm_recent: 'Recent lots',
     }
   };
   let lang = 'pt';
